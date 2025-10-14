@@ -5,6 +5,7 @@ class TodoApp {
     this.currentFilter = 'all';
     this.currentPriorityFilter = 'all';
     this.editingTaskId = null;
+    this.currentImage = null; // 当前选择的图片
     
     this.init();
   }
@@ -16,8 +17,20 @@ class TodoApp {
     // 绑定事件
     this.bindEvents();
     
+    // 设置默认日期为今天
+    this.setDefaultDate();
+    
     // 渲染任务列表
     this.render();
+  }
+
+  setDefaultDate() {
+    const dueDateInput = document.getElementById('due-date-input');
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    dueDateInput.value = `${year}-${month}-${day}`;
   }
 
   async loadTodos() {
@@ -74,11 +87,51 @@ class TodoApp {
         this.render();
       });
     });
+
+    // 添加图片按钮
+    const addImageBtn = document.getElementById('add-image-btn');
+    addImageBtn.addEventListener('click', async () => {
+      await this.selectImage();
+    });
+
+    // 移除图片按钮
+    const removeImageBtn = document.getElementById('remove-image-btn');
+    removeImageBtn.addEventListener('click', () => {
+      this.removeCurrentImage();
+    });
+  }
+
+  async selectImage() {
+    try {
+      const result = await window.electronAPI.selectImage();
+      if (result.success && result.fileName) {
+        this.currentImage = result.fileName;
+        
+        // 显示预览
+        const previewContainer = document.getElementById('image-preview-container');
+        const previewImg = document.getElementById('image-preview');
+        
+        const imageData = await window.electronAPI.readImage(result.fileName);
+        if (imageData.success) {
+          previewImg.src = imageData.data;
+          previewContainer.style.display = 'block';
+        }
+      }
+    } catch (error) {
+      console.error('选择图片失败:', error);
+    }
+  }
+
+  removeCurrentImage() {
+    this.currentImage = null;
+    const previewContainer = document.getElementById('image-preview-container');
+    previewContainer.style.display = 'none';
   }
 
   addTask() {
     const input = document.getElementById('task-input');
     const prioritySelect = document.getElementById('priority-select');
+    const dueDateInput = document.getElementById('due-date-input');
     const text = input.value.trim();
 
     if (!text) return;
@@ -88,12 +141,20 @@ class TodoApp {
       text: text,
       completed: false,
       priority: prioritySelect.value,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      dueDate: dueDateInput.value || null,
+      image: this.currentImage || null
     };
 
     this.todos.unshift(task);
     input.value = '';
     prioritySelect.value = 'medium';
+    
+    // 重置日期为今天
+    this.setDefaultDate();
+    
+    // 清除图片预览
+    this.removeCurrentImage();
 
     this.saveTodos();
     this.render();
@@ -108,7 +169,13 @@ class TodoApp {
     }
   }
 
-  deleteTask(id) {
+  async deleteTask(id) {
+    const task = this.todos.find(t => t.id === id);
+    if (task && task.image) {
+      // 删除图片文件
+      await window.electronAPI.deleteImage(task.image);
+    }
+    
     this.todos = this.todos.filter(t => t.id !== id);
     this.saveTodos();
     this.render();
@@ -199,6 +266,49 @@ class TodoApp {
     });
   }
 
+  formatDueDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('zh-CN', { 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  }
+
+  getDueDateStatus(dateString) {
+    if (!dateString) return null;
+    
+    const dueDate = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 'overdue';
+    if (diffDays === 0) return 'today';
+    return 'upcoming';
+  }
+
+  showImageViewer(imageSrc) {
+    let viewer = document.getElementById('image-viewer');
+    if (!viewer) {
+      viewer = document.createElement('div');
+      viewer.id = 'image-viewer';
+      viewer.className = 'image-viewer';
+      viewer.innerHTML = '<img />';
+      document.body.appendChild(viewer);
+      
+      viewer.addEventListener('click', () => {
+        viewer.classList.remove('show');
+      });
+    }
+    
+    const img = viewer.querySelector('img');
+    img.src = imageSrc;
+    viewer.classList.add('show');
+  }
+
   updateStats() {
     const total = this.todos.length;
     const completed = this.todos.filter(t => t.completed).length;
@@ -219,22 +329,22 @@ class TodoApp {
     }
   }
 
-  render() {
+  async render() {
     const taskList = document.getElementById('task-list');
     const filteredTodos = this.filterTasks();
 
     taskList.innerHTML = '';
 
-    filteredTodos.forEach(task => {
-      const taskItem = this.createTaskElement(task);
+    for (const task of filteredTodos) {
+      const taskItem = await this.createTaskElement(task);
       taskList.appendChild(taskItem);
-    });
+    }
 
     this.updateStats();
     this.updateEmptyState();
   }
 
-  createTaskElement(task) {
+  async createTaskElement(task) {
     const div = document.createElement('div');
     div.className = `task-item ${task.completed ? 'completed' : ''}`;
     div.dataset.taskId = task.id;
@@ -244,6 +354,24 @@ class TodoApp {
     }
 
     const priorityClass = `priority-${task.priority}`;
+
+    // 构建日期显示
+    let dueDateHtml = '';
+    if (task.dueDate) {
+      const dueDateStatus = this.getDueDateStatus(task.dueDate);
+      const dueDateText = this.formatDueDate(task.dueDate);
+      dueDateHtml = `
+        <div class="task-due-date ${dueDateStatus}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          ${dueDateText}
+        </div>
+      `;
+    }
 
     div.innerHTML = `
       <div class="task-checkbox">
@@ -255,7 +383,11 @@ class TodoApp {
       <div class="task-content">
         <div class="task-text">${this.escapeHtml(task.text)}</div>
         <input type="text" class="task-edit-input" value="${this.escapeHtml(task.text)}" />
-        <div class="task-time">${this.formatDate(task.createdAt)}</div>
+        <div class="task-meta">
+          <div class="task-time">${this.formatDate(task.createdAt)}</div>
+          ${dueDateHtml}
+        </div>
+        ${task.image ? '<div class="task-image-container"></div>' : ''}
       </div>
       <div class="task-actions">
         <button class="btn-edit" title="编辑">
@@ -272,6 +404,25 @@ class TodoApp {
         </button>
       </div>
     `;
+
+    // 加载并显示图片
+    if (task.image) {
+      const imageContainer = div.querySelector('.task-image-container');
+      try {
+        const imageData = await window.electronAPI.readImage(task.image);
+        if (imageData.success) {
+          const img = document.createElement('img');
+          img.src = imageData.data;
+          img.className = 'task-image';
+          img.addEventListener('click', () => {
+            this.showImageViewer(imageData.data);
+          });
+          imageContainer.appendChild(img);
+        }
+      } catch (error) {
+        console.error('加载图片失败:', error);
+      }
+    }
 
     // 绑定事件
     const checkbox = div.querySelector('.task-checkbox');
