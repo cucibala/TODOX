@@ -55,9 +55,9 @@ class TodoApp {
   bindEvents() {
     // 添加任务表单
     const form = document.getElementById('add-task-form');
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      this.addTask();
+      await this.addTask();
     });
 
     // 搜索框
@@ -69,22 +69,22 @@ class TodoApp {
     // 筛选按钮
     const filterButtons = document.querySelectorAll('.filter-btn');
     filterButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         filterButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.currentFilter = btn.dataset.filter;
-        this.render();
+        await this.render();
       });
     });
 
     // 优先级筛选按钮
     const priorityButtons = document.querySelectorAll('.priority-filter-btn');
     priorityButtons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         priorityButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         this.currentPriorityFilter = btn.dataset.priority;
-        this.render();
+        await this.render();
       });
     });
 
@@ -128,7 +128,7 @@ class TodoApp {
     previewContainer.style.display = 'none';
   }
 
-  addTask() {
+  async addTask() {
     const input = document.getElementById('task-input');
     const prioritySelect = document.getElementById('priority-select');
     const dueDateInput = document.getElementById('due-date-input');
@@ -156,16 +156,19 @@ class TodoApp {
     // 清除图片预览
     this.removeCurrentImage();
 
-    this.saveTodos();
-    this.render();
+    await this.saveTodos();
+    await this.render();
+    
+    // 确保输入框重新获得焦点
+    setTimeout(() => input.focus(), 0);
   }
 
-  toggleTask(id) {
+  async toggleTask(id) {
     const task = this.todos.find(t => t.id === id);
     if (task) {
       task.completed = !task.completed;
-      this.saveTodos();
-      this.render();
+      await this.saveTodos();
+      await this.render();
     }
   }
 
@@ -177,13 +180,13 @@ class TodoApp {
     }
     
     this.todos = this.todos.filter(t => t.id !== id);
-    this.saveTodos();
-    this.render();
+    await this.saveTodos();
+    await this.render();
   }
 
-  startEditTask(id) {
+  async startEditTask(id) {
     this.editingTaskId = id;
-    this.render();
+    await this.render();
     
     // 聚焦到编辑输入框
     setTimeout(() => {
@@ -195,21 +198,21 @@ class TodoApp {
     }, 0);
   }
 
-  saveEditTask(id, newText) {
+  async saveEditTask(id, newText) {
     const task = this.todos.find(t => t.id === id);
     if (task && newText.trim()) {
       task.text = newText.trim();
       this.editingTaskId = null;
-      this.saveTodos();
-      this.render();
+      await this.saveTodos();
+      await this.render();
     } else {
-      this.cancelEdit();
+      await this.cancelEdit();
     }
   }
 
-  cancelEdit() {
+  async cancelEdit() {
     this.editingTaskId = null;
-    this.render();
+    await this.render();
   }
 
   searchTasks(query) {
@@ -307,6 +310,61 @@ class TodoApp {
     const img = viewer.querySelector('img');
     img.src = imageSrc;
     viewer.classList.add('show');
+  }
+
+  showConfirmDialog(message) {
+    return new Promise((resolve) => {
+      let dialog = document.getElementById('confirm-dialog');
+      if (!dialog) {
+        dialog = document.createElement('div');
+        dialog.id = 'confirm-dialog';
+        dialog.className = 'confirm-dialog';
+        dialog.innerHTML = `
+          <div class="confirm-dialog-content">
+            <div class="confirm-dialog-title">确认操作</div>
+            <div class="confirm-dialog-message"></div>
+            <div class="confirm-dialog-buttons">
+              <button class="confirm-dialog-btn confirm-dialog-btn-cancel">取消</button>
+              <button class="confirm-dialog-btn confirm-dialog-btn-confirm">确定</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(dialog);
+      }
+
+      const messageEl = dialog.querySelector('.confirm-dialog-message');
+      const cancelBtn = dialog.querySelector('.confirm-dialog-btn-cancel');
+      const confirmBtn = dialog.querySelector('.confirm-dialog-btn-confirm');
+
+      messageEl.textContent = message;
+
+      const closeDialog = (result) => {
+        dialog.classList.remove('show');
+        resolve(result);
+      };
+
+      // 移除旧的事件监听器
+      const newCancelBtn = cancelBtn.cloneNode(true);
+      const newConfirmBtn = confirmBtn.cloneNode(true);
+      cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+      confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+      // 添加新的事件监听器
+      newCancelBtn.addEventListener('click', () => closeDialog(false));
+      newConfirmBtn.addEventListener('click', () => closeDialog(true));
+      
+      // 点击背景关闭
+      dialog.onclick = (e) => {
+        if (e.target === dialog) {
+          closeDialog(false);
+        }
+      };
+
+      dialog.classList.add('show');
+      
+      // 聚焦到确定按钮
+      setTimeout(() => newConfirmBtn.focus(), 100);
+    });
   }
 
   updateStats() {
@@ -426,39 +484,41 @@ class TodoApp {
 
     // 绑定事件
     const checkbox = div.querySelector('.task-checkbox');
-    checkbox.addEventListener('click', () => this.toggleTask(task.id));
+    checkbox.addEventListener('click', async () => await this.toggleTask(task.id));
 
     const deleteBtn = div.querySelector('.btn-delete');
-    deleteBtn.addEventListener('click', () => {
-      if (confirm('确定要删除这个任务吗?')) {
-        this.deleteTask(task.id);
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const confirmed = await this.showConfirmDialog('确定要删除这个任务吗？');
+      if (confirmed) {
+        await this.deleteTask(task.id);
       }
     });
 
     const editBtn = div.querySelector('.btn-edit');
-    editBtn.addEventListener('click', () => {
+    editBtn.addEventListener('click', async () => {
       if (this.editingTaskId === task.id) {
         const input = div.querySelector('.task-edit-input');
-        this.saveEditTask(task.id, input.value);
+        await this.saveEditTask(task.id, input.value);
       } else {
-        this.startEditTask(task.id);
+        await this.startEditTask(task.id);
       }
     });
 
     // 编辑输入框事件
     const editInput = div.querySelector('.task-edit-input');
-    editInput.addEventListener('keydown', (e) => {
+    editInput.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
-        this.saveEditTask(task.id, editInput.value);
+        await this.saveEditTask(task.id, editInput.value);
       } else if (e.key === 'Escape') {
-        this.cancelEdit();
+        await this.cancelEdit();
       }
     });
 
     editInput.addEventListener('blur', () => {
-      setTimeout(() => {
+      setTimeout(async () => {
         if (this.editingTaskId === task.id) {
-          this.saveEditTask(task.id, editInput.value);
+          await this.saveEditTask(task.id, editInput.value);
         }
       }, 200);
     });
