@@ -5,7 +5,7 @@ class TodoApp {
     this.currentFilter = 'all';
     this.currentPriorityFilter = 'all';
     this.editingTaskId = null;
-    this.currentImage = null; // 当前选择的图片
+    this.currentImages = []; // 当前选择的图片列表
     
     this.init();
   }
@@ -22,9 +22,6 @@ class TodoApp {
     
     // 监听模式变化
     this.listenModeChanges();
-    
-    // 设置默认日期为今天
-    this.setDefaultDate();
     
     // 渲染任务列表
     this.render();
@@ -149,14 +146,6 @@ class TodoApp {
     }, 3000);
   }
 
-  setDefaultDate() {
-    const dueDateInput = document.getElementById('due-date-input');
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    dueDateInput.value = `${year}-${month}-${day}`;
-  }
 
   async loadTodos() {
     try {
@@ -230,25 +219,61 @@ class TodoApp {
     try {
       const result = await window.electronAPI.selectImage();
       if (result.success && result.fileName) {
-        this.currentImage = result.fileName;
+        // 添加到图片列表
+        this.currentImages.push(result.fileName);
         
-        // 显示预览
-        const previewContainer = document.getElementById('image-preview-container');
-        const previewImg = document.getElementById('image-preview');
-        
-        const imageData = await window.electronAPI.readImage(result.fileName);
-        if (imageData.success) {
-          previewImg.src = imageData.data;
-          previewContainer.style.display = 'block';
-        }
+        // 更新预览显示
+        await this.updateImagePreviews();
       }
     } catch (error) {
       console.error('选择图片失败:', error);
     }
   }
+  
+  async updateImagePreviews() {
+    const previewContainer = document.getElementById('image-preview-container');
+    previewContainer.innerHTML = '';
+    
+    if (this.currentImages.length === 0) {
+      previewContainer.style.display = 'none';
+      return;
+    }
+    
+    previewContainer.style.display = 'block';
+    
+    for (let i = 0; i < this.currentImages.length; i++) {
+      const fileName = this.currentImages[i];
+      const imageData = await window.electronAPI.readImage(fileName);
+      
+      if (imageData.success) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'image-preview-wrapper';
+        wrapper.innerHTML = `
+          <img class="image-preview" src="${imageData.data}" />
+          <button type="button" class="btn-remove-image" data-index="${i}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        `;
+        
+        // 绑定删除按钮事件
+        const removeBtn = wrapper.querySelector('.btn-remove-image');
+        removeBtn.addEventListener('click', () => this.removeImage(i));
+        
+        previewContainer.appendChild(wrapper);
+      }
+    }
+  }
+  
+  removeImage(index) {
+    this.currentImages.splice(index, 1);
+    this.updateImagePreviews();
+  }
 
   removeCurrentImage() {
-    this.currentImage = null;
+    this.currentImages = [];
     const previewContainer = document.getElementById('image-preview-container');
     previewContainer.style.display = 'none';
   }
@@ -268,15 +293,14 @@ class TodoApp {
       priority: prioritySelect.value,
       createdAt: new Date().toISOString(),
       dueDate: dueDateInput.value || null,
-      image: this.currentImage || null
+      images: [...this.currentImages], // 保存图片数组
+      progress: [] // 进度记录数组
     };
 
     this.todos.unshift(task);
     input.value = '';
     prioritySelect.value = 'medium';
-    
-    // 重置日期为今天
-    this.setDefaultDate();
+    dueDateInput.value = ''; // 清空日期
     
     // 清除图片预览
     this.removeCurrentImage();
@@ -299,9 +323,17 @@ class TodoApp {
 
   async deleteTask(id) {
     const task = this.todos.find(t => t.id === id);
-    if (task && task.image) {
-      // 删除图片文件
-      await window.electronAPI.deleteImage(task.image);
+    if (task) {
+      // 删除旧版本的单张图片（兼容性）
+      if (task.image) {
+        await window.electronAPI.deleteImage(task.image);
+      }
+      // 删除多张图片
+      if (task.images && task.images.length > 0) {
+        for (const image of task.images) {
+          await window.electronAPI.deleteImage(image);
+        }
+      }
     }
     
     this.todos = this.todos.filter(t => t.id !== id);
@@ -338,6 +370,54 @@ class TodoApp {
   async cancelEdit() {
     this.editingTaskId = null;
     await this.render();
+  }
+
+  async addProgress(taskId, progressText) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task && progressText.trim()) {
+      if (!task.progress) {
+        task.progress = [];
+      }
+      task.progress.push({
+        id: Date.now(),
+        text: progressText.trim(),
+        createdAt: new Date().toISOString()
+      });
+      await this.saveTodos();
+      await this.render();
+    }
+  }
+
+  async deleteProgress(taskId, progressId) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task && task.progress) {
+      task.progress = task.progress.filter(p => p.id !== progressId);
+      await this.saveTodos();
+      await this.render();
+    }
+  }
+
+  async addImageToTask(taskId, imageName) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task) {
+      if (!task.images) {
+        task.images = [];
+      }
+      task.images.push(imageName);
+      await this.saveTodos();
+      await this.render();
+    }
+  }
+
+  async removeImageFromTask(taskId, imageIndex) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task && task.images && task.images[imageIndex]) {
+      const imageName = task.images[imageIndex];
+      await window.electronAPI.deleteImage(imageName);
+      task.images.splice(imageIndex, 1);
+      await this.saveTodos();
+      await this.render();
+    }
   }
 
   searchTasks(query) {
@@ -556,6 +636,8 @@ class TodoApp {
       `;
     }
 
+    const isEditing = this.editingTaskId === task.id;
+    
     div.innerHTML = `
       <div class="task-checkbox">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -570,7 +652,18 @@ class TodoApp {
           <div class="task-time">${this.formatDate(task.createdAt)}</div>
           ${dueDateHtml}
         </div>
-        ${task.image ? '<div class="task-image-container"></div>' : ''}
+        ${(task.images && task.images.length > 0) || task.image ? '<div class="task-images-container"></div>' : ''}
+        ${isEditing ? '<div class="task-edit-images-container"><button type="button" class="btn-add-task-image" title="添加图片">📷 添加图片</button><div class="task-edit-images-list"></div></div>' : ''}
+        ${task.progress && task.progress.length > 0 ? '<div class="task-progress-container"></div>' : ''}
+        <div class="task-add-progress">
+          <input type="text" class="progress-input" placeholder="添加进度描述..." />
+          <button class="btn-add-progress" title="添加进度">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="task-actions">
         <button class="btn-edit" title="编辑">
@@ -589,18 +682,37 @@ class TodoApp {
     `;
 
     // 加载并显示图片
-    if (task.image) {
-      const imageContainer = div.querySelector('.task-image-container');
+    const imagesContainer = div.querySelector('.task-images-container');
+    if (imagesContainer) {
       try {
-        const imageData = await window.electronAPI.readImage(task.image);
-        if (imageData.success) {
-          const img = document.createElement('img');
-          img.src = imageData.data;
-          img.className = 'task-image';
-          img.addEventListener('click', () => {
-            this.showImageViewer(imageData.data);
-          });
-          imageContainer.appendChild(img);
+        // 兼容旧版本的单张图片
+        if (task.image) {
+          const imageData = await window.electronAPI.readImage(task.image);
+          if (imageData.success) {
+            const img = document.createElement('img');
+            img.src = imageData.data;
+            img.className = 'task-image';
+            img.addEventListener('click', () => {
+              this.showImageViewer(imageData.data);
+            });
+            imagesContainer.appendChild(img);
+          }
+        }
+        
+        // 显示多张图片
+        if (task.images && task.images.length > 0) {
+          for (const imageName of task.images) {
+            const imageData = await window.electronAPI.readImage(imageName);
+            if (imageData.success) {
+              const img = document.createElement('img');
+              img.src = imageData.data;
+              img.className = 'task-image';
+              img.addEventListener('click', () => {
+                this.showImageViewer(imageData.data);
+              });
+              imagesContainer.appendChild(img);
+            }
+          }
         }
       } catch (error) {
         console.error('加载图片失败:', error);
@@ -647,6 +759,93 @@ class TodoApp {
         }
       }, 200);
     });
+
+    // 进度记录显示
+    const progressContainer = div.querySelector('.task-progress-container');
+    if (progressContainer && task.progress && task.progress.length > 0) {
+      for (const progress of task.progress) {
+        const progressItem = document.createElement('div');
+        progressItem.className = 'progress-item';
+        progressItem.innerHTML = `
+          <div class="progress-content">
+            <div class="progress-text">${this.escapeHtml(progress.text)}</div>
+            <div class="progress-time">${this.formatDate(progress.createdAt)}</div>
+          </div>
+          <button class="btn-delete-progress" data-progress-id="${progress.id}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        `;
+        
+        const deleteProgressBtn = progressItem.querySelector('.btn-delete-progress');
+        deleteProgressBtn.addEventListener('click', async () => {
+          await this.deleteProgress(task.id, progress.id);
+        });
+        
+        progressContainer.appendChild(progressItem);
+      }
+    }
+
+    // 添加进度按钮事件
+    const progressInput = div.querySelector('.progress-input');
+    const addProgressBtn = div.querySelector('.btn-add-progress');
+    
+    addProgressBtn.addEventListener('click', async () => {
+      if (progressInput.value.trim()) {
+        await this.addProgress(task.id, progressInput.value);
+        progressInput.value = '';
+      }
+    });
+
+    progressInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && progressInput.value.trim()) {
+        await this.addProgress(task.id, progressInput.value);
+        progressInput.value = '';
+      }
+    });
+
+    // 编辑模式下的图片管理
+    if (isEditing) {
+      const addTaskImageBtn = div.querySelector('.btn-add-task-image');
+      const editImagesList = div.querySelector('.task-edit-images-list');
+      
+      addTaskImageBtn.addEventListener('click', async () => {
+        const result = await window.electronAPI.selectImage();
+        if (result.success && result.fileName) {
+          await this.addImageToTask(task.id, result.fileName);
+        }
+      });
+
+      // 显示编辑模式下的图片（带删除按钮）
+      if (task.images && task.images.length > 0) {
+        for (let i = 0; i < task.images.length; i++) {
+          const imageName = task.images[i];
+          const imageData = await window.electronAPI.readImage(imageName);
+          if (imageData.success) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'edit-image-wrapper';
+            wrapper.innerHTML = `
+              <img class="edit-task-image" src="${imageData.data}" />
+              <button type="button" class="btn-remove-edit-image" data-index="${i}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            `;
+            
+            const removeBtn = wrapper.querySelector('.btn-remove-edit-image');
+            removeBtn.addEventListener('click', async () => {
+              await this.removeImageFromTask(task.id, i);
+            });
+            
+            editImagesList.appendChild(wrapper);
+          }
+        }
+      }
+    }
 
     return div;
   }

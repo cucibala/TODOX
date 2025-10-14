@@ -534,6 +534,9 @@ body.desktop-mode .task-item:hover {
 /* 图片预览 */
 .image-preview-container {
   margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   animation: slideDown 0.3s ease;
 }
 
@@ -544,7 +547,7 @@ body.desktop-mode .task-item:hover {
   }
   to {
     opacity: 1;
-    max-height: 200px;
+    max-height: 400px;
   }
 }
 
@@ -554,11 +557,13 @@ body.desktop-mode .task-item:hover {
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  flex-shrink: 0;
 }
 
 .image-preview {
-  max-width: 200px;
-  max-height: 150px;
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
   display: block;
   border-radius: var(--radius-md);
 }
@@ -748,22 +753,200 @@ body.desktop-mode .task-item:hover {
   height: 12px;
 }
 
-.task-image-container {
+.task-images-container {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .task-image {
-  max-width: 200px;
-  max-height: 150px;
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
 }
 
 .task-image:hover {
-  transform: scale(1.02);
+  transform: scale(1.05);
   box-shadow: var(--shadow-md);
+}
+
+/* 进度记录 */
+.task-progress-container {
+  margin-top: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.progress-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary-color);
+}
+
+.progress-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  word-wrap: break-word;
+  margin-bottom: 4px;
+}
+
+.progress-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-delete-progress {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.btn-delete-progress:hover {
+  color: var(--danger-color);
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.btn-delete-progress svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 添加进度输入 */
+.task-add-progress {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.progress-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+}
+
+.progress-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn-add-progress {
+  padding: 6px 10px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-add-progress:hover {
+  background: var(--primary-dark);
+}
+
+.btn-add-progress svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 编辑模式图片管理 */
+.task-edit-images-container {
+  margin-top: 12px;
+  padding: 8px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+}
+
+.btn-add-task-image {
+  padding: 8px 12px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  margin-bottom: 8px;
+}
+
+.btn-add-task-image:hover {
+  background: var(--primary-dark);
+}
+
+.task-edit-images-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.edit-image-wrapper {
+  position: relative;
+  display: inline-block;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.edit-task-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+  border-radius: var(--radius-sm);
+}
+
+.btn-remove-edit-image {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  color: white;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-remove-edit-image:hover {
+  background: var(--danger-color);
+}
+
+.btn-remove-edit-image svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* 图片查看器 */
