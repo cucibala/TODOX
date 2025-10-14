@@ -87,6 +87,14 @@ npm run dev
 
 ## 打包应用
 
+### ⚠️ 打包前必做
+**创建托盘图标**，否则打包后托盘不显示图标！
+
+1. 准备一个 32x32 像素的 PNG 图标
+2. 命名为 `tray-icon.png`
+3. 放在 `assets/` 目录
+4. 详见 `assets/README.md` 或 `创建托盘图标说明.md`
+
 ### 自动打包（根据当前系统）
 ```bash
 npm run build
@@ -96,7 +104,7 @@ npm run build
 ```bash
 npm run build:win
 ```
-生成文件：`dist/TodoX Setup 1.0.0.exe`
+生成文件：`dist/TodoX Setup 2.1.0.exe`
 
 ### 打包为 macOS 应用
 ```bash
@@ -113,7 +121,7 @@ npm run build:linux
 ### 注意事项
 - 打包后的文件在 `dist` 目录中
 - Windows 安装包支持自定义安装路径和创建桌面快捷方式
-- 如需自定义图标，请将图标文件放在 `assets` 目录（可选）
+- **托盘图标是必需的**：打包前必须创建 `assets/tray-icon.png`（32x32 PNG）
 - 首次打包会下载必要的依赖，可能需要较长时间
 
 ## 技术栈

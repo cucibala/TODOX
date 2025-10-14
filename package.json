@@ -30,7 +30,8 @@
       "index.html",
       "styles.css",
       "app.js",
-      "package.json"
+      "package.json",
+      "assets/**/*"
     ],
     "win": {
       "target": [
