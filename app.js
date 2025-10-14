@@ -6,6 +6,7 @@ class TodoApp {
     this.currentPriorityFilter = 'all';
     this.editingTaskId = null;
     this.currentImages = []; // 当前选择的图片列表
+    this.currentProgressImages = {}; // 每个任务的进度图片：{taskId: [images]}
     
     this.init();
   }
@@ -374,11 +375,19 @@ class TodoApp {
       if (!task.progress) {
         task.progress = [];
       }
+      
+      const progressImages = this.currentProgressImages[taskId] || [];
+      
       task.progress.push({
         id: Date.now(),
         text: progressText.trim(),
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        images: [...progressImages]
       });
+      
+      // 清空当前任务的进度图片
+      this.currentProgressImages[taskId] = [];
+      
       await this.saveTodos();
       await this.render();
     }
@@ -387,9 +396,78 @@ class TodoApp {
   async deleteProgress(taskId, progressId) {
     const task = this.todos.find(t => t.id === taskId);
     if (task && task.progress) {
+      // 找到进度并删除其图片
+      const progress = task.progress.find(p => p.id === progressId);
+      if (progress && progress.images) {
+        for (const image of progress.images) {
+          await window.electronAPI.deleteImage(image);
+        }
+      }
+      
       task.progress = task.progress.filter(p => p.id !== progressId);
       await this.saveTodos();
       await this.render();
+    }
+  }
+
+  async selectProgressImage(taskId) {
+    try {
+      const result = await window.electronAPI.selectImage();
+      if (result.success && result.fileName) {
+        if (!this.currentProgressImages[taskId]) {
+          this.currentProgressImages[taskId] = [];
+        }
+        this.currentProgressImages[taskId].push(result.fileName);
+        await this.updateProgressImagePreviews(taskId);
+      }
+    } catch (error) {
+      console.error('选择进度图片失败:', error);
+    }
+  }
+
+  async updateProgressImagePreviews(taskId) {
+    const previewContainer = document.querySelector(`[data-task-id="${taskId}"] .progress-image-preview-container`);
+    if (!previewContainer) return;
+    
+    previewContainer.innerHTML = '';
+    const images = this.currentProgressImages[taskId] || [];
+    
+    if (images.length === 0) {
+      previewContainer.style.display = 'none';
+      return;
+    }
+    
+    previewContainer.style.display = 'flex';
+    
+    for (let i = 0; i < images.length; i++) {
+      const fileName = images[i];
+      const imageData = await window.electronAPI.readImage(fileName);
+      
+      if (imageData.success) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'progress-image-preview-wrapper';
+        wrapper.innerHTML = `
+          <img class="progress-image-preview" src="${imageData.data}" />
+          <button type="button" class="btn-remove-progress-image" data-index="${i}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        `;
+        
+        const removeBtn = wrapper.querySelector('.btn-remove-progress-image');
+        removeBtn.addEventListener('click', () => this.removeProgressImage(taskId, i));
+        
+        previewContainer.appendChild(wrapper);
+      }
+    }
+  }
+
+  removeProgressImage(taskId, index) {
+    if (this.currentProgressImages[taskId]) {
+      this.currentProgressImages[taskId].splice(index, 1);
+      this.updateProgressImagePreviews(taskId);
     }
   }
 
@@ -652,13 +730,23 @@ class TodoApp {
         ${isEditing ? '<div class="task-edit-images-container"><button type="button" class="btn-add-task-image" title="添加图片">📷 添加图片</button><div class="task-edit-images-list"></div></div>' : ''}
         ${task.progress && task.progress.length > 0 ? '<div class="task-progress-container"></div>' : ''}
         <div class="task-add-progress">
-          <input type="text" class="progress-input" placeholder="添加进度描述..." />
-          <button class="btn-add-progress" title="添加进度">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
+          <div class="progress-input-group">
+            <input type="text" class="progress-input" placeholder="添加进度描述..." />
+            <button class="btn-add-progress-image" title="添加图片">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </button>
+            <button class="btn-add-progress" title="添加进度">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="progress-image-preview-container" style="display: none;"></div>
         </div>
       </div>
       <div class="task-actions">
@@ -766,6 +854,7 @@ class TodoApp {
           <div class="progress-content">
             <div class="progress-text">${this.escapeHtml(progress.text)}</div>
             <div class="progress-time">${this.formatDate(progress.createdAt)}</div>
+            ${progress.images && progress.images.length > 0 ? '<div class="progress-images-container"></div>' : ''}
           </div>
           <button class="btn-delete-progress" data-progress-id="${progress.id}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -774,6 +863,23 @@ class TodoApp {
             </svg>
           </button>
         `;
+        
+        // 显示进度图片
+        if (progress.images && progress.images.length > 0) {
+          const progressImagesContainer = progressItem.querySelector('.progress-images-container');
+          for (const imageName of progress.images) {
+            const imageData = await window.electronAPI.readImage(imageName);
+            if (imageData.success) {
+              const img = document.createElement('img');
+              img.src = imageData.data;
+              img.className = 'progress-image';
+              img.addEventListener('click', () => {
+                this.showImageViewer(imageData.data);
+              });
+              progressImagesContainer.appendChild(img);
+            }
+          }
+        }
         
         const deleteProgressBtn = progressItem.querySelector('.btn-delete-progress');
         deleteProgressBtn.addEventListener('click', async () => {
@@ -787,20 +893,31 @@ class TodoApp {
     // 添加进度按钮事件
     const progressInput = div.querySelector('.progress-input');
     const addProgressBtn = div.querySelector('.btn-add-progress');
+    const addProgressImageBtn = div.querySelector('.btn-add-progress-image');
     
-    addProgressBtn.addEventListener('click', async () => {
-      if (progressInput.value.trim()) {
-        await this.addProgress(task.id, progressInput.value);
-        progressInput.value = '';
-      }
-    });
+    if (addProgressImageBtn) {
+      addProgressImageBtn.addEventListener('click', async () => {
+        await this.selectProgressImage(task.id);
+      });
+    }
+    
+    if (addProgressBtn) {
+      addProgressBtn.addEventListener('click', async () => {
+        if (progressInput.value.trim()) {
+          await this.addProgress(task.id, progressInput.value);
+          progressInput.value = '';
+        }
+      });
+    }
 
-    progressInput.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter' && progressInput.value.trim()) {
-        await this.addProgress(task.id, progressInput.value);
-        progressInput.value = '';
-      }
-    });
+    if (progressInput) {
+      progressInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter' && progressInput.value.trim()) {
+          await this.addProgress(task.id, progressInput.value);
+          progressInput.value = '';
+        }
+      });
+    }
 
     // 编辑模式下的图片管理
     if (isEditing) {

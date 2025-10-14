@@ -834,11 +834,14 @@ body.desktop-mode .task-item:hover {
 
 /* 添加进度输入 */
 .task-add-progress {
-  display: flex;
-  gap: 6px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--border-color);
+}
+
+.progress-input-group {
+  display: flex;
+  gap: 6px;
 }
 
 .progress-input {
@@ -877,6 +880,99 @@ body.desktop-mode .task-item:hover {
 .btn-add-progress svg {
   width: 14px;
   height: 14px;
+}
+
+.btn-add-progress-image {
+  padding: 6px 10px;
+  background: var(--text-secondary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-add-progress-image:hover {
+  background: var(--text-primary);
+}
+
+.btn-add-progress-image svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 进度图片预览 */
+.progress-image-preview-container {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.progress-image-preview-wrapper {
+  position: relative;
+  display: inline-block;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.progress-image-preview {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  display: block;
+  border-radius: var(--radius-sm);
+}
+
+.btn-remove-progress-image {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 50%;
+  color: white;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-remove-progress-image:hover {
+  background: var(--danger-color);
+}
+
+.btn-remove-progress-image svg {
+  width: 10px;
+  height: 10px;
+}
+
+/* 进度图片显示 */
+.progress-images-container {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.progress-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.progress-image:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
 }
 
 /* 编辑模式图片管理 */

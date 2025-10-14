@@ -104,7 +104,7 @@ npm run build
 ```bash
 npm run build:win
 ```
-生成文件：`dist/TodoX Setup 2.3.0.exe`
+生成文件：`dist/TodoX Setup 2.4.0.exe`
 
 ### 打包为 macOS 应用
 ```bash

@@ -2,6 +2,23 @@ const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require
 const path = require('path');
 const fs = require('fs');
 
+// 单实例锁定 - 只允许运行一个应用实例
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  // 如果已经有实例在运行，退出当前实例
+  app.quit();
+} else {
+  // 当尝试打开第二个实例时，聚焦到第一个实例的窗口
+  app.on('second-instance', (event, commandLine, workingDirectory) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // 数据文件路径
 const dataPath = path.join(app.getPath('userData'), 'todos.json');
 const imagesPath = path.join(app.getPath('userData'), 'images');
