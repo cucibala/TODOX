@@ -21,6 +21,7 @@ if (!gotTheLock) {
 
 // 数据文件路径
 const dataPath = path.join(app.getPath('userData'), 'todos.json');
+const projectsPath = path.join(app.getPath('userData'), 'projects.json');
 const imagesPath = path.join(app.getPath('userData'), 'images');
 const settingsPath = path.join(app.getPath('userData'), 'settings.json');
 
@@ -366,6 +367,31 @@ ipcMain.on('check-window-position', () => {
 // 切换桌面模式
 ipcMain.on('toggle-desktop-mode', () => {
   toggleDesktopMode();
+});
+
+// IPC 通信处理 - 读取项目数据
+ipcMain.handle('load-projects', async () => {
+  try {
+    if (fs.existsSync(projectsPath)) {
+      const data = fs.readFileSync(projectsPath, 'utf-8');
+      return JSON.parse(data);
+    }
+    return { projects: [], currentProjectId: null };
+  } catch (error) {
+    console.error('读取项目数据失败:', error);
+    return { projects: [], currentProjectId: null };
+  }
+});
+
+// IPC 通信处理 - 保存项目数据
+ipcMain.handle('save-projects', async (event, projectData) => {
+  try {
+    fs.writeFileSync(projectsPath, JSON.stringify(projectData, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('保存项目数据失败:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // IPC 通信处理 - 读取任务数据

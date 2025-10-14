@@ -1,6 +1,8 @@
 // 任务管理应用
 class TodoApp {
   constructor() {
+    this.projects = []; // 项目列表
+    this.currentProjectId = null; // 当前选中的项目ID
     this.todos = [];
     this.currentFilter = 'all';
     this.currentPriorityFilter = 'all';
@@ -12,7 +14,8 @@ class TodoApp {
   }
 
   async init() {
-    // 加载任务数据
+    // 加载数据
+    await this.loadProjects();
     await this.loadTodos();
     
     // 绑定事件
@@ -24,7 +27,9 @@ class TodoApp {
     // 监听模式变化
     this.listenModeChanges();
     
-    // 渲染任务列表
+    // 渲染界面
+    this.renderProjects();
+    this.updateTaskInputState();
     this.render();
   }
 
@@ -148,6 +153,31 @@ class TodoApp {
   }
 
 
+  async loadProjects() {
+    try {
+      const data = await window.electronAPI.loadProjects();
+      this.projects = data.projects || [];
+      this.currentProjectId = data.currentProjectId || null;
+      console.log('项目数据加载成功:', this.projects);
+    } catch (error) {
+      console.error('加载项目数据失败:', error);
+      this.projects = [];
+      this.currentProjectId = null;
+    }
+  }
+
+  async saveProjects() {
+    try {
+      await window.electronAPI.saveProjects({
+        projects: this.projects,
+        currentProjectId: this.currentProjectId
+      });
+      console.log('项目数据保存成功');
+    } catch (error) {
+      console.error('保存项目数据失败:', error);
+    }
+  }
+
   async loadTodos() {
     try {
       this.todos = await window.electronAPI.loadTodos();
@@ -168,6 +198,14 @@ class TodoApp {
   }
 
   bindEvents() {
+    // 添加项目按钮
+    const addProjectBtn = document.getElementById('btn-add-project');
+    if (addProjectBtn) {
+      addProjectBtn.addEventListener('click', () => {
+        this.showAddProjectDialog();
+      });
+    }
+
     // 添加任务表单
     const form = document.getElementById('add-task-form');
     form.addEventListener('submit', async (e) => {
@@ -276,6 +314,12 @@ class TodoApp {
   }
 
   async addTask() {
+    // 检查是否选择了项目
+    if (!this.currentProjectId) {
+      this.showToast('请先选择一个项目');
+      return;
+    }
+
     const input = document.getElementById('task-input');
     const prioritySelect = document.getElementById('priority-select');
     const dueDateInput = document.getElementById('due-date-input');
@@ -286,6 +330,7 @@ class TodoApp {
     const task = {
       id: Date.now(),
       text: text,
+      projectId: this.currentProjectId, // 关联项目ID
       completed: false,
       priority: prioritySelect.value,
       createdAt: new Date().toISOString(),
@@ -512,6 +557,11 @@ class TodoApp {
 
   filterTasks() {
     let filtered = [...this.todos];
+
+    // 按项目筛选
+    if (this.currentProjectId) {
+      filtered = filtered.filter(t => t.projectId === this.currentProjectId);
+    }
 
     // 按完成状态筛选
     if (this.currentFilter === 'active') {
@@ -967,6 +1017,269 @@ class TodoApp {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ========== 项目管理方法 ==========
+
+  // 渲染项目列表
+  async renderProjects() {
+    const projectList = document.getElementById('project-list');
+    projectList.innerHTML = '';
+
+    if (this.projects.length === 0) {
+      const emptyHint = document.createElement('div');
+      emptyHint.className = 'project-empty-hint';
+      emptyHint.textContent = '暂无项目，点击 + 创建';
+      projectList.appendChild(emptyHint);
+      return;
+    }
+
+    for (const project of this.projects) {
+      const projectItem = document.createElement('div');
+      projectItem.className = `project-item ${this.currentProjectId === project.id ? 'active' : ''}`;
+      projectItem.dataset.projectId = project.id;
+
+      // 计算项目任务数
+      const projectTodos = this.todos.filter(t => t.projectId === project.id);
+      const completedCount = projectTodos.filter(t => t.completed).length;
+      const totalCount = projectTodos.length;
+
+      projectItem.innerHTML = `
+        <div class="project-color" style="background-color: ${project.color}"></div>
+        <div class="project-info">
+          <div class="project-name">${this.escapeHtml(project.name)}</div>
+          <div class="project-count">${completedCount}/${totalCount}</div>
+        </div>
+        <button class="btn-delete-project" data-project-id="${project.id}" title="删除项目">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      `;
+
+      // 点击切换项目
+      projectItem.addEventListener('click', (e) => {
+        if (!e.target.closest('.btn-delete-project')) {
+          this.selectProject(project.id);
+        }
+      });
+
+      // 删除项目按钮
+      const deleteBtn = projectItem.querySelector('.btn-delete-project');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.deleteProject(project.id);
+      });
+
+      projectList.appendChild(projectItem);
+    }
+  }
+
+  // 显示添加项目对话框
+  showAddProjectDialog() {
+    // 创建或获取对话框
+    let dialog = document.getElementById('add-project-dialog');
+    if (!dialog) {
+      dialog = document.createElement('div');
+      dialog.id = 'add-project-dialog';
+      dialog.className = 'project-dialog';
+      dialog.innerHTML = `
+        <div class="project-dialog-content">
+          <div class="project-dialog-title">创建新项目</div>
+          <form id="project-form">
+            <input type="text" id="project-name-input" class="project-name-input" 
+                   placeholder="输入项目名称..." required maxlength="30" />
+            <div class="project-color-selector">
+              <label class="project-color-label">选择颜色：</label>
+              <div class="color-options">
+                <div class="color-option" data-color="#667eea" style="background-color: #667eea"></div>
+                <div class="color-option" data-color="#f56565" style="background-color: #f56565"></div>
+                <div class="color-option" data-color="#ed8936" style="background-color: #ed8936"></div>
+                <div class="color-option" data-color="#48bb78" style="background-color: #48bb78"></div>
+                <div class="color-option" data-color="#38b2ac" style="background-color: #38b2ac"></div>
+                <div class="color-option" data-color="#4299e1" style="background-color: #4299e1"></div>
+                <div class="color-option" data-color="#9f7aea" style="background-color: #9f7aea"></div>
+                <div class="color-option" data-color="#ed64a6" style="background-color: #ed64a6"></div>
+              </div>
+              <input type="hidden" id="project-color-input" value="#667eea" />
+            </div>
+            <div class="project-dialog-buttons">
+              <button type="button" class="project-dialog-btn project-dialog-btn-cancel">取消</button>
+              <button type="submit" class="project-dialog-btn project-dialog-btn-confirm">创建</button>
+            </div>
+          </form>
+        </div>
+      `;
+      document.body.appendChild(dialog);
+
+      // 颜色选择
+      const colorOptions = dialog.querySelectorAll('.color-option');
+      const colorInput = dialog.querySelector('#project-color-input');
+      colorOptions.forEach(option => {
+        option.addEventListener('click', () => {
+          colorOptions.forEach(o => o.classList.remove('selected'));
+          option.classList.add('selected');
+          colorInput.value = option.dataset.color;
+        });
+      });
+      // 默认选择第一个颜色
+      colorOptions[0].classList.add('selected');
+
+      // 表单提交
+      const form = dialog.querySelector('#project-form');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nameInput = dialog.querySelector('#project-name-input');
+        const colorInput = dialog.querySelector('#project-color-input');
+        await this.addProject(nameInput.value.trim(), colorInput.value);
+        dialog.classList.remove('show');
+        nameInput.value = '';
+        colorOptions[0].classList.add('selected');
+        colorInput.value = '#667eea';
+      });
+
+      // 取消按钮
+      const cancelBtn = dialog.querySelector('.project-dialog-btn-cancel');
+      cancelBtn.addEventListener('click', () => {
+        dialog.classList.remove('show');
+        form.reset();
+      });
+
+      // 点击背景关闭
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+          dialog.classList.remove('show');
+          form.reset();
+        }
+      });
+    }
+
+    // 显示对话框
+    dialog.classList.add('show');
+    setTimeout(() => {
+      const nameInput = dialog.querySelector('#project-name-input');
+      nameInput.focus();
+    }, 100);
+  }
+
+  // 添加项目
+  async addProject(name, color) {
+    if (!name) return;
+
+    const project = {
+      id: Date.now(),
+      name: name,
+      color: color,
+      createdAt: new Date().toISOString()
+    };
+
+    this.projects.push(project);
+    
+    // 如果是第一个项目，自动选中
+    if (this.projects.length === 1) {
+      this.currentProjectId = project.id;
+    }
+
+    await this.saveProjects();
+    await this.renderProjects();
+    this.updateTaskInputState();
+    this.showToast(`项目"${name}"创建成功`);
+  }
+
+  // 选择项目
+  async selectProject(projectId) {
+    this.currentProjectId = projectId;
+    await this.saveProjects();
+    await this.renderProjects();
+    this.updateTaskInputState();
+    await this.render();
+    
+    const project = this.projects.find(p => p.id === projectId);
+    if (project) {
+      this.showToast(`已切换到项目"${project.name}"`);
+    }
+  }
+
+  // 删除项目
+  async deleteProject(projectId) {
+    const project = this.projects.find(p => p.id === projectId);
+    if (!project) return;
+
+    // 检查项目下是否有任务
+    const projectTodos = this.todos.filter(t => t.projectId === projectId);
+    let message = `确定要删除项目"${project.name}"吗？`;
+    if (projectTodos.length > 0) {
+      message = `项目"${project.name}"包含 ${projectTodos.length} 个任务，删除后任务也会被删除。确定要删除吗？`;
+    }
+
+    const confirmed = await this.showConfirmDialog(message);
+    if (!confirmed) return;
+
+    // 删除项目下的所有任务及其图片
+    for (const task of projectTodos) {
+      if (task.image) {
+        await window.electronAPI.deleteImage(task.image);
+      }
+      if (task.images && task.images.length > 0) {
+        for (const image of task.images) {
+          await window.electronAPI.deleteImage(image);
+        }
+      }
+      if (task.progress) {
+        for (const progress of task.progress) {
+          if (progress.images) {
+            for (const image of progress.images) {
+              await window.electronAPI.deleteImage(image);
+            }
+          }
+        }
+      }
+    }
+    this.todos = this.todos.filter(t => t.projectId !== projectId);
+
+    // 删除项目
+    this.projects = this.projects.filter(p => p.id !== projectId);
+
+    // 如果删除的是当前项目，切换到第一个项目
+    if (this.currentProjectId === projectId) {
+      this.currentProjectId = this.projects.length > 0 ? this.projects[0].id : null;
+    }
+
+    await this.saveProjects();
+    await this.saveTodos();
+    await this.renderProjects();
+    this.updateTaskInputState();
+    await this.render();
+    this.showToast(`项目"${project.name}"已删除`);
+  }
+
+  // 更新任务输入状态
+  updateTaskInputState() {
+    const noProjectHint = document.getElementById('no-project-hint');
+    const currentProjectDisplay = document.getElementById('current-project-display');
+    const currentProjectName = document.getElementById('current-project-name');
+    const taskForm = document.getElementById('add-task-form');
+
+    if (this.projects.length === 0 || !this.currentProjectId) {
+      // 没有项目，禁用输入
+      noProjectHint.style.display = 'flex';
+      currentProjectDisplay.style.display = 'none';
+      taskForm.style.opacity = '0.5';
+      taskForm.style.pointerEvents = 'none';
+    } else {
+      // 有项目，启用输入
+      noProjectHint.style.display = 'none';
+      currentProjectDisplay.style.display = 'flex';
+      taskForm.style.opacity = '1';
+      taskForm.style.pointerEvents = 'auto';
+      
+      const project = this.projects.find(p => p.id === this.currentProjectId);
+      if (project) {
+        currentProjectName.textContent = project.name;
+        currentProjectName.style.color = project.color;
+      }
+    }
   }
 }
 

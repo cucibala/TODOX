@@ -73,6 +73,22 @@
     <main class="main-content">
       <!-- 侧边栏 -->
       <aside class="sidebar">
+        <!-- 项目管理部分 -->
+        <div class="project-section">
+          <div class="section-header">
+            <h3 class="section-title">项目</h3>
+            <button class="btn-add-project" id="btn-add-project" title="创建项目">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+          <div id="project-list" class="project-list">
+            <!-- 项目列表将动态生成 -->
+          </div>
+        </div>
+
         <div class="filter-section">
           <h3 class="section-title">筛选</h3>
           <div class="filter-buttons">
@@ -124,6 +140,18 @@
 
         <!-- 添加任务表单 -->
         <div class="add-task-section">
+          <div id="no-project-hint" class="no-project-hint" style="display: none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>请先创建一个项目，然后再添加任务</span>
+          </div>
+          <div id="current-project-display" class="current-project-display" style="display: none;">
+            <span class="current-project-label">当前项目：</span>
+            <span class="current-project-name" id="current-project-name"></span>
+          </div>
           <form id="add-task-form">
             <div class="input-group">
               <input 

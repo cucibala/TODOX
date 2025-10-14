@@ -2,8 +2,15 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // 暴露受保护的方法给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
+  // 项目管理
+  loadProjects: () => ipcRenderer.invoke('load-projects'),
+  saveProjects: (projects) => ipcRenderer.invoke('save-projects', projects),
+  
+  // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),
   saveTodos: (todos) => ipcRenderer.invoke('save-todos', todos),
+  
+  // 图片管理
   selectImage: () => ipcRenderer.invoke('select-image'),
   readImage: (fileName) => ipcRenderer.invoke('read-image', fileName),
   deleteImage: (fileName) => ipcRenderer.invoke('delete-image', fileName),
