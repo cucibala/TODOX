@@ -6,6 +6,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveTodos: (todos) => ipcRenderer.invoke('save-todos', todos),
   selectImage: () => ipcRenderer.invoke('select-image'),
   readImage: (fileName) => ipcRenderer.invoke('read-image', fileName),
-  deleteImage: (fileName) => ipcRenderer.invoke('delete-image', fileName)
+  deleteImage: (fileName) => ipcRenderer.invoke('delete-image', fileName),
+  
+  // 窗口控制
+  windowMinimize: () => ipcRenderer.send('window-minimize'),
+  windowMaximize: () => ipcRenderer.send('window-maximize'),
+  windowClose: () => ipcRenderer.send('window-close'),
+  toggleCompactMode: () => ipcRenderer.send('toggle-compact-mode'),
+  toggleAlwaysOnTop: () => ipcRenderer.send('toggle-always-on-top'),
+  
+  // 监听模式变化
+  onModeChanged: (callback) => ipcRenderer.on('mode-changed', (event, isCompact) => callback(isCompact)),
+  onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop))
 });
 

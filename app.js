@@ -17,11 +17,76 @@ class TodoApp {
     // 绑定事件
     this.bindEvents();
     
+    // 绑定窗口控制事件
+    this.bindWindowControls();
+    
+    // 监听模式变化
+    this.listenModeChanges();
+    
     // 设置默认日期为今天
     this.setDefaultDate();
     
     // 渲染任务列表
     this.render();
+  }
+
+  bindWindowControls() {
+    // 最小化按钮
+    const btnMinimize = document.getElementById('btn-minimize');
+    if (btnMinimize) {
+      btnMinimize.addEventListener('click', () => {
+        window.electronAPI.windowMinimize();
+      });
+    }
+
+    // 关闭按钮（隐藏到托盘）
+    const btnClose = document.getElementById('btn-close');
+    if (btnClose) {
+      btnClose.addEventListener('click', () => {
+        window.electronAPI.windowClose();
+      });
+    }
+
+    // 迷你模式切换按钮
+    const btnCompact = document.getElementById('btn-compact');
+    if (btnCompact) {
+      btnCompact.addEventListener('click', () => {
+        window.electronAPI.toggleCompactMode();
+      });
+    }
+
+    // 置顶按钮
+    const btnPin = document.getElementById('btn-pin');
+    if (btnPin) {
+      btnPin.addEventListener('click', () => {
+        window.electronAPI.toggleAlwaysOnTop();
+      });
+    }
+  }
+
+  listenModeChanges() {
+    // 监听迷你模式变化
+    window.electronAPI.onModeChanged((isCompact) => {
+      if (isCompact) {
+        document.body.classList.add('compact-mode');
+      } else {
+        document.body.classList.remove('compact-mode');
+      }
+    });
+
+    // 监听置顶状态变化
+    window.electronAPI.onAlwaysOnTopChanged((isOnTop) => {
+      const btnPin = document.getElementById('btn-pin');
+      if (btnPin) {
+        if (isOnTop) {
+          btnPin.classList.add('active');
+          btnPin.title = '取消置顶';
+        } else {
+          btnPin.classList.remove('active');
+          btnPin.title = '窗口置顶';
+        }
+      }
+    });
   }
 
   setDefaultDate() {

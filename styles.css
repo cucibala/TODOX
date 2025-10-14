@@ -40,46 +40,106 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 自定义标题栏 */
+.titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  background: var(--primary-color);
+  color: white;
+  -webkit-app-region: drag;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.titlebar-drag-region {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.titlebar-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.titlebar-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.titlebar-controls {
+  display: flex;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  width: 46px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+  padding: 0;
+}
+
+.titlebar-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.titlebar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.titlebar-btn.active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.titlebar-btn-close:hover {
+  background: var(--danger-color);
 }
 
 /* 头部样式 */
 .header {
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
   color: white;
-  padding: 20px 30px;
-  box-shadow: var(--shadow-md);
-  -webkit-app-region: drag;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
 }
 
 .header-content {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-}
-
-.app-title {
-  font-size: 24px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo-icon {
-  width: 32px;
-  height: 32px;
 }
 
 .header-stats {
   display: flex;
-  gap: 24px;
+  gap: 20px;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .stat-label {
@@ -91,6 +151,71 @@ body {
   padding: 2px 10px;
   border-radius: var(--radius-sm);
   font-weight: 600;
+}
+
+/* 迷你模式样式 */
+body.compact-mode .sidebar {
+  display: none;
+}
+
+body.compact-mode .toolbar {
+  padding: 12px 16px;
+}
+
+body.compact-mode .add-task-section {
+  padding: 12px 16px;
+}
+
+body.compact-mode .task-list-container {
+  padding: 12px 16px;
+}
+
+body.compact-mode .header {
+  padding: 12px 16px;
+}
+
+body.compact-mode .header-stats {
+  gap: 16px;
+}
+
+body.compact-mode .stat-item {
+  font-size: 12px;
+}
+
+body.compact-mode .input-group {
+  flex-wrap: wrap;
+}
+
+body.compact-mode #task-input {
+  flex: 1 1 100%;
+  margin-bottom: 8px;
+}
+
+body.compact-mode .date-input,
+body.compact-mode .priority-select {
+  flex: 1;
+  min-width: 0;
+}
+
+body.compact-mode .btn-image {
+  width: 44px;
+  height: 44px;
+}
+
+body.compact-mode .btn-add {
+  padding: 10px 16px;
+}
+
+body.compact-mode .task-item {
+  padding: 12px;
+}
+
+body.compact-mode .task-actions {
+  opacity: 1;
+}
+
+body.compact-mode .search-box {
+  max-width: 100%;
 }
 
 /* 主内容区 */
