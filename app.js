@@ -31,6 +31,14 @@ class TodoApp {
   }
 
   bindWindowControls() {
+    // 桌面模式按钮
+    const btnDesktop = document.getElementById('btn-desktop');
+    if (btnDesktop) {
+      btnDesktop.addEventListener('click', () => {
+        window.electronAPI.toggleDesktopMode();
+      });
+    }
+
     // 最小化按钮
     const btnMinimize = document.getElementById('btn-minimize');
     if (btnMinimize) {
@@ -69,8 +77,10 @@ class TodoApp {
     window.electronAPI.onModeChanged((isCompact) => {
       if (isCompact) {
         document.body.classList.add('compact-mode');
+        this.showToast('已切换到迷你模式');
       } else {
         document.body.classList.remove('compact-mode');
+        this.showToast('已切换到完整模式');
       }
     });
 
@@ -87,6 +97,56 @@ class TodoApp {
         }
       }
     });
+
+    // 监听桌面模式变化
+    window.electronAPI.onDesktopModeChanged((isDesktop) => {
+      const btnDesktop = document.getElementById('btn-desktop');
+      const btnPin = document.getElementById('btn-pin');
+      
+      if (isDesktop) {
+        document.body.classList.add('desktop-mode');
+        if (btnDesktop) {
+          btnDesktop.classList.add('active');
+          btnDesktop.title = '退出桌面模式';
+        }
+        if (btnPin) {
+          btnPin.disabled = true;
+          btnPin.style.opacity = '0.5';
+        }
+        this.showToast('已进入桌面背景模式');
+      } else {
+        document.body.classList.remove('desktop-mode');
+        if (btnDesktop) {
+          btnDesktop.classList.remove('active');
+          btnDesktop.title = '桌面背景模式';
+        }
+        if (btnPin) {
+          btnPin.disabled = false;
+          btnPin.style.opacity = '1';
+        }
+        this.showToast('已退出桌面背景模式');
+      }
+    });
+  }
+
+  showToast(message) {
+    // 创建或获取toast容器
+    let toast = document.getElementById('toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.className = 'toast';
+      document.body.appendChild(toast);
+    }
+
+    // 显示消息
+    toast.textContent = message;
+    toast.classList.add('show');
+
+    // 3秒后自动隐藏
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3000);
   }
 
   setDefaultDate() {

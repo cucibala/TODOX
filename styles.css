@@ -218,6 +218,52 @@ body.compact-mode .search-box {
   max-width: 100%;
 }
 
+/* 桌面背景模式样式 */
+body.desktop-mode {
+  background: transparent;
+}
+
+body.desktop-mode .app-container {
+  background: rgba(247, 250, 252, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+body.desktop-mode .titlebar {
+  background: rgba(102, 126, 234, 0.9);
+}
+
+body.desktop-mode .header {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(124, 143, 240, 0.9) 100%);
+}
+
+body.desktop-mode .sidebar {
+  background: rgba(255, 255, 255, 0.7);
+  border-right: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+body.desktop-mode .toolbar,
+body.desktop-mode .add-task-section {
+  background: rgba(255, 255, 255, 0.7);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+body.desktop-mode .task-list-container {
+  background: transparent;
+}
+
+body.desktop-mode .task-item {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+body.desktop-mode .task-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
 /* 主内容区 */
 .main-content {
   display: flex;
@@ -844,6 +890,31 @@ body.compact-mode .search-box {
   background: #e53e3e;
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
+}
+
+/* Toast 提示 */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(45, 55, 72, 0.95);
+  color: white;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 10001;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 /* 任务操作按钮 */

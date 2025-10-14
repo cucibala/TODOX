@@ -16,6 +16,7 @@ let mainWindow;
 let tray = null;
 let isCompactMode = false;
 let isAlwaysOnTop = true;
+let isDesktopMode = false; // 桌面模式
 
 // 加载设置
 function loadSettings() {
@@ -25,6 +26,7 @@ function loadSettings() {
       const settings = JSON.parse(data);
       isCompactMode = settings.compactMode || false;
       isAlwaysOnTop = settings.alwaysOnTop !== undefined ? settings.alwaysOnTop : true;
+      isDesktopMode = settings.desktopMode || false;
     }
   } catch (error) {
     console.error('加载设置失败:', error);
@@ -36,7 +38,8 @@ function saveSettings() {
   try {
     const settings = {
       compactMode: isCompactMode,
-      alwaysOnTop: isAlwaysOnTop
+      alwaysOnTop: isAlwaysOnTop,
+      desktopMode: isDesktopMode
     };
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
   } catch (error) {
@@ -58,12 +61,12 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    backgroundColor: '#f5f7fa',
+    backgroundColor: isDesktopMode ? 'rgba(0, 0, 0, 0)' : '#f5f7fa',
     show: false,
     frame: false, // 无边框
-    transparent: false,
-    alwaysOnTop: isAlwaysOnTop,
-    skipTaskbar: false,
+    transparent: isDesktopMode, // 桌面模式时启用透明
+    alwaysOnTop: isDesktopMode ? false : isAlwaysOnTop, // 桌面模式时不置顶
+    skipTaskbar: isDesktopMode, // 桌面模式时不显示在任务栏
     resizable: !isCompactMode
   });
 
@@ -72,9 +75,16 @@ function createWindow() {
   // 窗口加载完成后显示
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    
+    // 如果是桌面模式，设置为最底层
+    if (isDesktopMode) {
+      setDesktopLevel();
+    }
+    
     // 发送初始状态
     mainWindow.webContents.send('mode-changed', isCompactMode);
     mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
+    mainWindow.webContents.send('desktop-mode-changed', isDesktopMode);
   });
 
   // 开发模式下打开开发者工具
@@ -90,10 +100,66 @@ function createWindow() {
     }
     return false;
   });
+
+  // 监听窗口移动，智能切换模式
+  let moveTimeout = null;
+  mainWindow.on('moved', () => {
+    // 防抖处理，避免频繁触发
+    if (moveTimeout) clearTimeout(moveTimeout);
+    
+    moveTimeout = setTimeout(() => {
+      checkWindowPosition();
+    }, 300);
+  });
+}
+
+// 检查窗口位置并自动切换模式
+function checkWindowPosition() {
+  if (!mainWindow) return;
+
+  const { screen } = require('electron');
+  const windowBounds = mainWindow.getBounds();
+  const display = screen.getDisplayNearestPoint({ x: windowBounds.x, y: windowBounds.y });
+  const { workArea } = display;
+
+  // 定义右上角区域：屏幕右侧 30% 且顶部 30% 的区域
+  const rightEdge = workArea.x + workArea.width;
+  const topEdge = workArea.y;
+  const rightThreshold = workArea.x + workArea.width * 0.7; // 右侧30%区域
+  const topThreshold = workArea.y + workArea.height * 0.3; // 顶部30%区域
+
+  const windowCenterX = windowBounds.x + windowBounds.width / 2;
+  const windowCenterY = windowBounds.y + windowBounds.height / 2;
+
+  // 检查窗口是否在右上角区域
+  const isInTopRight = windowCenterX >= rightThreshold && windowCenterY <= topThreshold;
+
+  if (isInTopRight && !isCompactMode) {
+    // 自动切换到迷你模式和置顶
+    console.log('窗口移动到右上角，自动切换到迷你模式');
+    
+    if (!isCompactMode) {
+      toggleCompactMode();
+    }
+    
+    if (!isAlwaysOnTop) {
+      isAlwaysOnTop = true;
+      mainWindow.setAlwaysOnTop(isAlwaysOnTop);
+      mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
+      saveSettings();
+      updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
+    }
+  }
 }
 
 // 创建系统托盘
 function createTray() {
+  // 如果托盘已存在，先销毁
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+
   // 创建托盘图标
   const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
   let trayIcon;
@@ -107,11 +173,31 @@ function createTray() {
   
   tray = new Tray(trayIcon);
   
+  updateTrayMenu();
+  
+  tray.setToolTip('TodoX - 任务清单');
+  
+  // 双击托盘图标显示窗口
+  tray.on('double-click', () => {
+    mainWindow.show();
+  });
+}
+
+// 更新托盘菜单（不重新创建托盘）
+function updateTrayMenu() {
+  if (!tray) return;
+  
   const contextMenu = Menu.buildFromTemplate([
     {
       label: '显示窗口',
       click: () => {
         mainWindow.show();
+      }
+    },
+    {
+      label: isDesktopMode ? '退出桌面模式' : '桌面背景模式',
+      click: () => {
+        toggleDesktopMode();
       }
     },
     {
@@ -121,8 +207,9 @@ function createTray() {
         mainWindow.setAlwaysOnTop(isAlwaysOnTop);
         mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
         saveSettings();
-        createTray(); // 重新创建托盘菜单
-      }
+        updateTrayMenu(); // 只更新菜单，不重新创建托盘
+      },
+      enabled: !isDesktopMode // 桌面模式下禁用
     },
     {
       label: isCompactMode ? '完整模式' : '迷你模式',
@@ -140,13 +227,7 @@ function createTray() {
     }
   ]);
   
-  tray.setToolTip('TodoX - 任务清单');
   tray.setContextMenu(contextMenu);
-  
-  // 双击托盘图标显示窗口
-  tray.on('double-click', () => {
-    mainWindow.show();
-  });
 }
 
 // 切换迷你模式
@@ -165,7 +246,51 @@ function toggleCompactMode() {
   
   mainWindow.webContents.send('mode-changed', isCompactMode);
   saveSettings();
-  createTray(); // 更新托盘菜单
+  updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
+}
+
+// 设置桌面层级
+function setDesktopLevel() {
+  if (process.platform === 'win32') {
+    // Windows 上设置为最底层
+    mainWindow.setAlwaysOnTop(false, 'normal', -1);
+  } else if (process.platform === 'darwin') {
+    // macOS 上设置为桌面层级
+    mainWindow.setAlwaysOnTop(false);
+    app.dock.hide();
+  } else {
+    // Linux 上设置为桌面层级
+    mainWindow.setAlwaysOnTop(false);
+  }
+}
+
+// 切换桌面模式
+function toggleDesktopMode() {
+  isDesktopMode = !isDesktopMode;
+  
+  if (isDesktopMode) {
+    // 进入桌面模式
+    // 先关闭窗口，重新创建以应用透明背景
+    const bounds = mainWindow.getBounds();
+    mainWindow.close();
+    
+    setTimeout(() => {
+      createWindow();
+      mainWindow.setBounds(bounds);
+    }, 100);
+  } else {
+    // 退出桌面模式
+    const bounds = mainWindow.getBounds();
+    mainWindow.close();
+    
+    setTimeout(() => {
+      createWindow();
+      mainWindow.setBounds(bounds);
+    }, 100);
+  }
+  
+  saveSettings();
+  updateTrayMenu();
 }
 
 // 应用准备就绪
@@ -213,7 +338,17 @@ ipcMain.on('toggle-always-on-top', () => {
   mainWindow.setAlwaysOnTop(isAlwaysOnTop);
   mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
   saveSettings();
-  createTray();
+  updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
+});
+
+// 手动触发位置检查（用于测试）
+ipcMain.on('check-window-position', () => {
+  checkWindowPosition();
+});
+
+// 切换桌面模式
+ipcMain.on('toggle-desktop-mode', () => {
+  toggleDesktopMode();
 });
 
 // IPC 通信处理 - 读取任务数据
