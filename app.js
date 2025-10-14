@@ -204,15 +204,11 @@ class TodoApp {
 
     // 添加图片按钮
     const addImageBtn = document.getElementById('add-image-btn');
-    addImageBtn.addEventListener('click', async () => {
-      await this.selectImage();
-    });
-
-    // 移除图片按钮
-    const removeImageBtn = document.getElementById('remove-image-btn');
-    removeImageBtn.addEventListener('click', () => {
-      this.removeCurrentImage();
-    });
+    if (addImageBtn) {
+      addImageBtn.addEventListener('click', async () => {
+        await this.selectImage();
+      });
+    }
   }
 
   async selectImage() {
