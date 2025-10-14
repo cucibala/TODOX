@@ -31,9 +31,41 @@ class TodoApp {
     this.renderProjects();
     this.updateTaskInputState();
     this.render();
+    
+    // 检查密码保护：启动时如果已设置密码，自动锁定
+    await this.checkPasswordOnStartup();
+  }
+
+  // 启动时检查密码保护
+  async checkPasswordOnStartup() {
+    const result = await window.electronAPI.hasPassword();
+    if (result.hasPassword) {
+      // 已设置密码，自动显示锁定界面
+      const lockScreen = document.getElementById('lock-screen');
+      lockScreen.style.display = 'flex';
+      
+      // 清空输入框
+      const unlockInput = document.getElementById('unlock-password-input');
+      unlockInput.value = '';
+      
+      // 隐藏错误提示
+      const errorEl = document.getElementById('unlock-error');
+      errorEl.style.display = 'none';
+      
+      // 聚焦到输入框
+      setTimeout(() => unlockInput.focus(), 100);
+    }
   }
 
   bindWindowControls() {
+    // 锁定按钮
+    const btnLock = document.getElementById('btn-lock');
+    if (btnLock) {
+      btnLock.addEventListener('click', async () => {
+        await this.lockApp();
+      });
+    }
+
     // 桌面模式按钮
     const btnDesktop = document.getElementById('btn-desktop');
     if (btnDesktop) {
@@ -71,6 +103,23 @@ class TodoApp {
     if (btnPin) {
       btnPin.addEventListener('click', () => {
         window.electronAPI.toggleAlwaysOnTop();
+      });
+    }
+
+    // 解锁表单
+    const unlockForm = document.getElementById('unlock-form');
+    if (unlockForm) {
+      unlockForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.unlockApp();
+      });
+    }
+
+    // 设置密码按钮
+    const btnSetPassword = document.getElementById('btn-set-password');
+    if (btnSetPassword) {
+      btnSetPassword.addEventListener('click', () => {
+        this.showPasswordDialog();
       });
     }
   }
@@ -336,7 +385,8 @@ class TodoApp {
       createdAt: new Date().toISOString(),
       dueDate: dueDateInput.value || null,
       images: [...this.currentImages], // 保存图片数组
-      progress: [] // 进度记录数组
+      progress: [], // 进度记录数组
+      pinned: false // 是否置顶
     };
 
     this.todos.unshift(task);
@@ -358,8 +408,25 @@ class TodoApp {
     const task = this.todos.find(t => t.id === id);
     if (task) {
       task.completed = !task.completed;
+      // 记录完成时间
+      if (task.completed) {
+        task.completedAt = new Date().toISOString();
+      } else {
+        // 取消完成时清除完成时间
+        task.completedAt = null;
+      }
       await this.saveTodos();
       await this.render();
+    }
+  }
+
+  async togglePinTask(id) {
+    const task = this.todos.find(t => t.id === id);
+    if (task) {
+      task.pinned = !task.pinned;
+      await this.saveTodos();
+      await this.render();
+      this.showToast(task.pinned ? '任务已置顶' : '已取消置顶');
     }
   }
 
@@ -575,6 +642,22 @@ class TodoApp {
       filtered = filtered.filter(t => t.priority === this.currentPriorityFilter);
     }
 
+    // 排序：置顶 > 完成状态 > 创建时间
+    filtered.sort((a, b) => {
+      // 1. 置顶任务始终在最前面
+      if (a.pinned !== b.pinned) {
+        return a.pinned ? -1 : 1;
+      }
+      
+      // 2. 显示全部任务时，未完成的在上面，已完成的在下面
+      if (this.currentFilter === 'all' && a.completed !== b.completed) {
+        return a.completed ? 1 : -1;
+      }
+      
+      // 3. 相同状态下，按创建时间排序（新的在前）
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
     return filtered;
   }
 
@@ -604,6 +687,36 @@ class TodoApp {
       month: 'long', 
       day: 'numeric' 
     });
+  }
+
+  // 计算任务耗时
+  calculateTaskDuration(createdAt, completedAt) {
+    if (!createdAt || !completedAt) return null;
+    
+    const created = new Date(createdAt);
+    const completed = new Date(completedAt);
+    const diffMs = completed - created;
+    
+    if (diffMs < 0) return null;
+    
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return '不到1分钟';
+    if (diffMins < 60) return `${diffMins}分钟`;
+    if (diffHours < 24) {
+      const mins = diffMins % 60;
+      return mins > 0 ? `${diffHours}小时${mins}分钟` : `${diffHours}小时`;
+    }
+    if (diffDays < 30) {
+      const hours = diffHours % 24;
+      return hours > 0 ? `${diffDays}天${hours}小时` : `${diffDays}天`;
+    }
+    
+    const months = Math.floor(diffDays / 30);
+    const days = diffDays % 30;
+    return days > 0 ? `${months}个月${days}天` : `${months}个月`;
   }
 
   getDueDateStatus(dateString) {
@@ -733,7 +846,7 @@ class TodoApp {
 
   async createTaskElement(task) {
     const div = document.createElement('div');
-    div.className = `task-item ${task.completed ? 'completed' : ''}`;
+    div.className = `task-item ${task.completed ? 'completed' : ''} ${task.pinned ? 'pinned' : ''}`;
     div.dataset.taskId = task.id;
     
     if (this.editingTaskId === task.id) {
@@ -760,6 +873,29 @@ class TodoApp {
       `;
     }
 
+    // 构建完成时间显示
+    let completedAtHtml = '';
+    if (task.completed && task.completedAt) {
+      const duration = this.calculateTaskDuration(task.createdAt, task.completedAt);
+      completedAtHtml = `
+        <div class="task-completed-time">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          完成于 ${this.formatDate(task.completedAt)}
+        </div>
+        ${duration ? `
+          <div class="task-duration">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            耗时 ${duration}
+          </div>
+        ` : ''}
+      `;
+    }
+
     const isEditing = this.editingTaskId === task.id;
     
     div.innerHTML = `
@@ -775,10 +911,21 @@ class TodoApp {
         <div class="task-meta">
           <div class="task-time">${this.formatDate(task.createdAt)}</div>
           ${dueDateHtml}
+          ${completedAtHtml}
         </div>
         ${(task.images && task.images.length > 0) || task.image ? '<div class="task-images-container"></div>' : ''}
         ${isEditing ? '<div class="task-edit-images-container"><button type="button" class="btn-add-task-image" title="添加图片">📷 添加图片</button><div class="task-edit-images-list"></div></div>' : ''}
-        ${task.progress && task.progress.length > 0 ? '<div class="task-progress-container"></div>' : ''}
+        ${task.progress && task.progress.length > 0 ? `
+          <div class="task-progress-section">
+            <button class="btn-toggle-progress" title="展开/收起进度">
+              <svg class="progress-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+              <span class="progress-count">进度记录 (${task.progress.length})</span>
+            </button>
+            <div class="task-progress-container" style="display: none;"></div>
+          </div>
+        ` : ''}
         <div class="task-add-progress">
           <div class="progress-input-group">
             <input type="text" class="progress-input" placeholder="添加进度描述..." />
@@ -800,6 +947,12 @@ class TodoApp {
         </div>
       </div>
       <div class="task-actions">
+        <button class="btn-pin" title="${task.pinned ? '取消置顶' : '置顶'}">
+          <svg viewBox="0 0 24 24" fill="${task.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="17" x2="12" y2="22"></line>
+            <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+          </svg>
+        </button>
         <button class="btn-edit" title="编辑">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -857,6 +1010,9 @@ class TodoApp {
     const checkbox = div.querySelector('.task-checkbox');
     checkbox.addEventListener('click', async () => await this.toggleTask(task.id));
 
+    const pinBtn = div.querySelector('.btn-pin');
+    pinBtn.addEventListener('click', async () => await this.togglePinTask(task.id));
+
     const deleteBtn = div.querySelector('.btn-delete');
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -893,6 +1049,23 @@ class TodoApp {
         }
       }, 200);
     });
+
+    // 进度展开/收起按钮
+    const toggleProgressBtn = div.querySelector('.btn-toggle-progress');
+    if (toggleProgressBtn) {
+      toggleProgressBtn.addEventListener('click', () => {
+        const progressContainer = div.querySelector('.task-progress-container');
+        const toggleIcon = toggleProgressBtn.querySelector('.progress-toggle-icon');
+        
+        if (progressContainer.style.display === 'none') {
+          progressContainer.style.display = 'block';
+          toggleIcon.style.transform = 'rotate(180deg)';
+        } else {
+          progressContainer.style.display = 'none';
+          toggleIcon.style.transform = 'rotate(0deg)';
+        }
+      });
+    }
 
     // 进度记录显示
     const progressContainer = div.querySelector('.task-progress-container');
@@ -1279,6 +1452,228 @@ class TodoApp {
         currentProjectName.textContent = project.name;
         currentProjectName.style.color = project.color;
       }
+    }
+  }
+
+  // ========== 锁定/解锁功能 ==========
+
+  // 锁定应用
+  async lockApp() {
+    const result = await window.electronAPI.hasPassword();
+    if (!result.hasPassword) {
+      // 未设置密码，显示设置密码对话框
+      this.showPasswordDialog();
+      return;
+    }
+    
+    // 显示锁定界面
+    const lockScreen = document.getElementById('lock-screen');
+    lockScreen.style.display = 'flex';
+    
+    // 清空输入框
+    const unlockInput = document.getElementById('unlock-password-input');
+    unlockInput.value = '';
+    
+    // 隐藏错误提示
+    const errorEl = document.getElementById('unlock-error');
+    errorEl.style.display = 'none';
+    
+    // 聚焦到输入框
+    setTimeout(() => unlockInput.focus(), 100);
+  }
+
+  // 解锁应用
+  async unlockApp() {
+    const unlockInput = document.getElementById('unlock-password-input');
+    const errorEl = document.getElementById('unlock-error');
+    const password = unlockInput.value;
+
+    if (!password) {
+      errorEl.textContent = '请输入密码';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const result = await window.electronAPI.verifyPassword(password);
+    if (result.success) {
+      // 解锁成功
+      const lockScreen = document.getElementById('lock-screen');
+      lockScreen.style.display = 'none';
+      unlockInput.value = '';
+      errorEl.style.display = 'none';
+      this.showToast('解锁成功');
+    } else {
+      // 密码错误
+      errorEl.textContent = '密码错误，请重试';
+      errorEl.style.display = 'block';
+      unlockInput.value = '';
+      unlockInput.focus();
+    }
+  }
+
+  // 显示密码设置对话框
+  showPasswordDialog() {
+    let dialog = document.getElementById('password-dialog');
+    if (!dialog) {
+      dialog = document.createElement('div');
+      dialog.id = 'password-dialog';
+      dialog.className = 'password-dialog';
+      dialog.innerHTML = `
+        <div class="password-dialog-content">
+          <div class="password-dialog-title">密码设置</div>
+          <form id="password-form">
+            <div class="password-form-group" id="old-password-group" style="display: none;">
+              <label class="password-label">当前密码</label>
+              <input type="password" id="old-password-input" class="password-input" 
+                     placeholder="输入当前密码" autocomplete="off" />
+            </div>
+            <div class="password-form-group">
+              <label class="password-label">新密码</label>
+              <input type="password" id="new-password-input" class="password-input" 
+                     placeholder="输入新密码（至少4位）" autocomplete="off" required minlength="4" />
+            </div>
+            <div class="password-form-group">
+              <label class="password-label">确认密码</label>
+              <input type="password" id="confirm-password-input" class="password-input" 
+                     placeholder="再次输入新密码" autocomplete="off" required />
+            </div>
+            <div class="password-error" id="password-error" style="display: none;"></div>
+            <div class="password-dialog-buttons">
+              <button type="button" class="password-dialog-btn password-dialog-btn-cancel">取消</button>
+              <button type="button" class="password-dialog-btn password-dialog-btn-clear" id="btn-clear-password">清除密码</button>
+              <button type="submit" class="password-dialog-btn password-dialog-btn-confirm">确定</button>
+            </div>
+          </form>
+        </div>
+      `;
+      document.body.appendChild(dialog);
+
+      // 表单提交
+      const form = dialog.querySelector('#password-form');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.setPassword();
+      });
+
+      // 取消按钮
+      const cancelBtn = dialog.querySelector('.password-dialog-btn-cancel');
+      cancelBtn.addEventListener('click', () => {
+        dialog.classList.remove('show');
+        form.reset();
+      });
+
+      // 清除密码按钮
+      const clearBtn = dialog.querySelector('#btn-clear-password');
+      clearBtn.addEventListener('click', async () => {
+        await this.clearPassword();
+      });
+
+      // 点击背景关闭
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+          dialog.classList.remove('show');
+          form.reset();
+        }
+      });
+    }
+
+    // 检查是否已设置密码
+    window.electronAPI.hasPassword().then(result => {
+      const oldPasswordGroup = dialog.querySelector('#old-password-group');
+      const clearBtn = dialog.querySelector('#btn-clear-password');
+      if (result.hasPassword) {
+        oldPasswordGroup.style.display = 'block';
+        dialog.querySelector('#old-password-input').required = true;
+        clearBtn.style.display = 'inline-block';
+      } else {
+        oldPasswordGroup.style.display = 'none';
+        dialog.querySelector('#old-password-input').required = false;
+        clearBtn.style.display = 'none';
+      }
+    });
+
+    // 显示对话框
+    dialog.classList.add('show');
+    dialog.querySelector('#password-error').style.display = 'none';
+    setTimeout(() => {
+      const firstInput = dialog.querySelector('input:not([style*="display: none"])');
+      if (firstInput) firstInput.focus();
+    }, 100);
+  }
+
+  // 设置/修改密码
+  async setPassword() {
+    const dialog = document.getElementById('password-dialog');
+    const oldPasswordInput = dialog.querySelector('#old-password-input');
+    const newPasswordInput = dialog.querySelector('#new-password-input');
+    const confirmPasswordInput = dialog.querySelector('#confirm-password-input');
+    const errorEl = dialog.querySelector('#password-error');
+
+    const oldPassword = oldPasswordInput.value;
+    const newPassword = newPasswordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
+
+    // 验证
+    if (newPassword.length < 4) {
+      errorEl.textContent = '密码至少需要4位';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      errorEl.textContent = '两次输入的密码不一致';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    // 检查是否已设置密码
+    const hasPasswordResult = await window.electronAPI.hasPassword();
+    let result;
+
+    if (hasPasswordResult.hasPassword) {
+      // 修改密码
+      if (!oldPassword) {
+        errorEl.textContent = '请输入当前密码';
+        errorEl.style.display = 'block';
+        return;
+      }
+      result = await window.electronAPI.changePassword(oldPassword, newPassword);
+    } else {
+      // 设置新密码
+      result = await window.electronAPI.setPassword(newPassword);
+    }
+
+    if (result.success) {
+      dialog.classList.remove('show');
+      dialog.querySelector('#password-form').reset();
+      this.showToast(hasPasswordResult.hasPassword ? '密码修改成功' : '密码设置成功');
+    } else {
+      errorEl.textContent = result.error || '操作失败';
+      errorEl.style.display = 'block';
+    }
+  }
+
+  // 清除密码
+  async clearPassword() {
+    const dialog = document.getElementById('password-dialog');
+    const oldPasswordInput = dialog.querySelector('#old-password-input');
+    const errorEl = dialog.querySelector('#password-error');
+    const password = oldPasswordInput.value;
+
+    if (!password) {
+      errorEl.textContent = '请输入当前密码以清除密码保护';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    const result = await window.electronAPI.clearPassword(password);
+    if (result.success) {
+      dialog.classList.remove('show');
+      dialog.querySelector('#password-form').reset();
+      this.showToast('密码保护已清除');
+    } else {
+      errorEl.textContent = result.error || '清除失败';
+      errorEl.style.display = 'block';
     }
   }
 }

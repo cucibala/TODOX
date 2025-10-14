@@ -20,6 +20,12 @@
         </div>
       </div>
       <div class="titlebar-controls">
+        <button class="titlebar-btn" id="btn-lock" title="锁定程序">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </button>
         <button class="titlebar-btn" id="btn-desktop" title="桌面背景模式">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -209,6 +215,35 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- 锁定界面 -->
+  <div id="lock-screen" class="lock-screen" style="display: none;">
+    <div class="lock-content">
+      <div class="lock-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <h2 class="lock-title">TodoX 已锁定</h2>
+      <p class="lock-subtitle">请输入密码解锁</p>
+      <form id="unlock-form" class="lock-form">
+        <input 
+          type="password" 
+          id="unlock-password-input" 
+          class="lock-input" 
+          placeholder="输入密码" 
+          autocomplete="off"
+          required
+        />
+        <div class="lock-error" id="unlock-error" style="display: none;"></div>
+        <button type="submit" class="lock-btn">解锁</button>
+      </form>
+      <div class="lock-footer">
+        <button type="button" class="lock-link" id="btn-set-password">设置/修改密码</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

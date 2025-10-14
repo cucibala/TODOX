@@ -15,6 +15,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readImage: (fileName) => ipcRenderer.invoke('read-image', fileName),
   deleteImage: (fileName) => ipcRenderer.invoke('delete-image', fileName),
   
+  // 密码管理
+  setPassword: (password) => ipcRenderer.invoke('set-password', password),
+  verifyPassword: (password) => ipcRenderer.invoke('verify-password', password),
+  hasPassword: () => ipcRenderer.invoke('has-password'),
+  changePassword: (oldPassword, newPassword) => ipcRenderer.invoke('change-password', oldPassword, newPassword),
+  clearPassword: (password) => ipcRenderer.invoke('clear-password', password),
+  
   // 窗口控制
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),

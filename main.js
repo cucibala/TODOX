@@ -36,6 +36,28 @@ let isCompactMode = false;
 let isAlwaysOnTop = true;
 let isDesktopMode = false; // 桌面模式
 
+// 简单的密码加密（Base64 + 混淆）
+function encryptPassword(password) {
+  const salt = 'TodoX-Secret-Key-2025';
+  const mixed = password.split('').map((char, i) => 
+    String.fromCharCode(char.charCodeAt(0) ^ salt.charCodeAt(i % salt.length))
+  ).join('');
+  return Buffer.from(mixed).toString('base64');
+}
+
+// 密码解密
+function decryptPassword(encrypted) {
+  try {
+    const salt = 'TodoX-Secret-Key-2025';
+    const mixed = Buffer.from(encrypted, 'base64').toString();
+    return mixed.split('').map((char, i) => 
+      String.fromCharCode(char.charCodeAt(0) ^ salt.charCodeAt(i % salt.length))
+    ).join('');
+  } catch (error) {
+    return null;
+  }
+}
+
 // 加载设置
 function loadSettings() {
   try {
@@ -486,6 +508,101 @@ ipcMain.handle('delete-image', async (event, fileName) => {
     return { success: true };
   } catch (error) {
     console.error('删除图片失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 设置密码
+ipcMain.handle('set-password', async (event, password) => {
+  try {
+    if (!password) {
+      return { success: false, error: '密码不能为空' };
+    }
+    const encrypted = encryptPassword(password);
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
+    settings.password = encrypted;
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('设置密码失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 验证密码
+ipcMain.handle('verify-password', async (event, password) => {
+  try {
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, hasPassword: false };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.password) {
+      return { success: false, hasPassword: false };
+    }
+    const decrypted = decryptPassword(settings.password);
+    const isValid = decrypted === password;
+    return { success: isValid, hasPassword: true };
+  } catch (error) {
+    console.error('验证密码失败:', error);
+    return { success: false, hasPassword: true, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 检查是否设置了密码
+ipcMain.handle('has-password', async () => {
+  try {
+    if (!fs.existsSync(settingsPath)) {
+      return { hasPassword: false };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    return { hasPassword: !!settings.password };
+  } catch (error) {
+    console.error('检查密码失败:', error);
+    return { hasPassword: false };
+  }
+});
+
+// IPC 通信处理 - 修改密码
+ipcMain.handle('change-password', async (event, oldPassword, newPassword) => {
+  try {
+    // 先验证旧密码
+    const verifyResult = await ipcMain.invoke('verify-password', oldPassword);
+    if (!verifyResult.success) {
+      return { success: false, error: '旧密码不正确' };
+    }
+    // 设置新密码
+    const encrypted = encryptPassword(newPassword);
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    settings.password = encrypted;
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('修改密码失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 清除密码
+ipcMain.handle('clear-password', async (event, password) => {
+  try {
+    // 先验证密码
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, error: '未设置密码' };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.password) {
+      return { success: false, error: '未设置密码' };
+    }
+    const decrypted = decryptPassword(settings.password);
+    if (decrypted !== password) {
+      return { success: false, error: '密码不正确' };
+    }
+    // 清除密码
+    delete settings.password;
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('清除密码失败:', error);
     return { success: false, error: error.message };
   }
 });
