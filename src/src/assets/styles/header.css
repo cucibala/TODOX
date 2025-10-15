@@ -1,0 +1,51 @@
+/* 头部样式 */
+.header {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  color: white;
+  padding: 16px 20px;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.header-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.header-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.stat-label {
+  opacity: 0.9;
+}
+
+.stat-value {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+/* 迷你模式样式 */
+.compact-mode .header {
+  padding: 12px 16px;
+}
+
+.compact-mode .header-stats {
+  gap: 16px;
+}
+
+.compact-mode .stat-item {
+  font-size: 12px;
+}
+

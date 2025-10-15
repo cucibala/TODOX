@@ -1,0 +1,342 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { useProjectStore } from './project'
+import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
+
+export const useTodoStore = defineStore('todo', () => {
+  // 状态
+  const todos = ref([])
+  const currentFilter = ref('all')
+  const currentPriorityFilter = ref('all')
+  const searchQuery = ref('')
+  const editingTaskId = ref(null)
+  const currentImages = ref([])
+  const currentProgressImages = ref({})
+  const currentSubtaskTaskId = ref(null)
+  
+  // 获取 electronAPI
+  const electronAPI = window.electronAPI
+  
+  // 计算属性
+  const filteredTodos = computed(() => {
+    const projectStore = useProjectStore()
+    let filtered = [...todos.value]
+    
+    // 按项目筛选
+    if (projectStore.currentProjectId) {
+      filtered = filtered.filter(t => t.projectId === projectStore.currentProjectId)
+    }
+    
+    // 按完成状态筛选
+    if (currentFilter.value === 'active') {
+      filtered = filtered.filter(t => !t.completed)
+    } else if (currentFilter.value === 'completed') {
+      filtered = filtered.filter(t => t.completed)
+    }
+    
+    // 按优先级筛选
+    if (currentPriorityFilter.value !== 'all') {
+      filtered = filtered.filter(t => t.priority === currentPriorityFilter.value)
+    }
+    
+    // 按搜索关键词筛选
+    if (searchQuery.value) {
+      const query = searchQuery.value.toLowerCase()
+      filtered = filtered.filter(t => t.text.toLowerCase().includes(query))
+    }
+    
+    // 排序：置顶 > 完成状态 > 创建时间
+    filtered.sort((a, b) => {
+      if (a.pinned !== b.pinned) {
+        return a.pinned ? -1 : 1
+      }
+      if (a.completed !== b.completed) {
+        return a.completed ? 1 : -1
+      }
+      return new Date(b.createdAt) - new Date(a.createdAt)
+    })
+    
+    return filtered
+  })
+  
+  const totalCount = computed(() => todos.value.length)
+  const completedCount = computed(() => todos.value.filter(t => t.completed).length)
+  
+  // 加载任务
+  async function loadTodos() {
+    try {
+      todos.value = await electronAPI.loadTodos()
+    } catch (error) {
+      console.error('加载任务数据失败:', error)
+      todos.value = []
+    }
+  }
+  
+  // 保存任务
+  async function saveTodos() {
+    try {
+      await electronAPI.saveTodos(todos.value)
+    } catch (error) {
+      console.error('保存任务数据失败:', error)
+    }
+  }
+  
+  // 添加任务
+  async function addTask(text, priority, dueDate) {
+    const projectStore = useProjectStore()
+    
+    if (!projectStore.currentProjectId) {
+      return { success: false, error: '请先选择一个项目' }
+    }
+    
+    if (!text.trim()) {
+      return { success: false, error: '请输入任务内容' }
+    }
+    
+    const task = {
+      id: Date.now(),
+      text: text.trim(),
+      projectId: projectStore.currentProjectId,
+      completed: false,
+      priority: priority || 'medium',
+      createdAt: new Date().toISOString(),
+      dueDate: dueDate || null,
+      images: [...currentImages.value],
+      progress: [],
+      pinned: false,
+      subtasks: []
+    }
+    
+    todos.value.unshift(task)
+    
+    // 清空当前图片
+    currentImages.value = []
+    
+    await saveTodos()
+    return { success: true }
+  }
+  
+  // 切换任务完成状态
+  async function toggleTask(id) {
+    const task = todos.value.find(t => t.id === id)
+    if (task) {
+      task.completed = !task.completed
+      if (task.completed) {
+        task.completedAt = new Date().toISOString()
+      } else {
+        task.completedAt = null
+      }
+      await saveTodos()
+    }
+  }
+  
+  // 切换任务置顶
+  async function togglePinTask(id) {
+    const task = todos.value.find(t => t.id === id)
+    if (task) {
+      task.pinned = !task.pinned
+      await saveTodos()
+    }
+  }
+  
+  // 删除任务（包含图片）
+  async function deleteTaskWithImages(id) {
+    const task = todos.value.find(t => t.id === id)
+    if (task) {
+      // 删除任务的所有图片
+      if (task.image) {
+        await electronAPI.deleteImage(task.image)
+      }
+      if (task.images && task.images.length > 0) {
+        for (const image of task.images) {
+          await electronAPI.deleteImage(image)
+        }
+      }
+      if (task.progress) {
+        for (const progress of task.progress) {
+          if (progress.images) {
+            for (const image of progress.images) {
+              await electronAPI.deleteImage(image)
+            }
+          }
+        }
+      }
+    }
+    todos.value = todos.value.filter(t => t.id !== id)
+  }
+  
+  // 删除任务
+  async function deleteTask(id) {
+    await deleteTaskWithImages(id)
+    await saveTodos()
+  }
+  
+  // 编辑任务
+  async function updateTask(id, updates) {
+    const task = todos.value.find(t => t.id === id)
+    if (task) {
+      Object.assign(task, updates)
+      await saveTodos()
+    }
+  }
+  
+  // 选择图片
+  async function selectImage() {
+    try {
+      const result = await electronAPI.selectImage()
+      if (result.success && result.fileName) {
+        currentImages.value.push(result.fileName)
+        return { success: true }
+      }
+      return { success: false }
+    } catch (error) {
+      console.error('选择图片失败:', error)
+      return { success: false }
+    }
+  }
+  
+  // 移除当前选择的图片
+  function removeCurrentImage(index) {
+    currentImages.value.splice(index, 1)
+  }
+  
+  // 清空当前图片
+  function clearCurrentImages() {
+    currentImages.value = []
+  }
+  
+  // 添加子任务
+  async function addSubtask(taskId, text, weight = 3) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && text.trim()) {
+      if (!task.subtasks) {
+        task.subtasks = []
+      }
+      
+      task.subtasks.push({
+        id: Date.now(),
+        text: text.trim(),
+        weight,
+        completed: false,
+        createdAt: new Date().toISOString()
+      })
+      
+      await saveTodos()
+    }
+  }
+  
+  // 切换子任务完成状态
+  async function toggleSubtask(taskId, subtaskId) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && task.subtasks) {
+      const subtask = task.subtasks.find(st => st.id === subtaskId)
+      if (subtask) {
+        subtask.completed = !subtask.completed
+        if (subtask.completed) {
+          subtask.completedAt = new Date().toISOString()
+        } else {
+          subtask.completedAt = null
+        }
+        await saveTodos()
+      }
+    }
+  }
+  
+  // 删除子任务
+  async function deleteSubtask(taskId, subtaskId) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && task.subtasks) {
+      task.subtasks = task.subtasks.filter(st => st.id !== subtaskId)
+      await saveTodos()
+    }
+  }
+  
+  // 获取任务进度百分比
+  function getTaskProgress(task) {
+    if (task.subtasks && task.subtasks.length > 0) {
+      const totalWeight = task.subtasks.reduce((sum, st) => sum + (st.weight || 3), 0)
+      const completedWeight = task.subtasks
+        .filter(st => st.completed)
+        .reduce((sum, st) => sum + (st.weight || 3), 0)
+      return totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0
+    } else {
+      return task.completed ? 100 : 0
+    }
+  }
+  
+  // 添加进度记录
+  async function addProgress(taskId, progressText) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && progressText.trim()) {
+      if (!task.progress) {
+        task.progress = []
+      }
+      
+      const progressImages = currentProgressImages.value[taskId] || []
+      
+      task.progress.push({
+        id: Date.now(),
+        text: progressText.trim(),
+        createdAt: new Date().toISOString(),
+        images: [...progressImages]
+      })
+      
+      // 清空当前任务的进度图片
+      currentProgressImages.value[taskId] = []
+      
+      await saveTodos()
+    }
+  }
+  
+  // 删除进度记录
+  async function deleteProgress(taskId, progressId) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && task.progress) {
+      // 找到进度并删除其图片
+      const progress = task.progress.find(p => p.id === progressId)
+      if (progress && progress.images) {
+        for (const image of progress.images) {
+          await electronAPI.deleteImage(image)
+        }
+      }
+      
+      task.progress = task.progress.filter(p => p.id !== progressId)
+      await saveTodos()
+    }
+  }
+  
+  return {
+    // 状态
+    todos,
+    currentFilter,
+    currentPriorityFilter,
+    searchQuery,
+    editingTaskId,
+    currentImages,
+    currentProgressImages,
+    currentSubtaskTaskId,
+    filteredTodos,
+    totalCount,
+    completedCount,
+    
+    // 方法
+    loadTodos,
+    saveTodos,
+    addTask,
+    toggleTask,
+    togglePinTask,
+    deleteTask,
+    deleteTaskWithImages,
+    updateTask,
+    selectImage,
+    removeCurrentImage,
+    clearCurrentImages,
+    addSubtask,
+    toggleSubtask,
+    deleteSubtask,
+    getTaskProgress,
+    addProgress,
+    deleteProgress
+  }
+})
+

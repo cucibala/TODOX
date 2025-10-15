@@ -1,0 +1,265 @@
+/* 侧边栏 */
+.sidebar {
+  width: 240px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 24px 16px;
+  overflow-y: auto;
+}
+
+.section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+}
+
+.filter-section,
+.priority-section {
+  margin-bottom: 32px;
+}
+
+.filter-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-btn,
+.priority-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.filter-btn:hover,
+.priority-filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-btn.active {
+  background: var(--primary-color);
+  color: white;
+}
+
+.filter-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.priority-filter-btn {
+  justify-content: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+}
+
+.priority-filter-btn.active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.priority-high.active {
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.priority-medium.active {
+  border-color: var(--warning-color);
+  color: var(--warning-color);
+  background: rgba(237, 137, 54, 0.1);
+}
+
+.priority-low.active {
+  border-color: var(--success-color);
+  color: var(--success-color);
+  background: rgba(72, 187, 120, 0.1);
+}
+
+/* 项目管理样式 */
+.project-section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.btn-add-project {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-add-project:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+.btn-add-project svg {
+  width: 14px;
+  height: 14px;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-empty-hint {
+  text-align: center;
+  padding: 20px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.project-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.project-item:hover {
+  background: var(--bg-hover);
+}
+
+.project-item.active {
+  background: rgba(102, 126, 234, 0.1);
+  border: 1px solid var(--primary-color);
+}
+
+.project-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.project-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-delete-project {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.project-item:hover .btn-delete-project {
+  opacity: 1;
+}
+
+.btn-delete-project:hover {
+  background: rgba(245, 101, 101, 0.1);
+  color: var(--danger-color);
+}
+
+.btn-delete-project svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 设置区域样式 */
+.settings-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.settings-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.settings-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+  transform: translateX(4px);
+}
+
+.settings-btn svg {
+  width: 18px;
+  height: 18px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+

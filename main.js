@@ -156,7 +156,17 @@ function createWindow() {
     resizable: !isCompactMode
   });
 
-  mainWindow.loadFile('index.html');
+  // 检查是否存在 Vue 构建的文件
+  const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
+  const oldIndexPath = path.join(__dirname, 'index.html');
+  
+  if (fs.existsSync(vueDistPath)) {
+    // 使用 Vue 构建的版本
+    mainWindow.loadFile(vueDistPath);
+  } else {
+    // 回退到旧版本
+    mainWindow.loadFile(oldIndexPath);
+  }
 
   // 窗口加载完成后显示
   mainWindow.once('ready-to-show', () => {

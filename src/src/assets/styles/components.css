@@ -1,0 +1,379 @@
+/* Toast 提示 */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(45, 55, 72, 0.95);
+  color: white;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 10001;
+  pointer-events: none;
+  white-space: pre-wrap;
+  max-width: 90%;
+  text-align: center;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 图片查看器 */
+.image-viewer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: pointer;
+  animation: fadeIn 0.2s ease;
+}
+
+.image-viewer img {
+  max-width: 90%;
+  max-height: 90%;
+  border-radius: var(--radius-md);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* 圆环进度条 */
+.task-progress-circle-wrapper {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-progress-circle-wrapper:hover {
+  transform: scale(1.1);
+}
+
+.task-progress-circle {
+  width: 44px;
+  height: 44px;
+}
+
+.progress-circle-bg {
+  fill: none;
+  stroke: var(--border-color);
+  stroke-width: 3;
+}
+
+.progress-circle-fill {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+}
+
+.progress-circle-text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-primary);
+  transition: opacity 0.2s ease;
+}
+
+.progress-circle-add-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  color: var(--primary-color);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.task-progress-circle-wrapper:hover .progress-circle-text {
+  opacity: 0;
+}
+
+.task-progress-circle-wrapper:hover .progress-circle-add-icon {
+  opacity: 1;
+}
+
+.progress-circle-add-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* 子任务样式 */
+.task-subtasks-section {
+  margin-top: 10px;
+}
+
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.subtask-item:hover {
+  background: var(--border-color);
+}
+
+.subtask-weight {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.subtask-weight-high {
+  background: rgba(245, 101, 101, 0.15);
+  color: var(--danger-color);
+}
+
+.subtask-weight-medium {
+  background: rgba(237, 137, 54, 0.15);
+  color: var(--warning-color);
+}
+
+.subtask-weight-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
+}
+
+.subtask-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.subtask-checkbox:hover {
+  border-color: var(--primary-color);
+}
+
+.subtask-checkbox.checked {
+  background: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.subtask-checkbox svg {
+  width: 12px;
+  height: 12px;
+  color: white;
+  display: none;
+}
+
+.subtask-checkbox.checked svg {
+  display: block;
+}
+
+.subtask-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subtask-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  word-wrap: break-word;
+}
+
+.subtask-text.completed {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.subtask-time-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.subtask-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.subtask-duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+.btn-delete-subtask {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.subtask-item:hover .btn-delete-subtask {
+  opacity: 1;
+}
+
+.btn-delete-subtask:hover {
+  color: var(--danger-color);
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.btn-delete-subtask svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 进度记录 */
+.task-progress-section {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-toggle-progress {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-progress:hover {
+  color: var(--primary-color);
+}
+
+.progress-toggle-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.3s ease;
+}
+
+.progress-count {
+  flex: 1;
+  text-align: left;
+}
+
+.task-progress-container {
+  padding: 8px 0 0 0;
+  animation: slideDown 0.3s ease;
+}
+
+.progress-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--primary-color);
+}
+
+.progress-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.progress-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  word-wrap: break-word;
+  margin-bottom: 4px;
+}
+
+.progress-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.btn-delete-progress {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.btn-delete-progress:hover {
+  color: var(--danger-color);
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.btn-delete-progress svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 任务图片 */
+.task-images-container {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.task-image:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
