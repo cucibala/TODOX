@@ -652,6 +652,74 @@ body.desktop-mode .task-item:hover {
   background: linear-gradient(to right, rgba(237, 137, 54, 0.05), transparent);
 }
 
+/* 圆环进度条 */
+.task-progress-circle-wrapper {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  margin-right: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-progress-circle-wrapper:hover {
+  transform: scale(1.1);
+}
+
+.task-progress-circle {
+  width: 44px;
+  height: 44px;
+}
+
+.progress-circle-bg {
+  fill: none;
+  stroke: var(--border-color);
+  stroke-width: 3;
+}
+
+.progress-circle-fill {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+}
+
+.progress-circle-text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--text-primary);
+  transition: opacity 0.2s ease;
+}
+
+.progress-circle-add-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  color: var(--primary-color);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.task-progress-circle-wrapper:hover .progress-circle-text {
+  opacity: 0;
+}
+
+.task-progress-circle-wrapper:hover .progress-circle-add-icon {
+  opacity: 1;
+}
+
+.progress-circle-add-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* 复选框 */
 .task-checkbox {
   width: 22px;
@@ -899,6 +967,146 @@ body.desktop-mode .task-item:hover {
 }
 
 .btn-delete-progress svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 子任务区域 */
+.task-subtasks-section {
+  margin-top: 8px;
+}
+
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+}
+
+.subtask-item:hover {
+  background: var(--border-color);
+}
+
+.subtask-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.subtask-checkbox:hover {
+  border-color: var(--primary-color);
+}
+
+.subtask-checkbox.checked {
+  background: var(--success-color);
+  border-color: var(--success-color);
+}
+
+.subtask-checkbox svg {
+  width: 12px;
+  height: 12px;
+  color: white;
+  display: none;
+}
+
+.subtask-checkbox.checked svg {
+  display: block;
+}
+
+.subtask-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  word-wrap: break-word;
+}
+
+.subtask-text.completed {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.btn-delete-subtask {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.subtask-item:hover .btn-delete-subtask {
+  opacity: 1;
+}
+
+.btn-delete-subtask:hover {
+  color: var(--danger-color);
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.btn-delete-subtask svg {
+  width: 12px;
+  height: 12px;
+}
+
+.subtasks-add-input {
+  display: flex;
+  gap: 6px;
+}
+
+.subtask-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  transition: all 0.2s ease;
+  background: var(--bg-secondary);
+}
+
+.subtask-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn-add-subtask {
+  padding: 6px 10px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-add-subtask:hover {
+  background: var(--primary-dark);
+}
+
+.btn-add-subtask svg {
   width: 14px;
   height: 14px;
 }

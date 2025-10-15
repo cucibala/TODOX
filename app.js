@@ -386,7 +386,8 @@ class TodoApp {
       dueDate: dueDateInput.value || null,
       images: [...this.currentImages], // 保存图片数组
       progress: [], // 进度记录数组
-      pinned: false // 是否置顶
+      pinned: false, // 是否置顶
+      subtasks: [] // 子任务数组
     };
 
     this.todos.unshift(task);
@@ -854,6 +855,10 @@ class TodoApp {
     }
 
     const priorityClass = `priority-${task.priority}`;
+    
+    // 获取任务进度
+    const taskProgress = this.getTaskProgress(task);
+    const progressCircleHtml = this.createProgressCircle(taskProgress, task.id);
 
     // 构建日期显示
     let dueDateHtml = '';
@@ -904,6 +909,7 @@ class TodoApp {
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
       </div>
+      ${progressCircleHtml}
       <div class="priority-indicator ${priorityClass}"></div>
       <div class="task-content">
         <div class="task-text">${this.escapeHtml(task.text)}</div>
@@ -915,6 +921,18 @@ class TodoApp {
         </div>
         ${(task.images && task.images.length > 0) || task.image ? '<div class="task-images-container"></div>' : ''}
         ${isEditing ? '<div class="task-edit-images-container"><button type="button" class="btn-add-task-image" title="添加图片">📷 添加图片</button><div class="task-edit-images-list"></div></div>' : ''}
+        <div class="task-subtasks-section">
+          ${task.subtasks && task.subtasks.length > 0 ? '<div class="subtasks-list"></div>' : ''}
+          <div class="subtasks-add-input">
+            <input type="text" class="subtask-input" placeholder="添加子任务..." data-task-id="${task.id}" id="subtask-input-${task.id}" />
+            <button class="btn-add-subtask" data-task-id="${task.id}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
         ${task.progress && task.progress.length > 0 ? `
           <div class="task-progress-section">
             <button class="btn-toggle-progress" title="展开/收起进度">
@@ -1009,6 +1027,21 @@ class TodoApp {
     // 绑定事件
     const checkbox = div.querySelector('.task-checkbox');
     checkbox.addEventListener('click', async () => await this.toggleTask(task.id));
+
+    // 圆环进度条点击事件 - 聚焦到子任务输入框
+    const progressCircleWrapper = div.querySelector('.task-progress-circle-wrapper');
+    if (progressCircleWrapper) {
+      progressCircleWrapper.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const subtaskInput = div.querySelector(`#subtask-input-${task.id}`);
+        if (subtaskInput) {
+          subtaskInput.focus();
+        }
+      });
+    }
+
+    // 渲染子任务列表
+    this.renderSubtasksInline(div, task);
 
     const pinBtn = div.querySelector('.btn-pin');
     pinBtn.addEventListener('click', async () => await this.togglePinTask(task.id));
@@ -1190,6 +1223,170 @@ class TodoApp {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // ========== 子任务管理方法 ==========
+
+  // 渲染子任务列表
+  renderSubtasksInline(taskElement, task) {
+    const subtasksList = taskElement.querySelector('.subtasks-list');
+    
+    // 如果有子任务，渲染列表
+    if (subtasksList && task.subtasks && task.subtasks.length > 0) {
+      subtasksList.innerHTML = '';
+      
+      task.subtasks.forEach(subtask => {
+        const item = document.createElement('div');
+        item.className = 'subtask-item';
+        item.innerHTML = `
+          <div class="subtask-checkbox ${subtask.completed ? 'checked' : ''}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <span class="subtask-text ${subtask.completed ? 'completed' : ''}">${this.escapeHtml(subtask.text)}</span>
+          <button class="btn-delete-subtask">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        `;
+
+        const checkbox = item.querySelector('.subtask-checkbox');
+        checkbox.addEventListener('click', async () => {
+          await this.toggleSubtask(task.id, subtask.id);
+        });
+
+        const deleteBtn = item.querySelector('.btn-delete-subtask');
+        deleteBtn.addEventListener('click', async () => {
+          await this.deleteSubtask(task.id, subtask.id);
+        });
+
+        subtasksList.appendChild(item);
+      });
+    }
+
+    // 绑定添加子任务事件
+    const subtaskInput = taskElement.querySelector('.subtask-input');
+    const addSubtaskBtn = taskElement.querySelector('.btn-add-subtask');
+
+    if (addSubtaskBtn) {
+      addSubtaskBtn.addEventListener('click', async () => {
+        if (subtaskInput.value.trim()) {
+          await this.addSubtask(task.id, subtaskInput.value);
+          subtaskInput.value = '';
+        }
+      });
+    }
+
+    if (subtaskInput) {
+      subtaskInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter' && subtaskInput.value.trim()) {
+          await this.addSubtask(task.id, subtaskInput.value);
+          subtaskInput.value = '';
+        }
+      });
+    }
+  }
+
+  // 获取子任务完成进度
+  getSubtasksProgress(subtasks) {
+    if (!subtasks || subtasks.length === 0) return '0/0';
+    const completed = subtasks.filter(st => st.completed).length;
+    return `${completed}/${subtasks.length}`;
+  }
+
+  // 计算任务完成百分比
+  getTaskProgress(task) {
+    if (task.subtasks && task.subtasks.length > 0) {
+      // 有子任务：根据子任务完成比例
+      const completed = task.subtasks.filter(st => st.completed).length;
+      return Math.round((completed / task.subtasks.length) * 100);
+    } else {
+      // 无子任务：根据主任务完成状态
+      return task.completed ? 100 : 0;
+    }
+  }
+
+  // 创建圆环进度条SVG
+  createProgressCircle(progress, taskId) {
+    const radius = 18;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (progress / 100) * circumference;
+    
+    // 根据进度选择颜色
+    let color = '#10b981'; // 绿色 (完成)
+    if (progress === 0) {
+      color = '#e5e7eb'; // 灰色 (未开始)
+    } else if (progress < 100) {
+      color = '#667eea'; // 蓝色 (进行中)
+    }
+    
+    return `
+      <div class="task-progress-circle-wrapper" data-task-id="${taskId}" title="点击添加子任务">
+        <svg class="task-progress-circle" viewBox="0 0 44 44">
+          <circle class="progress-circle-bg" cx="22" cy="22" r="${radius}"></circle>
+          <circle class="progress-circle-fill" cx="22" cy="22" r="${radius}" 
+            stroke="${color}"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${offset}">
+          </circle>
+          <text class="progress-circle-text" x="22" y="22" text-anchor="middle" dy="0.35em">
+            ${progress}
+          </text>
+        </svg>
+        <div class="progress-circle-add-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </div>
+      </div>
+    `;
+  }
+
+  // 添加子任务
+  async addSubtask(taskId, text) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task && text.trim()) {
+      if (!task.subtasks) {
+        task.subtasks = [];
+      }
+      
+      task.subtasks.push({
+        id: Date.now(),
+        text: text.trim(),
+        completed: false,
+        createdAt: new Date().toISOString()
+      });
+      
+      await this.saveTodos();
+      await this.render();
+    }
+  }
+
+  // 切换子任务完成状态
+  async toggleSubtask(taskId, subtaskId) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task && task.subtasks) {
+      const subtask = task.subtasks.find(st => st.id === subtaskId);
+      if (subtask) {
+        subtask.completed = !subtask.completed;
+        await this.saveTodos();
+        await this.render();
+      }
+    }
+  }
+
+  // 删除子任务
+  async deleteSubtask(taskId, subtaskId) {
+    const task = this.todos.find(t => t.id === taskId);
+    if (task && task.subtasks) {
+      task.subtasks = task.subtasks.filter(st => st.id !== subtaskId);
+      await this.saveTodos();
+      await this.render();
+    }
   }
 
   // ========== 项目管理方法 ==========
