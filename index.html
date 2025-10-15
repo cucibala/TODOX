@@ -129,6 +129,18 @@
             <button class="priority-filter-btn priority-low" data-priority="low">低</button>
           </div>
         </div>
+
+        <div class="settings-section">
+          <h3 class="section-title">设置</h3>
+          <div class="settings-buttons">
+            <button class="settings-btn" id="btn-data-path-settings">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              数据存储路径
+            </button>
+          </div>
+        </div>
       </aside>
 
       <!-- 任务列表区域 -->
@@ -285,6 +297,53 @@
       <div class="subtask-dialog-footer">
         <button class="subtask-dialog-btn subtask-dialog-btn-cancel" id="subtask-dialog-cancel">取消</button>
         <button class="subtask-dialog-btn subtask-dialog-btn-confirm" id="subtask-dialog-confirm">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 数据路径设置弹窗 -->
+  <div class="data-path-dialog" id="data-path-dialog" style="display: none;">
+    <div class="data-path-dialog-overlay"></div>
+    <div class="data-path-dialog-content">
+      <div class="data-path-dialog-header">
+        <h3 class="data-path-dialog-title">数据存储路径设置</h3>
+        <button class="data-path-dialog-close" id="data-path-dialog-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="data-path-dialog-body">
+        <div class="data-path-info">
+          <div class="data-path-label">当前存储路径：</div>
+          <div class="data-path-current" id="data-path-current">加载中...</div>
+        </div>
+        <div class="data-path-hint">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          <span>更改路径后会自动迁移所有数据（任务、项目、图片等）</span>
+        </div>
+      </div>
+      <div class="data-path-dialog-footer">
+        <button class="data-path-dialog-btn data-path-dialog-btn-reset" id="data-path-btn-reset">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+            <path d="M21 3v5h-5"></path>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+            <path d="M3 21v-5h5"></path>
+          </svg>
+          重置为默认
+        </button>
+        <button class="data-path-dialog-btn data-path-dialog-btn-select" id="data-path-btn-select">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          选择新路径
+        </button>
       </div>
     </div>
   </div>

@@ -22,6 +22,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   changePassword: (oldPassword, newPassword) => ipcRenderer.invoke('change-password', oldPassword, newPassword),
   clearPassword: (password) => ipcRenderer.invoke('clear-password', password),
   
+  // 数据路径管理
+  getDataPath: () => ipcRenderer.invoke('get-data-path'),
+  selectDataPath: () => ipcRenderer.invoke('select-data-path'),
+  changeDataPath: (newPath) => ipcRenderer.invoke('change-data-path', newPath),
+  resetDataPath: () => ipcRenderer.invoke('reset-data-path'),
+  
   // 窗口控制
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),

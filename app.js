@@ -123,6 +123,38 @@ class TodoApp {
         this.showPasswordDialog();
       });
     }
+
+    // 数据路径设置按钮
+    const btnDataPathSettings = document.getElementById('btn-data-path-settings');
+    if (btnDataPathSettings) {
+      btnDataPathSettings.addEventListener('click', () => {
+        this.showDataPathDialog();
+      });
+    }
+
+    // 数据路径对话框关闭按钮
+    const dataPathDialogClose = document.getElementById('data-path-dialog-close');
+    if (dataPathDialogClose) {
+      dataPathDialogClose.addEventListener('click', () => {
+        this.closeDataPathDialog();
+      });
+    }
+
+    // 选择新路径按钮
+    const btnSelectDataPath = document.getElementById('data-path-btn-select');
+    if (btnSelectDataPath) {
+      btnSelectDataPath.addEventListener('click', async () => {
+        await this.selectAndChangeDataPath();
+      });
+    }
+
+    // 重置路径按钮
+    const btnResetDataPath = document.getElementById('data-path-btn-reset');
+    if (btnResetDataPath) {
+      btnResetDataPath.addEventListener('click', async () => {
+        await this.resetDataPath();
+      });
+    }
   }
 
   listenModeChanges() {
@@ -1936,6 +1968,126 @@ class TodoApp {
     } else {
       errorEl.textContent = result.error || '清除失败';
       errorEl.style.display = 'block';
+    }
+  }
+
+  // 显示数据路径设置对话框
+  async showDataPathDialog() {
+    const dialog = document.getElementById('data-path-dialog');
+    const currentPathEl = document.getElementById('data-path-current');
+    
+    // 获取当前数据路径
+    const result = await window.electronAPI.getDataPath();
+    if (result.success) {
+      currentPathEl.textContent = result.path;
+      currentPathEl.title = result.path; // 鼠标悬停显示完整路径
+    } else {
+      currentPathEl.textContent = '获取失败';
+    }
+    
+    dialog.style.display = 'flex';
+    setTimeout(() => dialog.classList.add('show'), 10);
+  }
+
+  // 关闭数据路径设置对话框
+  closeDataPathDialog() {
+    const dialog = document.getElementById('data-path-dialog');
+    dialog.classList.remove('show');
+    setTimeout(() => dialog.style.display = 'none', 300);
+  }
+
+  // 选择并更改数据路径
+  async selectAndChangeDataPath() {
+    try {
+      // 选择新路径
+      const selectResult = await window.electronAPI.selectDataPath();
+      
+      if (selectResult.canceled || !selectResult.success) {
+        return;
+      }
+
+      const newPath = selectResult.path;
+      
+      // 确认对话框
+      const confirmed = await this.showConfirmDialog(
+        `确定要将数据存储路径更改为：\n${newPath}\n\n所有数据（任务、项目、图片等）将自动迁移到新路径。`
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+
+      // 显示加载提示
+      this.showToast('正在迁移数据，请稍候...', 0);
+
+      // 更改路径并迁移数据
+      const changeResult = await window.electronAPI.changeDataPath(newPath);
+
+      if (changeResult.success) {
+        this.showToast(
+          `数据路径更改成功！\n已迁移：${changeResult.migratedFiles.join(', ')}\n\n即将重新加载应用...`,
+          3000
+        );
+        
+        // 更新对话框中的路径显示
+        const currentPathEl = document.getElementById('data-path-current');
+        currentPathEl.textContent = changeResult.newPath;
+        currentPathEl.title = changeResult.newPath;
+        
+        // 延迟重新加载数据
+        setTimeout(async () => {
+          await this.loadTodos();
+          await this.loadProjects();
+          await this.render();
+          this.renderProjects();
+          this.showToast('应用已重新加载');
+        }, 3000);
+      } else {
+        this.showToast(`更改路径失败：${changeResult.error}`, 5000);
+      }
+    } catch (error) {
+      console.error('更改数据路径失败:', error);
+      this.showToast(`操作失败：${error.message}`, 5000);
+    }
+  }
+
+  // 重置数据路径为默认
+  async resetDataPath() {
+    try {
+      // 确认对话框
+      const confirmed = await this.showConfirmDialog(
+        '确定要将数据路径重置为默认位置吗？\n\n注意：数据不会自动迁移回默认位置，您需要手动管理数据。'
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+
+      // 重置路径
+      const result = await window.electronAPI.resetDataPath();
+
+      if (result.success) {
+        this.showToast('数据路径已重置为默认\n\n即将重新加载应用...', 3000);
+        
+        // 更新对话框中的路径显示
+        const currentPathEl = document.getElementById('data-path-current');
+        currentPathEl.textContent = result.path;
+        currentPathEl.title = result.path;
+        
+        // 延迟重新加载数据
+        setTimeout(async () => {
+          await this.loadTodos();
+          await this.loadProjects();
+          await this.render();
+          this.renderProjects();
+          this.showToast('应用已重新加载');
+        }, 3000);
+      } else {
+        this.showToast(`重置失败：${result.error}`, 5000);
+      }
+    } catch (error) {
+      console.error('重置数据路径失败:', error);
+      this.showToast(`操作失败：${error.message}`, 5000);
     }
   }
 }

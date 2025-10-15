@@ -19,15 +19,48 @@ if (!gotTheLock) {
   });
 }
 
-// 数据文件路径
-const dataPath = path.join(app.getPath('userData'), 'todos.json');
-const projectsPath = path.join(app.getPath('userData'), 'projects.json');
-const imagesPath = path.join(app.getPath('userData'), 'images');
-const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+// 全局设置文件路径（固定在 userData 目录）
+const globalSettingsPath = path.join(app.getPath('userData'), 'settings.json');
 
-// 确保图片目录存在
-if (!fs.existsSync(imagesPath)) {
-  fs.mkdirSync(imagesPath, { recursive: true });
+// 当前数据存储路径（可自定义）
+let currentDataPath = app.getPath('userData');
+
+// 动态获取数据文件路径
+function getDataPath() {
+  return path.join(currentDataPath, 'todos.json');
+}
+
+function getProjectsPath() {
+  return path.join(currentDataPath, 'projects.json');
+}
+
+function getImagesPath() {
+  return path.join(currentDataPath, 'images');
+}
+
+function getSettingsPath() {
+  return globalSettingsPath; // 全局设置始终在 userData
+}
+
+// 初始化数据目录
+function initDataDirectory(dataDir) {
+  try {
+    // 确保数据目录存在
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    // 确保图片目录存在
+    const imgPath = path.join(dataDir, 'images');
+    if (!fs.existsSync(imgPath)) {
+      fs.mkdirSync(imgPath, { recursive: true });
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('初始化数据目录失败:', error);
+    return false;
+  }
 }
 
 let mainWindow;
@@ -61,15 +94,27 @@ function decryptPassword(encrypted) {
 // 加载设置
 function loadSettings() {
   try {
-    if (fs.existsSync(settingsPath)) {
-      const data = fs.readFileSync(settingsPath, 'utf-8');
+    if (fs.existsSync(globalSettingsPath)) {
+      const data = fs.readFileSync(globalSettingsPath, 'utf-8');
       const settings = JSON.parse(data);
       isCompactMode = settings.compactMode || false;
       isAlwaysOnTop = settings.alwaysOnTop !== undefined ? settings.alwaysOnTop : true;
       isDesktopMode = settings.desktopMode || false;
+      
+      // 加载自定义数据路径
+      if (settings.customDataPath) {
+        currentDataPath = settings.customDataPath;
+      }
+      
+      // 初始化数据目录
+      initDataDirectory(currentDataPath);
+    } else {
+      // 首次运行，初始化默认数据目录
+      initDataDirectory(currentDataPath);
     }
   } catch (error) {
     console.error('加载设置失败:', error);
+    initDataDirectory(currentDataPath);
   }
 }
 
@@ -79,9 +124,10 @@ function saveSettings() {
     const settings = {
       compactMode: isCompactMode,
       alwaysOnTop: isAlwaysOnTop,
-      desktopMode: isDesktopMode
+      desktopMode: isDesktopMode,
+      customDataPath: currentDataPath !== app.getPath('userData') ? currentDataPath : undefined
     };
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
   } catch (error) {
     console.error('保存设置失败:', error);
   }
@@ -394,6 +440,7 @@ ipcMain.on('toggle-desktop-mode', () => {
 // IPC 通信处理 - 读取项目数据
 ipcMain.handle('load-projects', async () => {
   try {
+    const projectsPath = getProjectsPath();
     if (fs.existsSync(projectsPath)) {
       const data = fs.readFileSync(projectsPath, 'utf-8');
       return JSON.parse(data);
@@ -408,6 +455,7 @@ ipcMain.handle('load-projects', async () => {
 // IPC 通信处理 - 保存项目数据
 ipcMain.handle('save-projects', async (event, projectData) => {
   try {
+    const projectsPath = getProjectsPath();
     fs.writeFileSync(projectsPath, JSON.stringify(projectData, null, 2), 'utf-8');
     return { success: true };
   } catch (error) {
@@ -419,6 +467,7 @@ ipcMain.handle('save-projects', async (event, projectData) => {
 // IPC 通信处理 - 读取任务数据
 ipcMain.handle('load-todos', async () => {
   try {
+    const dataPath = getDataPath();
     if (fs.existsSync(dataPath)) {
       const data = fs.readFileSync(dataPath, 'utf-8');
       return JSON.parse(data);
@@ -433,6 +482,7 @@ ipcMain.handle('load-todos', async () => {
 // IPC 通信处理 - 保存任务数据
 ipcMain.handle('save-todos', async (event, todos) => {
   try {
+    const dataPath = getDataPath();
     fs.writeFileSync(dataPath, JSON.stringify(todos, null, 2), 'utf-8');
     return { success: true };
   } catch (error) {
@@ -458,6 +508,7 @@ ipcMain.handle('select-image', async () => {
     const sourcePath = result.filePaths[0];
     const ext = path.extname(sourcePath);
     const fileName = `${Date.now()}${ext}`;
+    const imagesPath = getImagesPath();
     const destPath = path.join(imagesPath, fileName);
 
     // 复制图片到应用数据目录
@@ -477,6 +528,7 @@ ipcMain.handle('select-image', async () => {
 // IPC 通信处理 - 读取图片文件
 ipcMain.handle('read-image', async (event, fileName) => {
   try {
+    const imagesPath = getImagesPath();
     const imagePath = path.join(imagesPath, fileName);
     if (!fs.existsSync(imagePath)) {
       return { success: false, error: '图片不存在' };
@@ -501,6 +553,7 @@ ipcMain.handle('delete-image', async (event, fileName) => {
   try {
     if (!fileName) return { success: true };
     
+    const imagesPath = getImagesPath();
     const imagePath = path.join(imagesPath, fileName);
     if (fs.existsSync(imagePath)) {
       fs.unlinkSync(imagePath);
@@ -519,6 +572,7 @@ ipcMain.handle('set-password', async (event, password) => {
       return { success: false, error: '密码不能为空' };
     }
     const encrypted = encryptPassword(password);
+    const settingsPath = getSettingsPath();
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
     settings.password = encrypted;
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
@@ -532,6 +586,7 @@ ipcMain.handle('set-password', async (event, password) => {
 // IPC 通信处理 - 验证密码
 ipcMain.handle('verify-password', async (event, password) => {
   try {
+    const settingsPath = getSettingsPath();
     if (!fs.existsSync(settingsPath)) {
       return { success: false, hasPassword: false };
     }
@@ -551,6 +606,7 @@ ipcMain.handle('verify-password', async (event, password) => {
 // IPC 通信处理 - 检查是否设置了密码
 ipcMain.handle('has-password', async () => {
   try {
+    const settingsPath = getSettingsPath();
     if (!fs.existsSync(settingsPath)) {
       return { hasPassword: false };
     }
@@ -572,6 +628,7 @@ ipcMain.handle('change-password', async (event, oldPassword, newPassword) => {
     }
     // 设置新密码
     const encrypted = encryptPassword(newPassword);
+    const settingsPath = getSettingsPath();
     const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
     settings.password = encrypted;
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
@@ -586,6 +643,7 @@ ipcMain.handle('change-password', async (event, oldPassword, newPassword) => {
 ipcMain.handle('clear-password', async (event, password) => {
   try {
     // 先验证密码
+    const settingsPath = getSettingsPath();
     if (!fs.existsSync(settingsPath)) {
       return { success: false, error: '未设置密码' };
     }
@@ -603,6 +661,153 @@ ipcMain.handle('clear-password', async (event, password) => {
     return { success: true };
   } catch (error) {
     console.error('清除密码失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 获取当前数据路径
+ipcMain.handle('get-data-path', async () => {
+  try {
+    return {
+      success: true,
+      path: currentDataPath,
+      isDefault: currentDataPath === app.getPath('userData')
+    };
+  } catch (error) {
+    console.error('获取数据路径失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 选择新的数据路径
+ipcMain.handle('select-data-path', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'createDirectory'],
+      title: '选择数据存储路径',
+      buttonLabel: '选择文件夹'
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return {
+      success: true,
+      path: result.filePaths[0]
+    };
+  } catch (error) {
+    console.error('选择数据路径失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 复制文件夹内容
+function copyFolderSync(source, target) {
+  if (!fs.existsSync(target)) {
+    fs.mkdirSync(target, { recursive: true });
+  }
+
+  const files = fs.readdirSync(source);
+  for (const file of files) {
+    const sourcePath = path.join(source, file);
+    const targetPath = path.join(target, file);
+    
+    if (fs.statSync(sourcePath).isDirectory()) {
+      copyFolderSync(sourcePath, targetPath);
+    } else {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+}
+
+// IPC 通信处理 - 更改数据路径（包含数据迁移）
+ipcMain.handle('change-data-path', async (event, newPath) => {
+  try {
+    // 验证新路径
+    if (!newPath || newPath === currentDataPath) {
+      return { success: false, error: '路径无效或与当前路径相同' };
+    }
+
+    // 确保新路径存在
+    if (!fs.existsSync(newPath)) {
+      return { success: false, error: '路径不存在' };
+    }
+
+    const oldPath = currentDataPath;
+    const oldTodosPath = getDataPath();
+    const oldProjectsPath = getProjectsPath();
+    const oldImagesPath = getImagesPath();
+
+    // 创建新的数据目录结构
+    const newTodosPath = path.join(newPath, 'todos.json');
+    const newProjectsPath = path.join(newPath, 'projects.json');
+    const newImagesPath = path.join(newPath, 'images');
+
+    // 初始化新数据目录
+    if (!initDataDirectory(newPath)) {
+      return { success: false, error: '初始化新数据目录失败' };
+    }
+
+    // 迁移数据文件
+    let migratedFiles = [];
+    
+    // 复制 todos.json
+    if (fs.existsSync(oldTodosPath)) {
+      fs.copyFileSync(oldTodosPath, newTodosPath);
+      migratedFiles.push('todos.json');
+    }
+
+    // 复制 projects.json
+    if (fs.existsSync(oldProjectsPath)) {
+      fs.copyFileSync(oldProjectsPath, newProjectsPath);
+      migratedFiles.push('projects.json');
+    }
+
+    // 复制 images 文件夹
+    if (fs.existsSync(oldImagesPath)) {
+      copyFolderSync(oldImagesPath, newImagesPath);
+      const imageFiles = fs.readdirSync(oldImagesPath);
+      migratedFiles.push(`images (${imageFiles.length} 个文件)`);
+    }
+
+    // 更新当前数据路径
+    currentDataPath = newPath;
+
+    // 保存新路径到设置
+    saveSettings();
+
+    return {
+      success: true,
+      oldPath,
+      newPath,
+      migratedFiles
+    };
+  } catch (error) {
+    console.error('更改数据路径失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 重置数据路径为默认
+ipcMain.handle('reset-data-path', async () => {
+  try {
+    const defaultPath = app.getPath('userData');
+    
+    if (currentDataPath === defaultPath) {
+      return { success: false, error: '当前已是默认路径' };
+    }
+
+    currentDataPath = defaultPath;
+    initDataDirectory(currentDataPath);
+    saveSettings();
+
+    return {
+      success: true,
+      path: currentDataPath
+    };
+  } catch (error) {
+    console.error('重置数据路径失败:', error);
     return { success: false, error: error.message };
   }
 });
