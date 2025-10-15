@@ -93,9 +93,10 @@
         <img
           v-for="(image, index) in task.images"
           :key="index"
-          :src="getImageSrc(image)"
+          v-show="imageCache[image]"
+          :src="imageCache[image]"
           class="task-image"
-          @click="appStore.viewImage(getImageSrc(image))"
+          @click="appStore.viewImage(imageCache[image])"
           alt="任务图片"
         />
       </div>
@@ -206,6 +207,7 @@ const appStore = useAppStore()
 const todoStore = useTodoStore()
 const electronAPI = window.electronAPI
 
+// 图片缓存 - 存储图片的 base64 数据
 const imageCache = ref({})
 
 // 计算进度
@@ -220,26 +222,26 @@ const duration = computed(() => {
   return null
 })
 
-// 获取图片数据
-async function getImageSrc(fileName) {
+// 加载图片数据
+async function loadImage(fileName) {
   if (imageCache.value[fileName]) {
-    return imageCache.value[fileName]
+    return // 已加载，跳过
   }
   
   const result = await electronAPI.readImage(fileName)
   if (result.success) {
+    // 使用响应式赋值，确保 Vue 能检测到变化
     imageCache.value[fileName] = result.data
-    return result.data
   }
-  return ''
 }
 
 // 加载所有图片
 onMounted(async () => {
   if (props.task.images && props.task.images.length > 0) {
-    for (const image of props.task.images) {
-      await getImageSrc(image)
-    }
+    // 并行加载所有图片
+    await Promise.all(
+      props.task.images.map(image => loadImage(image))
+    )
   }
 })
 

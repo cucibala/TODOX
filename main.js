@@ -159,9 +159,9 @@ function createWindow() {
   // 开发模式：加载 Vite 开发服务器
   // 生产模式：加载 Vue 构建的文件
   const isDev = process.argv.includes('--dev');
-  // if (isDev) {
-  //   mainWindow.webContents.openDevTools();
-  // }
+  if (isDev) {
+    mainWindow.webContents.openDevTools();
+  }
   
   if (isDev) {
     // 开发模式：使用 Vite 开发服务器
