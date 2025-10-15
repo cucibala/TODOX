@@ -156,16 +156,20 @@ function createWindow() {
     resizable: !isCompactMode
   });
 
-  // 检查是否存在 Vue 构建的文件
-  const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
-  const oldIndexPath = path.join(__dirname, 'index.html');
+  // 开发模式：加载 Vite 开发服务器
+  // 生产模式：加载 Vue 构建的文件
+  const isDev = process.argv.includes('--dev');
+  // if (isDev) {
+  //   mainWindow.webContents.openDevTools();
+  // }
   
-  if (fs.existsSync(vueDistPath)) {
-    // 使用 Vue 构建的版本
-    mainWindow.loadFile(vueDistPath);
+  if (isDev) {
+    // 开发模式：使用 Vite 开发服务器
+    mainWindow.loadURL('http://localhost:5173');
   } else {
-    // 回退到旧版本
-    mainWindow.loadFile(oldIndexPath);
+    // 生产模式：使用构建好的文件
+    const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
+    mainWindow.loadFile(vueDistPath);
   }
 
   // 窗口加载完成后显示
@@ -183,10 +187,15 @@ function createWindow() {
     mainWindow.webContents.send('desktop-mode-changed', isDesktopMode);
   });
 
-  // 开发模式下打开开发者工具
-  if (process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools();
-  }
+
+  
+  // // 开发模式下，监听页面加载失败（Vite 服务器可能未启动）
+  // if (isDev) {
+  //   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+  //     console.error('页面加载失败:', errorDescription);
+  //     console.log('请确保 Vite 开发服务器已启动：cd src && npm run dev');
+  //   });
+  // }
 
   // 窗口关闭时最小化到托盘而不是退出
   mainWindow.on('close', (event) => {
