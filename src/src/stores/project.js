@@ -34,8 +34,9 @@ export const useProjectStore = defineStore('project', () => {
   // 保存项目
   async function saveProjects() {
     try {
+      // 将响应式对象转换为普通对象，避免 IPC 传递错误
       await electronAPI.saveProjects({
-        projects: projects.value,
+        projects: JSON.parse(JSON.stringify(projects.value)),
         currentProjectId: currentProjectId.value
       })
     } catch (error) {

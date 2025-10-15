@@ -75,7 +75,8 @@ export const useTodoStore = defineStore('todo', () => {
   // 保存任务
   async function saveTodos() {
     try {
-      await electronAPI.saveTodos(todos.value)
+      // 将响应式对象转换为普通对象，避免 IPC 传递错误
+      await electronAPI.saveTodos(JSON.parse(JSON.stringify(todos.value)))
     } catch (error) {
       console.error('保存任务数据失败:', error)
     }
