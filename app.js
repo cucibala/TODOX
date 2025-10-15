@@ -1291,6 +1291,24 @@ class TodoApp {
         const weightClass = subtask.weight === 5 ? 'high' : subtask.weight === 3 ? 'medium' : 'low';
         const weightText = subtask.weight === 5 ? '高' : subtask.weight === 3 ? '中' : '低';
         
+        // 构建时间信息
+        let timeInfo = '';
+        if (subtask.completed && subtask.completedAt) {
+          const duration = this.calculateTaskDuration(subtask.createdAt, subtask.completedAt);
+          timeInfo = `
+            <div class="subtask-time-info">
+              <span class="subtask-time">完成于 ${this.formatDate(subtask.completedAt)}</span>
+              ${duration ? `<span class="subtask-duration">耗时 ${duration}</span>` : ''}
+            </div>
+          `;
+        } else if (subtask.createdAt) {
+          timeInfo = `
+            <div class="subtask-time-info">
+              <span class="subtask-time">创建于 ${this.formatDate(subtask.createdAt)}</span>
+            </div>
+          `;
+        }
+        
         const item = document.createElement('div');
         item.className = 'subtask-item';
         item.innerHTML = `
@@ -1300,7 +1318,10 @@ class TodoApp {
             </svg>
           </div>
           <span class="subtask-weight subtask-weight-${weightClass}">${weightText}</span>
-          <span class="subtask-text ${subtask.completed ? 'completed' : ''}">${this.escapeHtml(subtask.text)}</span>
+          <div class="subtask-content">
+            <span class="subtask-text ${subtask.completed ? 'completed' : ''}">${this.escapeHtml(subtask.text)}</span>
+            ${timeInfo}
+          </div>
           <button class="btn-delete-subtask">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1411,6 +1432,13 @@ class TodoApp {
       const subtask = task.subtasks.find(st => st.id === subtaskId);
       if (subtask) {
         subtask.completed = !subtask.completed;
+        // 记录完成时间
+        if (subtask.completed) {
+          subtask.completedAt = new Date().toISOString();
+        } else {
+          // 取消完成时清除完成时间
+          subtask.completedAt = null;
+        }
         await this.saveTodos();
         await this.render();
       }
