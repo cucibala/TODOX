@@ -4,15 +4,21 @@
     <TitleBar />
 
     <!-- 头部统计 -->
-    <Header />
+    <Header v-if="currentPage === 'home'" />
 
     <!-- 主内容区 -->
     <main class="main-content">
-      <!-- 侧边栏 -->
-      <Sidebar v-if="!isCompactMode" />
+      <!-- 首页 -->
+      <template v-if="currentPage === 'home'">
+        <!-- 侧边栏 -->
+        <Sidebar v-if="!isCompactMode" />
 
-      <!-- 任务列表区域 -->
-      <TaskContent />
+        <!-- 任务列表区域 -->
+        <TaskContent />
+      </template>
+
+      <!-- 设置页面 -->
+      <SettingsPage v-else-if="currentPage === 'settings'" />
     </main>
 
     <!-- 锁定界面 -->
@@ -20,9 +26,6 @@
 
     <!-- 子任务弹窗 -->
     <SubtaskDialog />
-
-    <!-- 数据路径设置弹窗 -->
-    <DataPathDialog />
 
     <!-- Toast 提示 -->
     <Toast />
@@ -50,12 +53,12 @@ import Sidebar from './components/Sidebar.vue'
 import TaskContent from './components/TaskContent.vue'
 import LockScreen from './components/LockScreen.vue'
 import SubtaskDialog from './components/SubtaskDialog.vue'
-import DataPathDialog from './components/DataPathDialog.vue'
 import Toast from './components/Toast.vue'
 import ImageViewer from './components/ImageViewer.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import ProjectDialog from './components/ProjectDialog.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
+import SettingsPage from './components/SettingsPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
@@ -64,7 +67,7 @@ const appStore = useAppStore()
 const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 
-const { isCompactMode, isDesktopMode, showLockScreen } = storeToRefs(appStore)
+const { isCompactMode, isDesktopMode, showLockScreen, currentPage } = storeToRefs(appStore)
 
 onMounted(async () => {
   // 初始化应用

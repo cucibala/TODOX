@@ -831,3 +831,45 @@ ipcMain.handle('reset-data-path', async () => {
   }
 });
 
+// IPC 通信处理 - 获取开机自启状态
+ipcMain.handle('get-auto-launch', async () => {
+  try {
+    const enabled = app.getLoginItemSettings().openAtLogin;
+    return {
+      success: true,
+      enabled
+    };
+  } catch (error) {
+    console.error('获取开机自启状态失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 设置开机自启
+ipcMain.handle('set-auto-launch', async (event, enabled) => {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enabled,
+      openAsHidden: false // 启动时不隐藏窗口
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('设置开机自启失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 获取应用版本
+ipcMain.handle('get-app-version', async () => {
+  try {
+    return {
+      success: true,
+      version: app.getVersion()
+    };
+  } catch (error) {
+    console.error('获取应用版本失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+

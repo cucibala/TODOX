@@ -7,6 +7,7 @@ export const useAppStore = defineStore('app', () => {
   const isAlwaysOnTop = ref(true)
   const isDesktopMode = ref(false)
   const showLockScreen = ref(false)
+  const currentPage = ref('home') // 'home' | 'settings'
   
   // Toast
   const toastMessage = ref('')
@@ -14,7 +15,6 @@ export const useAppStore = defineStore('app', () => {
   
   // 对话框
   const showSubtaskDialog = ref(false)
-  const showDataPathDialog = ref(false)
   const showConfirmDialog = ref(false)
   const showProjectDialog = ref(false)
   const showPasswordDialog = ref(false)
@@ -154,10 +154,10 @@ export const useAppStore = defineStore('app', () => {
     isAlwaysOnTop,
     isDesktopMode,
     showLockScreen,
+    currentPage,
     toastMessage,
     showToast,
     showSubtaskDialog,
-    showDataPathDialog,
     showConfirmDialog,
     showProjectDialog,
     showPasswordDialog,

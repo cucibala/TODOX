@@ -10,6 +10,12 @@
       </div>
     </div>
     <div class="titlebar-controls">
+      <button class="titlebar-btn" @click="openSettings" title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
+        </svg>
+      </button>
       <button class="titlebar-btn" @click="appStore.lockApp" title="锁定程序">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -66,5 +72,10 @@ import { useAppStore } from '../stores/app'
 
 const appStore = useAppStore()
 const { isAlwaysOnTop, isDesktopMode } = storeToRefs(appStore)
+
+// 打开设置页面
+function openSettings() {
+  appStore.currentPage = 'settings'
+}
 </script>
 

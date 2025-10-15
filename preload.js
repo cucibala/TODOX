@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   changeDataPath: (newPath) => ipcRenderer.invoke('change-data-path', newPath),
   resetDataPath: () => ipcRenderer.invoke('reset-data-path'),
   
+  // 设置管理
+  getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
+  setAutoLaunch: (enabled) => ipcRenderer.invoke('set-auto-launch', enabled),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  
   // 窗口控制
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),
