@@ -700,11 +700,21 @@ class TodoApp {
 
     // 排序：置顶 > 完成状态 > 创建时间
     filtered.sort((a, b) => {
-      if(a.pinned != undefined && b.pinned != undefined) {
-        if(a.pinned !== b.pinned) {
+      if(a.pinned !== b.pinned) {
+        if(a.pinned === undefined || b.pinned === undefined) {
+          // 如果一个有pinned，一个没有，有pinned的排在前面
+          if(a.pinned){
+            return -1;
+          }
+
+          if(b.pinned){
+            return 1;
+          }
+        }else{
+          // 如果两个都有pinned，按pinned的值排序
           return a.pinned ? -1 : 1;
         }
-      }
+      }  
       
       // 2. 显示全部任务时，未完成的在上面，已完成的在下面
       if (a.completed !== b.completed) {
