@@ -137,8 +137,8 @@ function createWindow() {
   loadSettings();
 
   mainWindow = new BrowserWindow({
-    width: isCompactMode ? 350 : 1000,
-    height: isCompactMode ? 500 : 700,
+    width: isCompactMode ? 350 : 1400,
+    height: isCompactMode ? 500 : 880,
     minWidth: 350,
     minHeight: 400,
     maxWidth: isCompactMode ? 350 : undefined,
