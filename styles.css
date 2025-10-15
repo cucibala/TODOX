@@ -973,21 +973,20 @@ body.desktop-mode .task-item:hover {
 
 /* 子任务区域 */
 .task-subtasks-section {
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .subtasks-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 8px;
 }
 
 .subtask-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   background: var(--bg-hover);
   border-radius: var(--radius-sm);
   transition: all 0.2s ease;
@@ -995,6 +994,29 @@ body.desktop-mode .task-item:hover {
 
 .subtask-item:hover {
   background: var(--border-color);
+}
+
+.subtask-weight {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.subtask-weight-high {
+  background: rgba(245, 101, 101, 0.15);
+  color: var(--danger-color);
+}
+
+.subtask-weight-medium {
+  background: rgba(237, 137, 54, 0.15);
+  color: var(--warning-color);
+}
+
+.subtask-weight-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success-color);
 }
 
 .subtask-checkbox {
@@ -1068,47 +1090,199 @@ body.desktop-mode .task-item:hover {
   height: 12px;
 }
 
-.subtasks-add-input {
+/* 添加子任务弹窗 */
+.subtask-dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
   display: flex;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
 }
 
-.subtask-input {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color);
+.subtask-dialog-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.subtask-dialog-content {
+  position: relative;
+  width: 90%;
+  max-width: 450px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: slideIn 0.3s ease;
+}
+
+.subtask-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.subtask-dialog-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.subtask-dialog-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
   border-radius: var(--radius-sm);
-  font-size: 12px;
+}
+
+.subtask-dialog-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.subtask-dialog-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.subtask-dialog-body {
+  padding: 24px;
+}
+
+.subtask-form-group {
+  margin-bottom: 20px;
+}
+
+.subtask-form-group:last-child {
+  margin-bottom: 0;
+}
+
+.subtask-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.subtask-dialog-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 14px;
   transition: all 0.2s ease;
   background: var(--bg-secondary);
+  box-sizing: border-box;
 }
 
-.subtask-input:focus {
+.subtask-dialog-input:focus {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.btn-add-subtask {
-  padding: 6px 10px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: var(--radius-sm);
+.subtask-priority-options {
+  display: flex;
+  gap: 12px;
+}
+
+.subtask-priority-option {
+  flex: 1;
   cursor: pointer;
-  transition: all 0.2s ease;
+}
+
+.subtask-priority-option input[type="radio"] {
+  display: none;
+}
+
+.priority-badge {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
 }
 
-.btn-add-subtask:hover {
+.priority-high {
+  background: rgba(245, 101, 101, 0.1);
+  color: var(--danger-color);
+}
+
+.priority-medium {
+  background: rgba(237, 137, 54, 0.1);
+  color: var(--warning-color);
+}
+
+.priority-low {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success-color);
+}
+
+.subtask-priority-option input[type="radio"]:checked + .priority-badge {
+  border-color: currentColor;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.subtask-priority-option:hover .priority-badge {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.subtask-dialog-footer {
+  display: flex;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.subtask-dialog-btn {
+  flex: 1;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subtask-dialog-btn-cancel {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.subtask-dialog-btn-cancel:hover {
+  background: var(--border-color);
+}
+
+.subtask-dialog-btn-confirm {
+  background: var(--primary-color);
+  color: white;
+}
+
+.subtask-dialog-btn-confirm:hover {
   background: var(--primary-dark);
-}
-
-.btn-add-subtask svg {
-  width: 14px;
-  height: 14px;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 /* 添加进度输入 */

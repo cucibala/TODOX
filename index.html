@@ -246,6 +246,49 @@
     </div>
   </div>
 
+  <!-- 添加子任务弹窗 -->
+  <div class="subtask-dialog" id="subtask-dialog" style="display: none;">
+    <div class="subtask-dialog-overlay"></div>
+    <div class="subtask-dialog-content">
+      <div class="subtask-dialog-header">
+        <h3 class="subtask-dialog-title">添加子任务</h3>
+        <button class="subtask-dialog-close" id="subtask-dialog-close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="subtask-dialog-body">
+        <div class="subtask-form-group">
+          <label class="subtask-label">子任务内容</label>
+          <input type="text" class="subtask-dialog-input" id="subtask-dialog-input" placeholder="输入子任务内容..." />
+        </div>
+        <div class="subtask-form-group">
+          <label class="subtask-label">重要程度</label>
+          <div class="subtask-priority-options">
+            <label class="subtask-priority-option">
+              <input type="radio" name="subtask-priority" value="5" />
+              <span class="priority-badge priority-high">高</span>
+            </label>
+            <label class="subtask-priority-option">
+              <input type="radio" name="subtask-priority" value="3" checked />
+              <span class="priority-badge priority-medium">中</span>
+            </label>
+            <label class="subtask-priority-option">
+              <input type="radio" name="subtask-priority" value="2" />
+              <span class="priority-badge priority-low">低</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="subtask-dialog-footer">
+        <button class="subtask-dialog-btn subtask-dialog-btn-cancel" id="subtask-dialog-cancel">取消</button>
+        <button class="subtask-dialog-btn subtask-dialog-btn-confirm" id="subtask-dialog-confirm">添加</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>

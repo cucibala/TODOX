@@ -9,6 +9,7 @@ class TodoApp {
     this.editingTaskId = null;
     this.currentImages = []; // 当前选择的图片列表
     this.currentProgressImages = {}; // 每个任务的进度图片：{taskId: [images]}
+    this.currentSubtaskTaskId = null; // 当前正在添加子任务的任务ID
     
     this.init();
   }
@@ -297,6 +298,28 @@ class TodoApp {
         await this.selectImage();
       });
     }
+
+    // 子任务弹窗事件
+    const subtaskDialog = document.getElementById('subtask-dialog');
+    const subtaskDialogClose = document.getElementById('subtask-dialog-close');
+    const subtaskDialogOverlay = subtaskDialog.querySelector('.subtask-dialog-overlay');
+    const subtaskDialogCancel = document.getElementById('subtask-dialog-cancel');
+    const subtaskDialogConfirm = document.getElementById('subtask-dialog-confirm');
+    const subtaskDialogInput = document.getElementById('subtask-dialog-input');
+
+    subtaskDialogClose.addEventListener('click', () => this.closeSubtaskDialog());
+    subtaskDialogOverlay.addEventListener('click', () => this.closeSubtaskDialog());
+    subtaskDialogCancel.addEventListener('click', () => this.closeSubtaskDialog());
+    
+    subtaskDialogConfirm.addEventListener('click', async () => {
+      await this.confirmAddSubtask();
+    });
+
+    subtaskDialogInput.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        await this.confirmAddSubtask();
+      }
+    });
   }
 
   async selectImage() {
@@ -921,18 +944,7 @@ class TodoApp {
         </div>
         ${(task.images && task.images.length > 0) || task.image ? '<div class="task-images-container"></div>' : ''}
         ${isEditing ? '<div class="task-edit-images-container"><button type="button" class="btn-add-task-image" title="添加图片">📷 添加图片</button><div class="task-edit-images-list"></div></div>' : ''}
-        <div class="task-subtasks-section">
-          ${task.subtasks && task.subtasks.length > 0 ? '<div class="subtasks-list"></div>' : ''}
-          <div class="subtasks-add-input">
-            <input type="text" class="subtask-input" placeholder="添加子任务..." data-task-id="${task.id}" id="subtask-input-${task.id}" />
-            <button class="btn-add-subtask" data-task-id="${task.id}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
+        ${task.subtasks && task.subtasks.length > 0 ? '<div class="task-subtasks-section"><div class="subtasks-list"></div></div>' : ''}
         ${task.progress && task.progress.length > 0 ? `
           <div class="task-progress-section">
             <button class="btn-toggle-progress" title="展开/收起进度">
@@ -1028,20 +1040,19 @@ class TodoApp {
     const checkbox = div.querySelector('.task-checkbox');
     checkbox.addEventListener('click', async () => await this.toggleTask(task.id));
 
-    // 圆环进度条点击事件 - 聚焦到子任务输入框
+    // 圆环进度条点击事件 - 打开添加子任务弹窗
     const progressCircleWrapper = div.querySelector('.task-progress-circle-wrapper');
     if (progressCircleWrapper) {
       progressCircleWrapper.addEventListener('click', (e) => {
         e.stopPropagation();
-        const subtaskInput = div.querySelector(`#subtask-input-${task.id}`);
-        if (subtaskInput) {
-          subtaskInput.focus();
-        }
+        this.showSubtaskDialog(task.id);
       });
     }
 
     // 渲染子任务列表
-    this.renderSubtasksInline(div, task);
+    if (task.subtasks && task.subtasks.length > 0) {
+      this.renderSubtasksInline(div, task);
+    }
 
     const pinBtn = div.querySelector('.btn-pin');
     pinBtn.addEventListener('click', async () => await this.togglePinTask(task.id));
@@ -1227,15 +1238,59 @@ class TodoApp {
 
   // ========== 子任务管理方法 ==========
 
+  // 显示添加子任务弹窗
+  showSubtaskDialog(taskId) {
+    this.currentSubtaskTaskId = taskId;
+    const dialog = document.getElementById('subtask-dialog');
+    const input = document.getElementById('subtask-dialog-input');
+    const priorityInputs = document.querySelectorAll('input[name="subtask-priority"]');
+    
+    // 重置表单
+    input.value = '';
+    priorityInputs.forEach(radio => {
+      radio.checked = radio.value === '3'; // 默认选中
+    });
+    
+    dialog.style.display = 'flex';
+    setTimeout(() => input.focus(), 100);
+  }
+
+  // 关闭添加子任务弹窗
+  closeSubtaskDialog() {
+    const dialog = document.getElementById('subtask-dialog');
+    dialog.style.display = 'none';
+    this.currentSubtaskTaskId = null;
+  }
+
+  // 确认添加子任务
+  async confirmAddSubtask() {
+    const input = document.getElementById('subtask-dialog-input');
+    const text = input.value.trim();
+    
+    if (!text) {
+      this.showToast('请输入子任务内容');
+      return;
+    }
+    
+    const selectedPriority = document.querySelector('input[name="subtask-priority"]:checked');
+    const weight = parseInt(selectedPriority.value);
+    
+    await this.addSubtask(this.currentSubtaskTaskId, text, weight);
+    this.closeSubtaskDialog();
+  }
+
   // 渲染子任务列表
   renderSubtasksInline(taskElement, task) {
     const subtasksList = taskElement.querySelector('.subtasks-list');
     
-    // 如果有子任务，渲染列表
     if (subtasksList && task.subtasks && task.subtasks.length > 0) {
       subtasksList.innerHTML = '';
       
       task.subtasks.forEach(subtask => {
+        // 获取权重标识
+        const weightClass = subtask.weight === 5 ? 'high' : subtask.weight === 3 ? 'medium' : 'low';
+        const weightText = subtask.weight === 5 ? '高' : subtask.weight === 3 ? '中' : '低';
+        
         const item = document.createElement('div');
         item.className = 'subtask-item';
         item.innerHTML = `
@@ -1244,6 +1299,7 @@ class TodoApp {
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </div>
+          <span class="subtask-weight subtask-weight-${weightClass}">${weightText}</span>
           <span class="subtask-text ${subtask.completed ? 'completed' : ''}">${this.escapeHtml(subtask.text)}</span>
           <button class="btn-delete-subtask">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1266,28 +1322,6 @@ class TodoApp {
         subtasksList.appendChild(item);
       });
     }
-
-    // 绑定添加子任务事件
-    const subtaskInput = taskElement.querySelector('.subtask-input');
-    const addSubtaskBtn = taskElement.querySelector('.btn-add-subtask');
-
-    if (addSubtaskBtn) {
-      addSubtaskBtn.addEventListener('click', async () => {
-        if (subtaskInput.value.trim()) {
-          await this.addSubtask(task.id, subtaskInput.value);
-          subtaskInput.value = '';
-        }
-      });
-    }
-
-    if (subtaskInput) {
-      subtaskInput.addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter' && subtaskInput.value.trim()) {
-          await this.addSubtask(task.id, subtaskInput.value);
-          subtaskInput.value = '';
-        }
-      });
-    }
   }
 
   // 获取子任务完成进度
@@ -1297,12 +1331,15 @@ class TodoApp {
     return `${completed}/${subtasks.length}`;
   }
 
-  // 计算任务完成百分比
+  // 计算任务完成百分比（基于权重）
   getTaskProgress(task) {
     if (task.subtasks && task.subtasks.length > 0) {
-      // 有子任务：根据子任务完成比例
-      const completed = task.subtasks.filter(st => st.completed).length;
-      return Math.round((completed / task.subtasks.length) * 100);
+      // 有子任务：根据权重计算完成百分比
+      const totalWeight = task.subtasks.reduce((sum, st) => sum + (st.weight || 3), 0);
+      const completedWeight = task.subtasks
+        .filter(st => st.completed)
+        .reduce((sum, st) => sum + (st.weight || 3), 0);
+      return totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
     } else {
       // 无子任务：根据主任务完成状态
       return task.completed ? 100 : 0;
@@ -1347,7 +1384,7 @@ class TodoApp {
   }
 
   // 添加子任务
-  async addSubtask(taskId, text) {
+  async addSubtask(taskId, text, weight = 3) {
     const task = this.todos.find(t => t.id === taskId);
     if (task && text.trim()) {
       if (!task.subtasks) {
@@ -1357,6 +1394,7 @@ class TodoApp {
       task.subtasks.push({
         id: Date.now(),
         text: text.trim(),
+        weight: weight, // 重要程度：5(高), 3(中), 2(低)
         completed: false,
         createdAt: new Date().toISOString()
       });
