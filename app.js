@@ -674,14 +674,13 @@ class TodoApp {
       }
       
       // 2. 显示全部任务时，未完成的在上面，已完成的在下面
-      if (this.currentFilter === 'all' && a.completed !== b.completed) {
+      if (a.completed !== b.completed) {
         return a.completed ? 1 : -1;
       }
       
       // 3. 相同状态下，按创建时间排序（新的在前）
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
-
     return filtered;
   }
 
