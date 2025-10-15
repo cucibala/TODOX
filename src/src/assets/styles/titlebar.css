@@ -32,6 +32,45 @@
   height: 16px;
 }
 
+/* 页面导航 */
+.titlebar-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 16px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-nav-btn {
+  width: 32px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.titlebar-nav-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.titlebar-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.titlebar-nav-btn.active {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
 .titlebar-controls {
   display: flex;
   height: 100%;

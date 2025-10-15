@@ -8,14 +8,34 @@
         </svg>
         <span>TodoX</span>
       </div>
+      
+      <!-- 页面导航 -->
+      <div class="titlebar-nav">
+        <button 
+          class="titlebar-nav-btn" 
+          :class="{ active: currentPage === 'home' }"
+          @click="goToHome" 
+          title="主页"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </button>
+        <button 
+          class="titlebar-nav-btn" 
+          :class="{ active: currentPage === 'settings' }"
+          @click="goToSettings" 
+          title="设置"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="titlebar-controls">
-      <button class="titlebar-btn" @click="openSettings" title="设置">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
-        </svg>
-      </button>
       <button class="titlebar-btn" @click="appStore.lockApp" title="锁定程序">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -71,10 +91,15 @@ import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 
 const appStore = useAppStore()
-const { isAlwaysOnTop, isDesktopMode } = storeToRefs(appStore)
+const { isAlwaysOnTop, isDesktopMode, currentPage } = storeToRefs(appStore)
 
-// 打开设置页面
-function openSettings() {
+// 导航到主页
+function goToHome() {
+  appStore.currentPage = 'home'
+}
+
+// 导航到设置
+function goToSettings() {
   appStore.currentPage = 'settings'
 }
 </script>

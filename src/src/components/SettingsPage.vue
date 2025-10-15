@@ -1,92 +1,147 @@
 <template>
   <div class="settings-page">
-    <!-- 页面头部 -->
-    <div class="settings-header">
-      <button class="btn-back" @click="handleBack">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
-        </svg>
-        <span>返回</span>
-      </button>
-      <h2 class="settings-title">设置</h2>
-      <div class="settings-header-spacer"></div>
-    </div>
-
-    <!-- 设置内容 -->
+    <!-- 设置内容 - 使用两栏布局 -->
     <div class="settings-content">
-      <!-- 数据存储路径 -->
-      <div class="setting-section">
-        <div class="setting-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-          </svg>
-          <h4>数据存储路径</h4>
-        </div>
-        <p class="setting-description">选择任务数据和图片的存储位置</p>
-        <div class="setting-content">
-          <div class="path-display">
-            <input 
-              type="text" 
-              :value="dataPath" 
-              readonly 
-              class="path-input"
-              :title="dataPath"
-            />
-            <button class="btn-select-path" @click="handleSelectPath">
-              选择路径
-            </button>
+      <div class="settings-grid">
+        <!-- 左侧设置 -->
+        <div class="settings-column">
+          <!-- 数据存储路径 -->
+          <div class="setting-section">
+            <div class="setting-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <h4>数据存储路径</h4>
+            </div>
+            <p class="setting-description">选择任务数据和图片的存储位置</p>
+            <div class="setting-body">
+              <div class="path-display">
+                <input 
+                  type="text" 
+                  :value="dataPath" 
+                  readonly 
+                  class="path-input"
+                  :title="dataPath"
+                />
+                <button class="btn-select-path" @click="handleSelectPath">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  选择路径
+                </button>
+              </div>
+              <div class="path-info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <span>修改路径后，需要重启应用才能生效</span>
+              </div>
+            </div>
           </div>
-          <div class="path-info">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-            <span>修改路径后，需要重启应用才能生效</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- 开机自启 -->
-      <div class="setting-section">
-        <div class="setting-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M23 6l-9.5 9.5-5-5L1 18"></path>
-          </svg>
-          <h4>开机自启</h4>
-        </div>
-        <p class="setting-description">开机时自动启动 TodoX</p>
-        <div class="setting-content">
-          <label class="toggle-switch">
-            <input 
-              type="checkbox" 
-              :checked="autoLaunch" 
-              @change="handleToggleAutoLaunch"
-            />
-            <span class="toggle-slider"></span>
-            <span class="toggle-label">{{ autoLaunch ? '已启用' : '已禁用' }}</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- 应用信息 -->
-      <div class="setting-section">
-        <div class="setting-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
-          </svg>
-          <h4>应用信息</h4>
-        </div>
-        <div class="setting-content app-info">
-          <div class="info-item">
-            <span class="info-label">应用版本：</span>
-            <span class="info-value">{{ appVersion }}</span>
+          <!-- 开机自启 -->
+          <div class="setting-section">
+            <div class="setting-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 6l-9.5 9.5-5-5L1 18"></path>
+              </svg>
+              <h4>开机自启</h4>
+            </div>
+            <p class="setting-description">开机时自动启动 TodoX</p>
+            <div class="setting-body">
+              <div class="toggle-container">
+                <div class="toggle-info">
+                  <div class="toggle-title">启动时自动打开应用</div>
+                  <div class="toggle-desc">Windows 系统启动后自动运行 TodoX</div>
+                </div>
+                <label class="toggle-switch">
+                  <input 
+                    type="checkbox" 
+                    :checked="autoLaunch" 
+                    @change="handleToggleAutoLaunch"
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="status-badge" :class="{ active: autoLaunch }">
+                <span class="status-dot"></span>
+                <span class="status-text">{{ autoLaunch ? '已启用' : '已禁用' }}</span>
+              </div>
+            </div>
           </div>
-          <div class="info-item">
-            <span class="info-label">数据格式版本：</span>
-            <span class="info-value">3.0</span>
+        </div>
+
+        <!-- 右侧信息 -->
+        <div class="settings-column">
+          <!-- 应用信息 -->
+          <div class="setting-section">
+            <div class="setting-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
+              </svg>
+              <h4>应用信息</h4>
+            </div>
+            <div class="setting-body">
+              <div class="info-grid">
+                <div class="info-item">
+                  <div class="info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                  </div>
+                  <div class="info-content">
+                    <div class="info-label">应用版本</div>
+                    <div class="info-value">v{{ appVersion }}</div>
+                  </div>
+                </div>
+                
+                <div class="info-item">
+                  <div class="info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                      <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="info-content">
+                    <div class="info-label">数据格式版本</div>
+                    <div class="info-value">v3.0</div>
+                  </div>
+                </div>
+                
+                <div class="info-item">
+                  <div class="info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                  </div>
+                  <div class="info-content">
+                    <div class="info-label">技术栈</div>
+                    <div class="info-value">Electron + Vue 3</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 关于 -->
+          <div class="setting-section about-section">
+            <div class="setting-header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+              <h4>关于 TodoX</h4>
+            </div>
+            <div class="setting-body">
+              <p class="about-text">
+                TodoX 是一个现代化的桌面任务管理应用，支持项目管理、进度追踪、多图片附件、桌面背景模式等功能。
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -169,11 +224,6 @@ async function handleToggleAutoLaunch(event) {
   }
 }
 
-// 返回主页
-function handleBack() {
-  appStore.currentPage = 'home'
-}
-
 // 组件挂载时加载设置
 onMounted(() => {
   loadSettings()
@@ -188,88 +238,51 @@ onMounted(() => {
   background: var(--bg-primary);
 }
 
-/* 页面头部 */
-.settings-header {
-  display: flex;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-}
-
-.btn-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: none;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
-.btn-back:hover {
-  background: var(--bg-hover);
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
-
-.btn-back svg {
-  width: 18px;
-  height: 18px;
-}
-
-.settings-title {
-  flex: 1;
-  text-align: center;
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.settings-header-spacer {
-  width: 80px; /* 与返回按钮宽度相同，保持标题居中 */
-}
-
-/* 设置内容 */
+/* 设置内容 - 两栏布局 */
 .settings-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 32px;
 }
 
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.settings-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 设置分区 */
 .setting-section {
-  margin-bottom: 32px;
-  padding: 24px;
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
+  padding: 24px;
   transition: all 0.2s ease;
 }
 
 .setting-section:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.setting-section:last-child {
-  margin-bottom: 0;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .setting-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .setting-header svg {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   color: var(--primary-color);
   flex-shrink: 0;
 }
@@ -282,13 +295,13 @@ onMounted(() => {
 }
 
 .setting-description {
-  margin: 0 0 20px 0;
+  margin: 0 0 20px 36px;
   font-size: 14px;
   color: var(--text-muted);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
-.setting-content {
+.setting-body {
   margin-top: 16px;
 }
 
@@ -301,12 +314,13 @@ onMounted(() => {
 
 .path-input {
   flex: 1;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', monospace;
   cursor: default;
   transition: all 0.2s ease;
 }
@@ -318,7 +332,10 @@ onMounted(() => {
 }
 
 .btn-select-path {
-  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
   background: var(--primary-color);
   color: white;
   border: none;
@@ -332,7 +349,7 @@ onMounted(() => {
 
 .btn-select-path:hover {
   background: var(--primary-hover);
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
 }
 
@@ -340,10 +357,15 @@ onMounted(() => {
   transform: translateY(0);
 }
 
+.btn-select-path svg {
+  width: 16px;
+  height: 16px;
+}
+
 .path-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 12px 16px;
   background: rgba(64, 158, 255, 0.08);
   border-radius: var(--radius-md);
@@ -358,14 +380,39 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* 开关容器 */
+.toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  margin-bottom: 12px;
+}
+
+.toggle-info {
+  flex: 1;
+}
+
+.toggle-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.toggle-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 /* 开关切换 */
 .toggle-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
+  position: relative;
+  display: inline-block;
   cursor: pointer;
-  user-select: none;
-  padding: 4px;
 }
 
 .toggle-switch input[type="checkbox"] {
@@ -374,9 +421,9 @@ onMounted(() => {
 
 .toggle-slider {
   position: relative;
-  width: 50px;
+  width: 52px;
   height: 28px;
-  background: var(--border-color);
+  background: #ddd;
   border-radius: 14px;
   transition: all 0.3s ease;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -400,41 +447,125 @@ onMounted(() => {
 }
 
 .toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
-  transform: translateX(22px);
+  transform: translateX(24px);
 }
 
-.toggle-label {
-  font-size: 15px;
-  color: var(--text-primary);
+/* 状态徽章 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-primary);
+  border-radius: 20px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.status-badge.active {
+  background: rgba(82, 196, 26, 0.1);
+  border-color: var(--success-color);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+.status-badge.active .status-dot {
+  background: var(--success-color);
+}
+
+.status-text {
   font-weight: 500;
+  color: var(--text-secondary);
 }
 
-/* 应用信息 */
-.app-info {
+.status-badge.active .status-text {
+  color: var(--success-color);
+}
+
+/* 信息网格 */
+.info-grid {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .info-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  gap: 16px;
+  padding: 16px;
   background: var(--bg-primary);
   border-radius: var(--radius-md);
-  font-size: 14px;
   border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.info-item:hover {
+  border-color: var(--primary-color);
+  transform: translateX(4px);
+}
+
+.info-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.info-icon svg {
+  width: 20px;
+  height: 20px;
+  color: var(--primary-color);
+}
+
+.info-content {
+  flex: 1;
 }
 
 .info-label {
-  color: var(--text-secondary);
-  min-width: 150px;
-  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
 }
 
 .info-value {
+  font-size: 15px;
   color: var(--text-primary);
   font-weight: 600;
   font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* 关于部分 */
+.about-section .setting-body {
+  margin-top: 12px;
+}
+
+.about-text {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+/* 响应式：小屏幕改为单列 */
+@media (max-width: 1200px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
