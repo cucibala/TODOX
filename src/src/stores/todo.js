@@ -48,8 +48,16 @@ export const useTodoStore = defineStore('todo', () => {
     // 排序：置顶 > 完成状态 > 创建时间
     filtered.sort((a, b) => {
       if (a.pinned !== b.pinned) {
-        return a.pinned ? -1 : 1
+        if(a.pinned === undefined || b.pinned === undefined) {
+          if(a.pinned){
+            return -1;
+          }
+          if(b.pinned){
+            return 1;
+          }
+        }
       }
+
       if (a.completed !== b.completed) {
         return a.completed ? 1 : -1
       }
