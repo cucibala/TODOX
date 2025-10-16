@@ -274,7 +274,7 @@ function createTray() {
   }
 
   // 创建托盘图标 - 使用 X.png
-  const iconPath = path.join(__dirname, 'assets', 'X.png');
+  const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
   let trayIcon;
   
   // 如果图标文件不存在，创建一个简单的图标
