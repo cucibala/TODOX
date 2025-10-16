@@ -315,7 +315,18 @@ async function handleGenerateSummary() {
     isGeneratingSummary.value = true
     appStore.toast('正在生成总结，请稍候...')
     
-    const result = await electronAPI.generateDailySummary(todayTasks)
+    // 转换为纯 JavaScript 对象，避免传递响应式对象
+    const plainTasks = todayTasks.map(task => ({
+      id: task.id,
+      text: task.text,
+      completed: task.completed,
+      priority: task.priority,
+      createdAt: task.createdAt,
+      completedAt: task.completedAt || null,
+      dueDate: task.dueDate || null
+    }))
+    
+    const result = await electronAPI.generateDailySummary(plainTasks)
     
     if (result.success) {
       dailySummary.value = result.summary

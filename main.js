@@ -791,7 +791,8 @@ ipcMain.handle('generate-daily-summary', async (event, tasks) => {
     }));
 
     // 调用 DeepSeek API
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    // 使用 deepseek-chat (非思考模式) 生成简洁总结
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -810,7 +811,8 @@ ipcMain.handle('generate-daily-summary', async (event, tasks) => {
           }
         ],
         max_tokens: 500,
-        temperature: 0.7
+        temperature: 0.7,
+        stream: false
       })
     });
 

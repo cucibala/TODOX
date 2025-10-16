@@ -11,49 +11,25 @@
       </div>
       
       <div class="dialog-content">
-        <div class="form-group">
-          <label class="form-label">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-            DeepSeek API 密钥
-          </label>
-          <input 
-            v-model="apiKey" 
-            type="password" 
-            class="form-input"
-            :placeholder="hasKey ? '输入新密钥（留空则删除）' : '请输入 API 密钥'"
-            @keydown.enter="handleConfirm"
-            @keydown.esc="handleCancel"
-            ref="inputRef"
-          />
-        </div>
+        <input 
+          v-model="apiKey" 
+          type="password" 
+          class="form-input"
+          :placeholder="hasKey ? '输入新密钥（留空删除）' : '请输入 API 密钥'"
+          @keydown.enter="handleConfirm"
+          @keydown.esc="handleCancel"
+          ref="inputRef"
+        />
         
-        <div class="hint-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="16" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-          </svg>
-          <span>在 <a href="https://platform.deepseek.com" target="_blank">DeepSeek 平台</a> 获取 API 密钥</span>
+        <div class="hint-text">
+          在 <a href="https://platform.deepseek.com" target="_blank">DeepSeek 平台</a> 获取密钥
         </div>
       </div>
       
       <div class="dialog-actions">
-        <button class="btn-cancel" @click="handleCancel">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-          取消
-        </button>
+        <button class="btn-cancel" @click="handleCancel">取消</button>
         <button class="btn-confirm" @click="handleConfirm">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          {{ hasKey && !apiKey ? '删除' : '确定' }}
+          {{ hasKey && !apiKey ? '删除密钥' : '确定' }}
         </button>
       </div>
     </div>
@@ -180,62 +156,42 @@ onMounted(() => {
 }
 
 .apikey-dialog {
-  width: 480px;
+  width: 420px;
 }
 
 .dialog-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
+  gap: 10px;
+  padding: 16px 20px;
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
   color: white;
 }
 
 .dialog-header svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
 .dialog-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .dialog-content {
-  padding: 24px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 10px;
-}
-
-.form-label svg {
-  width: 16px;
-  height: 16px;
-  color: var(--primary-color);
+  padding: 20px;
 }
 
 .form-input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 13px;
   font-family: 'Consolas', 'Monaco', monospace;
   transition: all 0.2s ease;
   box-sizing: border-box;
@@ -244,93 +200,65 @@ onMounted(() => {
 .form-input:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(138, 157, 251, 0.1);
+  box-shadow: 0 0 0 2px rgba(138, 157, 251, 0.1);
 }
 
-.hint-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: rgba(103, 194, 58, 0.08);
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: var(--success-color);
-  border: 1px solid rgba(103, 194, 58, 0.2);
+.hint-text {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
 }
 
-.hint-box svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-.hint-box a {
+.hint-text a {
   color: var(--primary-color);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: 500;
   transition: all 0.2s;
 }
 
-.hint-box a:hover {
+.hint-text a:hover {
   text-decoration: underline;
 }
 
 .dialog-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: flex-end;
-  padding: 0 24px 24px;
+  padding: 0 20px 20px;
 }
 
 .btn-cancel,
 .btn-confirm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  padding: 9px 24px;
   border: none;
   border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .btn-cancel {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  color: var(--text-secondary);
   border: 1px solid var(--border-color);
 }
 
 .btn-cancel:hover {
   background: var(--border-color);
-  transform: translateY(-1px);
-}
-
-.btn-cancel svg {
-  width: 16px;
-  height: 16px;
+  color: var(--text-primary);
 }
 
 .btn-confirm {
   background: var(--primary-color);
   color: white;
+  min-width: 80px;
 }
 
 .btn-confirm:hover {
   background: var(--primary-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(138, 157, 251, 0.3);
-}
-
-.btn-confirm:active {
-  transform: translateY(0);
-}
-
-.btn-confirm svg {
-  width: 16px;
-  height: 16px;
+  box-shadow: 0 2px 8px rgba(138, 157, 251, 0.3);
 }
 </style>
 
