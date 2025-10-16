@@ -593,8 +593,11 @@ async function handleAddProgress() {
 }
 
 async function handleDeleteProgress(progressId) {
-  await todoStore.deleteProgress(props.task.id, progressId)
-  appStore.toast('进度已删除')
+  const confirmed = await appStore.confirm('确定要删除这条进度记录吗？')
+  if (confirmed) {
+    await todoStore.deleteProgress(props.task.id, progressId)
+    appStore.toast('进度已删除')
+  }
 }
 
 async function handleSelectProgressImage() {
