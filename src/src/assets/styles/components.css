@@ -353,6 +353,159 @@
   height: 14px;
 }
 
+.progress-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.progress-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.progress-list {
+  padding: 8px 0;
+}
+
+/* 进度图片 */
+.progress-images-container {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.progress-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.progress-image:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-md);
+}
+
+/* 添加进度 */
+.add-progress-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.add-progress-input-wrapper {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.add-progress-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  transition: all 0.2s ease;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.add-progress-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
+}
+
+.btn-add-progress-image,
+.btn-add-progress {
+  padding: 8px;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-add-progress-image:hover {
+  background: var(--bg-hover);
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.btn-add-progress:hover {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.btn-add-progress-image svg,
+.btn-add-progress svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 进度图片预览 */
+.progress-images-preview {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preview-image-item {
+  position: relative;
+  width: 60px;
+  height: 60px;
+}
+
+.preview-image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-remove-preview-image {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: var(--danger-color);
+  border: 2px solid white;
+  border-radius: 50%;
+  cursor: pointer;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-remove-preview-image:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(245, 101, 101, 0.3);
+}
+
+.btn-remove-preview-image svg {
+  width: 10px;
+  height: 10px;
+}
+
 /* 任务图片 */
 .task-images-container {
   margin-top: 8px;
