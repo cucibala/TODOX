@@ -10,20 +10,18 @@
         <h3>{{ hasKey ? '修改 API 密钥' : '设置 API 密钥' }}</h3>
       </div>
       
-      <div class="dialog-content">
-        <input 
-          v-model="apiKey" 
-          type="password" 
-          class="form-input"
-          :placeholder="hasKey ? '输入新密钥（留空删除）' : '请输入 API 密钥'"
-          @keydown.enter="handleConfirm"
-          @keydown.esc="handleCancel"
-          ref="inputRef"
-        />
-        
-        <div class="hint-text">
-          在 <a href="https://platform.deepseek.com" target="_blank">DeepSeek 平台</a> 获取密钥
-        </div>
+      <input 
+        v-model="apiKey" 
+        type="password" 
+        class="form-input"
+        :placeholder="hasKey ? '输入新密钥（留空删除）' : '请输入 API 密钥'"
+        @keydown.enter="handleConfirm"
+        @keydown.esc="handleCancel"
+        ref="inputRef"
+      />
+      
+      <div class="hint-text">
+        在 <a href="https://platform.deepseek.com" target="_blank">DeepSeek 平台</a> 获取密钥
       </div>
       
       <div class="dialog-actions">
@@ -180,31 +178,29 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.dialog-content {
-  padding: 20px;
-}
-
 .form-input {
   width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--border-color);
+  padding: 12px 16px;
+  margin: 20px 20px 0 20px;
+  border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-family: 'Consolas', 'Monaco', monospace;
   transition: all 0.2s ease;
   box-sizing: border-box;
+  width: calc(100% - 40px);
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(138, 157, 251, 0.1);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .hint-text {
-  margin-top: 10px;
+  margin: 10px 20px 0 20px;
   font-size: 12px;
   color: var(--text-muted);
   text-align: center;
@@ -258,7 +254,6 @@ onMounted(() => {
 
 .btn-confirm:hover {
   background: var(--primary-hover);
-  box-shadow: 0 2px 8px rgba(138, 157, 251, 0.3);
 }
 </style>
 

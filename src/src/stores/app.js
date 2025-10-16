@@ -20,6 +20,7 @@ export const useAppStore = defineStore('app', () => {
   const showPasswordDialog = ref(false)
   const showApiKeyDialog = ref(false)
   const showSubtaskSuggestionDialog = ref(false)
+  const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
   
   // 确认对话框配置
@@ -165,6 +166,7 @@ export const useAppStore = defineStore('app', () => {
     showPasswordDialog,
     showApiKeyDialog,
     showSubtaskSuggestionDialog,
+    showAILoadingDialog,
     showImageViewer,
     confirmMessage,
     viewerImageSrc,

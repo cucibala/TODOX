@@ -10,34 +10,32 @@
         <h3>AI 建议的子任务</h3>
       </div>
       
-      <div class="dialog-content">
-        <div class="suggestion-hint">
-          AI 已为您智能拆解任务，以下是建议的子任务列表：
-        </div>
-        
-        <div v-if="suggestedSubtasks.length > 0" class="subtasks-list">
-          <div 
-            v-for="(subtask, index) in suggestedSubtasks" 
-            :key="index" 
-            class="subtask-item"
-          >
-            <div class="subtask-number">{{ index + 1 }}</div>
-            <div class="subtask-content">
-              <div class="subtask-text">{{ subtask.text }}</div>
-              <div class="subtask-weight">
-                <span class="weight-label">重要度：</span>
-                <div class="weight-stars">
-                  <svg 
-                    v-for="i in 5" 
-                    :key="i" 
-                    viewBox="0 0 24 24" 
-                    :fill="i <= subtask.weight ? 'currentColor' : 'none'"
-                    stroke="currentColor" 
-                    stroke-width="2"
-                  >
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                  </svg>
-                </div>
+      <div class="suggestion-hint">
+        AI 已为您智能拆解任务，以下是建议的子任务列表：
+      </div>
+      
+      <div v-if="suggestedSubtasks.length > 0" class="subtasks-list">
+        <div 
+          v-for="(subtask, index) in suggestedSubtasks" 
+          :key="index" 
+          class="subtask-item"
+        >
+          <div class="subtask-number">{{ index + 1 }}</div>
+          <div class="subtask-content">
+            <div class="subtask-text">{{ subtask.text }}</div>
+            <div class="subtask-weight">
+              <span class="weight-label">重要度：</span>
+              <div class="weight-stars">
+                <svg 
+                  v-for="i in 5" 
+                  :key="i" 
+                  viewBox="0 0 24 24" 
+                  :fill="i <= subtask.weight ? 'currentColor' : 'none'"
+                  stroke="currentColor" 
+                  stroke-width="2"
+                >
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
               </div>
             </div>
           </div>
@@ -140,8 +138,7 @@ onUnmounted(() => {
   animation: slideUp 0.3s ease;
   overflow: hidden;
   max-height: 80vh;
-  display: flex;
-  flex-direction: column;
+  overflow-y: auto;
 }
 
 @keyframes slideUp {
@@ -166,7 +163,6 @@ onUnmounted(() => {
   padding: 16px 20px;
   background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
   color: white;
-  flex-shrink: 0;
 }
 
 .dialog-header svg {
@@ -181,16 +177,10 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.dialog-content {
-  padding: 20px;
-  flex: 1;
-  overflow-y: auto;
-}
-
 .suggestion-hint {
   font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 16px;
+  margin: 20px 20px 16px 20px;
   padding: 10px 14px;
   background: rgba(138, 157, 251, 0.08);
   border-radius: var(--radius-md);
@@ -201,6 +191,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 0 20px;
 }
 
 .subtask-item {
@@ -209,13 +200,12 @@ onUnmounted(() => {
   padding: 12px;
   background: var(--bg-primary);
   border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
+  border: 2px solid var(--border-color);
   transition: all 0.2s ease;
 }
 
 .subtask-item:hover {
   border-color: var(--primary-color);
-  box-shadow: 0 2px 8px rgba(138, 157, 251, 0.1);
 }
 
 .subtask-number {
@@ -271,8 +261,7 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  padding: 0 20px 20px;
-  flex-shrink: 0;
+  padding: 20px;
 }
 
 .btn-cancel,
@@ -305,7 +294,6 @@ onUnmounted(() => {
 
 .btn-confirm:hover {
   background: var(--primary-hover);
-  box-shadow: 0 2px 8px rgba(138, 157, 251, 0.3);
 }
 </style>
 

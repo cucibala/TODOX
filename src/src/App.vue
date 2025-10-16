@@ -44,6 +44,9 @@
 
     <!-- 子任务建议对话框 -->
     <SubtaskSuggestionDialog />
+
+    <!-- AI 加载动画对话框 -->
+    <AILoadingDialog />
   </div>
 </template>
 
@@ -62,6 +65,7 @@ import ProjectDialog from './components/ProjectDialog.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import ApiKeyDialog from './components/ApiKeyDialog.vue'
 import SubtaskSuggestionDialog from './components/SubtaskSuggestionDialog.vue'
+import AILoadingDialog from './components/AILoadingDialog.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'

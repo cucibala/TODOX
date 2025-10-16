@@ -559,10 +559,12 @@ async function handleAIBreakdown() {
     }
 
     isAIBreakingDown.value = true
-    appStore.toast('AI 正在分析任务，请稍候...')
+    appStore.showAILoadingDialog = true
     
     // 调用 AI 拆解
     const result = await electronAPI.aiBreakdownTask(props.task.text)
+    
+    appStore.showAILoadingDialog = false
     
     if (!result.success) {
       appStore.toast('AI 拆解失败：' + (result.error || '未知错误'))
@@ -585,6 +587,7 @@ async function handleAIBreakdown() {
 
   } catch (error) {
     console.error('AI 拆解失败:', error)
+    appStore.showAILoadingDialog = false
     appStore.toast('AI 拆解失败：' + error.message)
   } finally {
     isAIBreakingDown.value = false
