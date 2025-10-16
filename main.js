@@ -766,6 +766,86 @@ ipcMain.handle('delete-deepseek-key', async () => {
   }
 });
 
+// IPC 通信处理 - AI 任务拆解
+ipcMain.handle('ai-breakdown-task', async (event, taskText) => {
+  try {
+    // 获取 API 密钥
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, error: '未配置 API 密钥' };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.deepseekApiKey) {
+      return { success: false, error: '未配置 API 密钥' };
+    }
+    const apiKey = decryptPassword(settings.deepseekApiKey);
+
+    // 调用 DeepSeek API
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个专业的任务管理助手，擅长将复杂任务拆解为可执行的子任务。请以 JSON 数组格式返回子任务列表，每个子任务包含 text(子任务描述) 和 weight(重要程度1-5)。返回格式：[{"text":"子任务1","weight":3},{"text":"子任务2","weight":4}]'
+          },
+          {
+            role: 'user',
+            content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 只返回 JSON 数组，不要其他解释`
+          }
+        ],
+        max_tokens: 800,
+        temperature: 0.7,
+        stream: false
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || '调用 API 失败');
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content.trim();
+    
+    // 提取 JSON 数组
+    let subtasks;
+    try {
+      // 尝试直接解析
+      subtasks = JSON.parse(content);
+    } catch (e) {
+      // 如果失败，尝试提取 JSON 数组
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        subtasks = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error('无法解析 AI 返回的子任务列表');
+      }
+    }
+
+    // 验证数据格式
+    if (!Array.isArray(subtasks) || subtasks.length === 0) {
+      throw new Error('AI 返回的子任务格式不正确');
+    }
+
+    // 标准化子任务数据
+    const formattedSubtasks = subtasks.map(st => ({
+      text: st.text || st.description || st.task || '',
+      weight: Math.max(1, Math.min(5, st.weight || st.priority || 3))
+    })).filter(st => st.text);
+
+    return { success: true, subtasks: formattedSubtasks };
+  } catch (error) {
+    console.error('AI 任务拆解失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 生成每日任务总结
 ipcMain.handle('generate-daily-summary', async (event, tasks) => {
   try {

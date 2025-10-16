@@ -41,6 +41,9 @@
 
     <!-- API 密钥对话框 -->
     <ApiKeyDialog />
+
+    <!-- 子任务建议对话框 -->
+    <SubtaskSuggestionDialog />
   </div>
 </template>
 
@@ -58,6 +61,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import ProjectDialog from './components/ProjectDialog.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import ApiKeyDialog from './components/ApiKeyDialog.vue'
+import SubtaskSuggestionDialog from './components/SubtaskSuggestionDialog.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'

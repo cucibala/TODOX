@@ -341,6 +341,18 @@
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
         </svg>
       </button>
+      <button 
+        class="btn-ai-breakdown" 
+        @click="handleAIBreakdown" 
+        title="AI 智能拆解任务"
+        :disabled="isAIBreakingDown"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="7.5 10 12 12.5 16.5 10"></polyline>
+          <line x1="12" y1="17" x2="12" y2="12.5"></line>
+        </svg>
+      </button>
       <button class="btn-delete" @click="handleDelete" title="删除">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="3 6 5 6 21 6"></polyline>
@@ -377,6 +389,9 @@ const progressImageCache = ref({})
 const isEditing = ref(false)
 const editText = ref('')
 const editInputRef = ref(null)
+
+// AI 拆解状态
+const isAIBreakingDown = ref(false)
 
 // 进度记录输入
 const progressInput = ref('')
@@ -531,6 +546,49 @@ async function handleDelete() {
 function handleAddSubtask() {
   todoStore.currentSubtaskTaskId = props.task.id
   appStore.showSubtaskDialog = true
+}
+
+// AI 智能拆解任务
+async function handleAIBreakdown() {
+  try {
+    // 检查是否有 API 密钥
+    const hasKeyResult = await electronAPI.hasDeepSeekKey()
+    if (!hasKeyResult.hasKey) {
+      appStore.toast('请先在设置中配置 DeepSeek API 密钥')
+      return
+    }
+
+    isAIBreakingDown.value = true
+    appStore.toast('AI 正在分析任务，请稍候...')
+    
+    // 调用 AI 拆解
+    const result = await electronAPI.aiBreakdownTask(props.task.text)
+    
+    if (!result.success) {
+      appStore.toast('AI 拆解失败：' + (result.error || '未知错误'))
+      return
+    }
+
+    if (!result.subtasks || result.subtasks.length === 0) {
+      appStore.toast('AI 未能生成有效的子任务建议')
+      return
+    }
+
+    // 通过事件总线或全局状态显示对话框
+    // 这里我们需要访问 SubtaskSuggestionDialog，我们通过自定义事件来实现
+    window.dispatchEvent(new CustomEvent('show-subtask-suggestion', {
+      detail: {
+        taskId: props.task.id,
+        subtasks: result.subtasks
+      }
+    }))
+
+  } catch (error) {
+    console.error('AI 拆解失败:', error)
+    appStore.toast('AI 拆解失败：' + error.message)
+  } finally {
+    isAIBreakingDown.value = false
+  }
 }
 
 async function handleToggleSubtask(subtaskId) {

@@ -799,6 +799,7 @@
 
 .btn-pin,
 .btn-edit,
+.btn-ai-breakdown,
 .btn-delete {
   width: 32px;
   height: 32px;
@@ -828,6 +829,24 @@
   background: rgba(102, 126, 234, 0.1);
 }
 
+.btn-ai-breakdown {
+  color: var(--primary-color);
+  background: linear-gradient(135deg, rgba(138, 157, 251, 0.1) 0%, rgba(138, 157, 251, 0.05) 100%);
+}
+
+.btn-ai-breakdown:hover {
+  background: linear-gradient(135deg, rgba(138, 157, 251, 0.2) 0%, rgba(138, 157, 251, 0.1) 100%);
+}
+
+.btn-ai-breakdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ai-breakdown:disabled:hover {
+  transform: none;
+}
+
 .btn-delete {
   color: var(--danger-color);
 }
@@ -838,6 +857,7 @@
 
 .btn-pin svg,
 .btn-edit svg,
+.btn-ai-breakdown svg,
 .btn-delete svg {
   width: 16px;
   height: 16px;
