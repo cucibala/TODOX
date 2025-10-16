@@ -31,6 +31,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   generateDailySummary: (tasks) => ipcRenderer.invoke('generate-daily-summary', tasks),
   chatWithDeepSeek: (messages) => ipcRenderer.invoke('chat-with-deepseek', messages),
   
+  // 流式聊天监听
+  onChatStreamData: (callback) => ipcRenderer.on('chat-stream-data', (event, data) => callback(data)),
+  onChatStreamEnd: (callback) => ipcRenderer.on('chat-stream-end', () => callback()),
+  onChatStreamError: (callback) => ipcRenderer.on('chat-stream-error', (event, error) => callback(error)),
+  removeChatStreamListeners: () => {
+    ipcRenderer.removeAllListeners('chat-stream-data');
+    ipcRenderer.removeAllListeners('chat-stream-end');
+    ipcRenderer.removeAllListeners('chat-stream-error');
+  },
+  
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),
   selectDataPath: () => ipcRenderer.invoke('select-data-path'),

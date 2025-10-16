@@ -1087,7 +1087,7 @@ ipcMain.handle('set-auto-launch', async (event, enabled) => {
   }
 });
 
-// IPC 通信处理 - DeepSeek 聊天
+// IPC 通信处理 - DeepSeek 聊天（流式）
 ipcMain.handle('chat-with-deepseek', async (event, messages) => {
   try {
     // 获取 API 密钥
@@ -1101,7 +1101,7 @@ ipcMain.handle('chat-with-deepseek', async (event, messages) => {
     }
     const apiKey = decryptPassword(settings.deepseekApiKey);
 
-    // 调用 DeepSeek API
+    // 调用 DeepSeek API（流式）
     const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: {
@@ -1115,7 +1115,8 @@ ipcMain.handle('chat-with-deepseek', async (event, messages) => {
           content: msg.content
         })),
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 2000,
+        stream: true
       })
     });
 
@@ -1127,16 +1128,55 @@ ipcMain.handle('chat-with-deepseek', async (event, messages) => {
       };
     }
 
-    const data = await response.json();
-    const assistantMessage = data.choices[0]?.message?.content || '';
+    // 处理流式响应
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine === 'data: [DONE]') {
+          continue;
+        }
+
+        if (trimmedLine.startsWith('data: ')) {
+          try {
+            const jsonStr = trimmedLine.slice(6);
+            const data = JSON.parse(jsonStr);
+            const content = data.choices[0]?.delta?.content;
+            
+            if (content) {
+              // 发送流式数据块到渲染进程
+              event.sender.send('chat-stream-data', content);
+            }
+          } catch (e) {
+            console.error('解析流式数据失败:', e);
+          }
+        }
+      }
+    }
+
+    // 发送完成信号
+    event.sender.send('chat-stream-end');
 
     return {
-      success: true,
-      content: assistantMessage
+      success: true
     };
 
   } catch (error) {
     console.error('DeepSeek 聊天失败:', error);
+    event.sender.send('chat-stream-error', error.message || '聊天失败');
     return { success: false, error: error.message || '聊天失败' };
   }
 });

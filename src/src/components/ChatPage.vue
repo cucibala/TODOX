@@ -9,13 +9,6 @@
         </svg>
         <h2>DeepSeek AI 助手</h2>
       </div>
-      <button class="btn-back" @click="appStore.currentPage = 'home'" title="返回首页">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="19" y1="12" x2="5" y2="12"></line>
-          <polyline points="12 19 5 12 12 5"></polyline>
-        </svg>
-        返回
-      </button>
     </div>
 
     <div class="chat-container">
@@ -52,23 +45,6 @@
           <div class="message-content">
             <div class="message-text">{{ message.content }}</div>
             <div class="message-time">{{ formatTime(message.timestamp) }}</div>
-          </div>
-        </div>
-
-        <div v-if="isLoading" class="message-item assistant loading">
-          <div class="message-avatar">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-              <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            </svg>
-          </div>
-          <div class="message-content">
-            <div class="typing-indicator">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
           </div>
         </div>
       </div>
@@ -109,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAppStore } from '../stores/app'
 
 const appStore = useAppStore()
@@ -120,6 +96,7 @@ const userInput = ref('')
 const isLoading = ref(false)
 const messagesContainer = ref(null)
 const inputTextarea = ref(null)
+const streamingMessageIndex = ref(-1)
 
 // 检查 API 密钥
 async function checkApiKey() {
@@ -151,34 +128,38 @@ async function handleSend() {
   resetTextareaHeight()
   scrollToBottom()
 
-  // 调用 API
+  // 添加一个空的 AI 消息，准备接收流式内容
+  messages.value.push({
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now()
+  })
+  streamingMessageIndex.value = messages.value.length - 1
+
+  // 调用 API（流式）
   isLoading.value = true
   try {
     // 将 Vue 响应式对象转换为普通对象数组
-    const plainMessages = messages.value.map(msg => ({
+    const plainMessages = messages.value.slice(0, -1).map(msg => ({
       role: msg.role,
       content: msg.content
     }))
     const result = await electronAPI.chatWithDeepSeek(plainMessages)
     
-    if (result.success) {
-      messages.value.push({
-        role: 'assistant',
-        content: result.content,
-        timestamp: Date.now()
-      })
-    } else {
+    if (!result.success) {
       appStore.toast('AI 回复失败：' + (result.error || '未知错误'))
-      // 移除用户消息
+      // 移除用户消息和空的 AI 消息
       messages.value.pop()
+      messages.value.pop()
+      streamingMessageIndex.value = -1
     }
   } catch (error) {
     console.error('聊天失败:', error)
     appStore.toast('聊天失败，请重试')
+    // 移除用户消息和空的 AI 消息
     messages.value.pop()
-  } finally {
-    isLoading.value = false
-    scrollToBottom()
+    messages.value.pop()
+    streamingMessageIndex.value = -1
   }
 }
 
@@ -224,8 +205,42 @@ function formatTime(timestamp) {
   return `${hours}:${minutes}`
 }
 
+// 设置流式数据监听
+function setupStreamListeners() {
+  // 接收流式数据块
+  electronAPI.onChatStreamData((content) => {
+    if (streamingMessageIndex.value >= 0) {
+      messages.value[streamingMessageIndex.value].content += content
+      scrollToBottom()
+    }
+  })
+
+  // 流式响应结束
+  electronAPI.onChatStreamEnd(() => {
+    isLoading.value = false
+    streamingMessageIndex.value = -1
+    scrollToBottom()
+  })
+
+  // 流式响应错误
+  electronAPI.onChatStreamError((error) => {
+    isLoading.value = false
+    appStore.toast('AI 回复失败：' + error)
+    // 移除空的 AI 消息和用户消息
+    if (streamingMessageIndex.value >= 0) {
+      messages.value.splice(streamingMessageIndex.value - 1, 2)
+      streamingMessageIndex.value = -1
+    }
+  })
+}
+
 onMounted(async () => {
   await checkApiKey()
+  setupStreamListeners()
+})
+
+onUnmounted(() => {
+  electronAPI.removeChatStreamListeners()
 })
 </script>
 
