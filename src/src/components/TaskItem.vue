@@ -55,7 +55,33 @@
 
     <!-- 任务内容 -->
     <div class="task-content">
-      <div class="task-text">{{ task.text }}</div>
+      <!-- 编辑模式 -->
+      <div v-if="isEditing" class="task-edit-mode">
+        <textarea 
+          v-model="editText" 
+          class="task-edit-input"
+          ref="editInputRef"
+          @keydown.ctrl.enter="handleSaveEdit"
+          @keydown.esc="handleCancelEdit"
+        ></textarea>
+        <div class="task-edit-actions">
+          <button class="btn-save-edit" @click="handleSaveEdit" title="保存 (Ctrl+Enter)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            保存
+          </button>
+          <button class="btn-cancel-edit" @click="handleCancelEdit" title="取消 (Esc)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            取消
+          </button>
+        </div>
+      </div>
+      <!-- 显示模式 -->
+      <div v-else class="task-text">{{ task.text }}</div>
       
       <!-- 元信息 -->
       <div class="task-meta">
@@ -289,7 +315,7 @@
           <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
         </svg>
       </button>
-      <button class="btn-edit" title="编辑">
+      <button class="btn-edit" @click="handleStartEdit" title="编辑">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -326,6 +352,11 @@ const electronAPI = window.electronAPI
 // 图片缓存 - 存储图片的 base64 数据
 const imageCache = ref({})
 const progressImageCache = ref({})
+
+// 编辑状态
+const isEditing = ref(false)
+const editText = ref('')
+const editInputRef = ref(null)
 
 // 进度记录输入
 const progressInput = ref('')
@@ -410,6 +441,44 @@ async function handleToggle() {
 
 async function handleTogglePin() {
   await todoStore.togglePinTask(props.task.id)
+}
+
+// 开始编辑
+function handleStartEdit() {
+  isEditing.value = true
+  editText.value = props.task.text
+  // 聚焦输入框
+  setTimeout(() => {
+    if (editInputRef.value) {
+      editInputRef.value.focus()
+      // 自动调整高度
+      editInputRef.value.style.height = 'auto'
+      editInputRef.value.style.height = editInputRef.value.scrollHeight + 'px'
+    }
+  }, 0)
+}
+
+// 保存编辑
+async function handleSaveEdit() {
+  const newText = editText.value.trim()
+  if (!newText) {
+    appStore.toast('任务内容不能为空')
+    return
+  }
+  
+  if (newText !== props.task.text) {
+    await todoStore.updateTask(props.task.id, { text: newText })
+    appStore.toast('任务已更新')
+  }
+  
+  isEditing.value = false
+  editText.value = ''
+}
+
+// 取消编辑
+function handleCancelEdit() {
+  isEditing.value = false
+  editText.value = ''
 }
 
 async function handleDelete() {
