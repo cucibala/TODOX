@@ -300,7 +300,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 12px;
   background: transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
@@ -327,21 +327,53 @@
 .project-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
 }
 
 .project-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
 
 .project-count {
   font-size: 11px;
   color: var(--text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.project-progress-bar {
+  height: 4px;
+  background: var(--bg-hover);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.project-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  min-width: 2px;
+  opacity: 0.8;
+}
+
+.project-item:hover .project-progress-fill {
+  opacity: 1;
 }
 
 .btn-delete-project {

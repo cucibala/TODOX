@@ -28,9 +28,20 @@
         >
           <div class="project-color" :style="{ backgroundColor: project.color }"></div>
           <div class="project-info">
-            <div class="project-name">{{ project.name }}</div>
-            <div class="project-count">
-              {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
+            <div class="project-header">
+              <div class="project-name">{{ project.name }}</div>
+              <div class="project-count">
+                {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
+              </div>
+            </div>
+            <div class="project-progress-bar">
+              <div 
+                class="project-progress-fill" 
+                :style="{ 
+                  width: getProjectProgress(project.id) + '%',
+                  backgroundColor: project.color 
+                }"
+              ></div>
             </div>
           </div>
           <button 
@@ -159,6 +170,12 @@ const todayCompletedPercentage = computed(() => {
 
 function getProjectStats(projectId) {
   return projectStore.getProjectStats(projectId)
+}
+
+function getProjectProgress(projectId) {
+  const stats = projectStore.getProjectStats(projectId)
+  if (stats.total === 0) return 0
+  return Math.round((stats.completed / stats.total) * 100)
 }
 </script>
 
