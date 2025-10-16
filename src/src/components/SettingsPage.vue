@@ -49,24 +49,19 @@
           </div>
           <p class="setting-description">开机时自动启动 TodoX</p>
           <div class="setting-body">
-            <div class="toggle-container">
-              <div class="toggle-info">
-                <div class="toggle-title">启动时自动打开应用</div>
-                <div class="toggle-desc">Windows 系统启动后自动运行 TodoX</div>
+            <label class="toggle-switch-container">
+              <div class="toggle-label">
+                <div class="toggle-label-text">开机自动启动</div>
+                <div class="toggle-label-desc">{{ autoLaunch ? '已启用' : '已禁用' }}</div>
               </div>
-            </div>
-            <div class="status-badge" :class="{ active: autoLaunch }">
-              <label class="toggle-switch">
-                <input 
-                  type="checkbox" 
-                  :checked="autoLaunch" 
-                  @change="handleToggleAutoLaunch"
-                />
-                <span class="toggle-slider"></span>
-              </label>
-              <span class="status-dot"></span>
-              <span class="status-text">{{ autoLaunch ? '已启用' : '已禁用' }}</span>
-            </div>
+              <input 
+                type="checkbox" 
+                class="toggle-checkbox"
+                :checked="autoLaunch" 
+                @change="handleToggleAutoLaunch"
+              />
+              <span class="toggle-slider"></span>
+            </label>
           </div>
         </div>
 
@@ -329,41 +324,43 @@ onMounted(() => {
 }
 
 /* 开关容器 */
-.toggle-container {
+.toggle-switch-container {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
+  padding: 16px 20px;
   background: var(--bg-primary);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
 }
 
-.toggle-info {
+.toggle-switch-container:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+}
+
+.toggle-label {
   flex: 1;
 }
 
-.toggle-title {
+.toggle-label-text {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
 
-.toggle-desc {
+.toggle-label-desc {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--success-color);
+  font-weight: 500;
 }
 
 /* 开关切换 */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  cursor: pointer;
-}
-
-.toggle-switch input[type="checkbox"] {
+.toggle-checkbox {
   display: none;
 }
 
@@ -375,6 +372,7 @@ onMounted(() => {
   border-radius: 14px;
   transition: all 0.3s ease;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .toggle-slider::before {
@@ -390,51 +388,12 @@ onMounted(() => {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+.toggle-checkbox:checked + .toggle-slider {
   background: var(--success-color);
 }
 
-.toggle-switch input[type="checkbox"]:checked + .toggle-slider::before {
+.toggle-checkbox:checked + .toggle-slider::before {
   transform: translateX(24px);
-}
-
-/* 状态徽章 */
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--bg-primary);
-  border-radius: 20px;
-  font-size: 13px;
-  border: 1px solid var(--border-color);
-  transition: all 0.3s ease;
-}
-
-.status-badge.active {
-  background: rgba(82, 196, 26, 0.1);
-  border-color: var(--success-color);
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: all 0.3s ease;
-}
-
-.status-badge.active .status-dot {
-  background: var(--success-color);
-}
-
-.status-text {
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.status-badge.active .status-text {
-  color: var(--success-color);
 }
 
 /* 信息项 */
