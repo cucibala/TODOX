@@ -449,13 +449,58 @@
   min-width: 0;
 }
 
+.task-text-wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.task-text-wrapper:hover .btn-copy-text {
+  opacity: 1;
+}
+
 .task-text {
+  flex: 1;
   font-size: 14px;
   color: var(--text-primary);
   word-wrap: break-word;
   white-space: pre-wrap;
   line-height: 1.5;
-  margin-bottom: 4px;
+}
+
+.btn-copy-text {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-copy-text:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.btn-copy-text:hover svg {
+  color: white;
+}
+
+.btn-copy-text svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+  transition: color 0.2s;
 }
 
 /* 任务编辑模式 */

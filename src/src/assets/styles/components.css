@@ -334,6 +334,42 @@
   color: var(--text-muted);
 }
 
+.progress-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.progress-item:hover .progress-actions {
+  opacity: 1;
+}
+
+.btn-copy-progress {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-copy-progress:hover {
+  color: var(--primary-color);
+  background: rgba(138, 157, 251, 0.1);
+}
+
+.btn-copy-progress svg {
+  width: 14px;
+  height: 14px;
+}
+
 .btn-delete-progress {
   background: none;
   border: none;
@@ -343,6 +379,9 @@
   transition: all 0.2s ease;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-delete-progress:hover {

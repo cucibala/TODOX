@@ -81,7 +81,15 @@
         </div>
       </div>
       <!-- 显示模式 -->
-      <div v-else class="task-text">{{ task.text }}</div>
+      <div v-else class="task-text-wrapper">
+        <div class="task-text">{{ task.text }}</div>
+        <button class="btn-copy-text" @click="handleCopyTaskText" title="复制任务内容">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
       
       <!-- 元信息 -->
       <div class="task-meta">
@@ -230,16 +238,28 @@
                   />
                 </div>
               </div>
-              <button 
-                class="btn-delete-progress" 
-                @click="handleDeleteProgress(progressItem.id)"
-                title="删除进度"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
+              <div class="progress-actions">
+                <button 
+                  class="btn-copy-progress" 
+                  @click="handleCopyProgressText(progressItem.text)"
+                  title="复制进度内容"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+                <button 
+                  class="btn-delete-progress" 
+                  @click="handleDeleteProgress(progressItem.id)"
+                  title="删除进度"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -479,6 +499,26 @@ async function handleSaveEdit() {
 function handleCancelEdit() {
   isEditing.value = false
   editText.value = ''
+}
+
+// 复制任务内容
+async function handleCopyTaskText() {
+  try {
+    await navigator.clipboard.writeText(props.task.text)
+    appStore.toast('任务内容已复制')
+  } catch (err) {
+    appStore.toast('复制失败')
+  }
+}
+
+// 复制进度内容
+async function handleCopyProgressText(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    appStore.toast('进度内容已复制')
+  } catch (err) {
+    appStore.toast('复制失败')
+  }
 }
 
 async function handleDelete() {
