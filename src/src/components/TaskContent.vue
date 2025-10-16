@@ -100,12 +100,12 @@
         </svg>
         <span>请先创建一个项目，然后再添加任务</span>
       </div>
-      <div v-else class="current-project-display">
+      <!-- <div v-else class="current-project-display">
         <span class="current-project-label">当前项目：</span>
         <span class="current-project-name" :style="{ color: currentProject?.color }">
           {{ currentProject?.name }}
         </span>
-      </div>
+      </div> -->
       <form 
         @submit.prevent="handleAddTask" 
         :style="{ 

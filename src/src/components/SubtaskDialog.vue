@@ -1,8 +1,19 @@
 <template>
   <div v-if="showSubtaskDialog" class="dialog-overlay" @click.self="handleClose">
-    <div class="dialog-content">
+    <div class="dialog-content subtask-dialog">
       <div class="dialog-header">
-        <h3 class="dialog-title">添加子任务</h3>
+        <div class="dialog-header-content">
+          <div class="dialog-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 11 12 14 22 4"></polyline>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            </svg>
+          </div>
+          <div>
+            <h3 class="dialog-title">添加子任务</h3>
+            <p class="dialog-subtitle">将大任务分解为可管理的小步骤</p>
+          </div>
+        </div>
         <button class="dialog-close" @click="handleClose">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -10,37 +21,99 @@
           </svg>
         </button>
       </div>
+      
       <form @submit.prevent="handleConfirm">
         <div class="subtask-form-group">
-          <label class="subtask-label">子任务内容</label>
+          <label class="subtask-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            子任务内容
+          </label>
           <input 
             v-model="subtaskText" 
             type="text" 
             class="subtask-dialog-input" 
-            placeholder="输入子任务内容..." 
+            placeholder="例如：编写文档、测试功能..." 
             ref="inputRef"
+            maxlength="100"
           />
-        </div>
-        <div class="subtask-form-group">
-          <label class="subtask-label">重要程度</label>
-          <div class="subtask-priority-options">
-            <label class="subtask-priority-option">
-              <input type="radio" v-model="subtaskWeight" value="5" name="subtask-priority" />
-              <span class="priority-badge priority-high">高</span>
-            </label>
-            <label class="subtask-priority-option">
-              <input type="radio" v-model="subtaskWeight" value="3" name="subtask-priority" />
-              <span class="priority-badge priority-medium">中</span>
-            </label>
-            <label class="subtask-priority-option">
-              <input type="radio" v-model="subtaskWeight" value="2" name="subtask-priority" />
-              <span class="priority-badge priority-low">低</span>
-            </label>
+          <div class="input-hint">
+            <span class="char-count">{{ subtaskText.length }}/100</span>
           </div>
         </div>
+        
+        <div class="subtask-form-group">
+          <label class="subtask-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            重要程度
+            <span class="label-hint">影响任务进度权重</span>
+          </label>
+          <div class="subtask-priority-options">
+            <label class="subtask-priority-option" :class="{ active: subtaskWeight === '5' }">
+              <input type="radio" v-model="subtaskWeight" value="5" name="subtask-priority" />
+              <div class="priority-content">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span class="priority-label">高</span>
+                <span class="priority-weight">权重 5</span>
+              </div>
+            </label>
+            <label class="subtask-priority-option" :class="{ active: subtaskWeight === '3' }">
+              <input type="radio" v-model="subtaskWeight" value="3" name="subtask-priority" />
+              <div class="priority-content">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                </svg>
+                <span class="priority-label">中</span>
+                <span class="priority-weight">权重 3</span>
+              </div>
+            </label>
+            <label class="subtask-priority-option" :class="{ active: subtaskWeight === '2' }">
+              <input type="radio" v-model="subtaskWeight" value="2" name="subtask-priority" />
+              <div class="priority-content">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 16 12 12 8 10"></polyline>
+                </svg>
+                <span class="priority-label">低</span>
+                <span class="priority-weight">权重 2</span>
+              </div>
+            </label>
+          </div>
+          <div class="priority-hint">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <span>重要程度越高，完成后对整体进度贡献越大</span>
+          </div>
+        </div>
+        
         <div class="dialog-footer">
-          <button type="button" class="dialog-btn dialog-btn-cancel" @click="handleClose">取消</button>
-          <button type="submit" class="dialog-btn dialog-btn-confirm">添加</button>
+          <button type="button" class="dialog-btn dialog-btn-cancel" @click="handleClose">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            取消
+          </button>
+          <button type="submit" class="dialog-btn dialog-btn-confirm" :disabled="!subtaskText.trim()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            添加子任务
+          </button>
         </div>
       </form>
     </div>

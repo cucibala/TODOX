@@ -28,13 +28,13 @@
   transform: rotate(-90deg);
 }
 
-.progress-bg {
+.stats-progress-bg {
   fill: none;
   stroke: var(--bg-hover);
   stroke-width: 8;
 }
 
-.progress-bar {
+.stats-progress-bar {
   fill: none;
   stroke: var(--primary-color);
   stroke-width: 8;
@@ -43,7 +43,7 @@
   transition: stroke-dashoffset 0.6s ease;
 }
 
-.progress-text {
+.stats-progress-text {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -51,7 +51,7 @@
   text-align: center;
 }
 
-.progress-value {
+.stats-progress-value {
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
@@ -59,7 +59,7 @@
   margin-bottom: 4px;
 }
 
-.progress-label {
+.stats-progress-label {
   font-size: 12px;
   color: var(--text-muted);
   font-weight: 500;
@@ -136,8 +136,8 @@
   color: var(--text-primary);
 }
 
-/* 进度条容器 */
-.progress-bar-container {
+/* 每日统计进度条 */
+.daily-progress-bar {
   height: 8px;
   background: var(--bg-hover);
   border-radius: 4px;
@@ -145,18 +145,18 @@
   position: relative;
 }
 
-.progress-bar-fill {
+.daily-progress-fill {
   height: 100%;
   border-radius: 4px;
   transition: width 0.4s ease;
   position: relative;
 }
 
-.progress-bar-fill.added {
+.daily-progress-fill.added {
   background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
 }
 
-.progress-bar-fill.completed {
+.daily-progress-fill.completed {
   background: linear-gradient(90deg, var(--success-color), #48bb78);
 }
 

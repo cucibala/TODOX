@@ -63,18 +63,18 @@
       <!-- 环形进度条 - 总任务完成情况 -->
       <div class="circular-progress-container">
         <svg class="circular-progress" viewBox="0 0 120 120">
-          <circle class="progress-bg" cx="60" cy="60" r="50" />
+          <circle class="stats-progress-bg" cx="60" cy="60" r="50" />
           <circle 
-            class="progress-bar" 
+            class="stats-progress-bar" 
             cx="60" 
             cy="60" 
             r="50" 
             :style="{ strokeDashoffset: circleOffset }"
           />
         </svg>
-        <div class="progress-text">
-          <div class="progress-value">{{ completionPercentage }}%</div>
-          <div class="progress-label">完成率</div>
+        <div class="stats-progress-text">
+          <div class="stats-progress-value">{{ completionPercentage }}%</div>
+          <div class="stats-progress-label">完成率</div>
         </div>
       </div>
       
@@ -98,9 +98,9 @@
               <span class="daily-stat-label">今日新增</span>
               <span class="daily-stat-value">{{ todayAddedCount }}</span>
             </div>
-            <div class="progress-bar-container">
+            <div class="daily-progress-bar">
               <div 
-                class="progress-bar-fill added" 
+                class="daily-progress-fill added" 
                 :style="{ width: todayAddedPercentage + '%' }"
               ></div>
             </div>
@@ -111,9 +111,9 @@
               <span class="daily-stat-label">今日完成</span>
               <span class="daily-stat-value">{{ todayCompletedCount }}</span>
             </div>
-            <div class="progress-bar-container">
+            <div class="daily-progress-bar">
               <div 
-                class="progress-bar-fill completed" 
+                class="daily-progress-fill completed" 
                 :style="{ width: todayCompletedPercentage + '%' }"
               ></div>
             </div>
