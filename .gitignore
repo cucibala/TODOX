@@ -15,4 +15,4 @@ release/
 *.AppImage
 *.deb
 *.rpm
-
+dist-vue/*

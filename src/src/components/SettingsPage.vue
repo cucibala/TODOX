@@ -1,146 +1,96 @@
 <template>
   <div class="settings-page">
-    <!-- 设置内容 - 使用两栏布局 -->
+    <!-- 设置内容 - 单列居中布局 -->
     <div class="settings-content">
-      <div class="settings-grid">
-        <!-- 左侧设置 -->
-        <div class="settings-column">
-          <!-- 数据存储路径 -->
-          <div class="setting-section">
-            <div class="setting-header">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <h4>数据存储路径</h4>
-            </div>
-            <p class="setting-description">选择任务数据和图片的存储位置</p>
-            <div class="setting-body">
-              <div class="path-display">
-                <input 
-                  type="text" 
-                  :value="dataPath" 
-                  readonly 
-                  class="path-input"
-                  :title="dataPath"
-                />
-                <button class="btn-select-path" @click="handleSelectPath">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-                  </svg>
-                  选择路径
-                </button>
-              </div>
-              <div class="path-info">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-                <span>修改路径后，需要重启应用才能生效</span>
-              </div>
-            </div>
+      <div class="settings-container">
+        <!-- 数据存储路径 -->
+        <div class="setting-section">
+          <div class="setting-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <h4>数据存储路径</h4>
           </div>
-
-          <!-- 开机自启 -->
-          <div class="setting-section">
-            <div class="setting-header">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M23 6l-9.5 9.5-5-5L1 18"></path>
-              </svg>
-              <h4>开机自启</h4>
+          <p class="setting-description">选择任务数据和图片的存储位置</p>
+          <div class="setting-body">
+            <div class="path-display">
+              <input 
+                type="text" 
+                :value="dataPath" 
+                readonly 
+                class="path-input"
+                :title="dataPath"
+              />
+              <button class="btn-select-path" @click="handleSelectPath">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                选择路径
+              </button>
             </div>
-            <p class="setting-description">开机时自动启动 TodoX</p>
-            <div class="setting-body">
-              <div class="toggle-container">
-                <div class="toggle-info">
-                  <div class="toggle-title">启动时自动打开应用</div>
-                  <div class="toggle-desc">Windows 系统启动后自动运行 TodoX</div>
-                </div>
-                <label class="toggle-switch">
-                  <input 
-                    type="checkbox" 
-                    :checked="autoLaunch" 
-                    @change="handleToggleAutoLaunch"
-                  />
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>
-              <div class="status-badge" :class="{ active: autoLaunch }">
-                <span class="status-dot"></span>
-                <span class="status-text">{{ autoLaunch ? '已启用' : '已禁用' }}</span>
-              </div>
+            <div class="path-info">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>修改路径后，需要重启应用才能生效</span>
             </div>
           </div>
         </div>
 
-        <!-- 右侧信息 -->
-        <div class="settings-column">
-          <!-- 应用信息 -->
-          <div class="setting-section">
-            <div class="setting-header">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
-              </svg>
-              <h4>应用信息</h4>
-            </div>
-            <div class="setting-body">
-              <div class="info-grid">
-                <div class="info-item">
-                  <div class="info-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                  </div>
-                  <div class="info-content">
-                    <div class="info-label">应用版本</div>
-                    <div class="info-value">v{{ appVersion }}</div>
-                  </div>
-                </div>
-                
-                <div class="info-item">
-                  <div class="info-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
-                      <polyline points="13 2 13 9 20 9"></polyline>
-                    </svg>
-                  </div>
-                  <div class="info-content">
-                    <div class="info-label">数据格式版本</div>
-                    <div class="info-value">v3.0</div>
-                  </div>
-                </div>
-                
-                <div class="info-item">
-                  <div class="info-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="16 18 22 12 16 6"></polyline>
-                      <polyline points="8 6 2 12 8 18"></polyline>
-                    </svg>
-                  </div>
-                  <div class="info-content">
-                    <div class="info-label">技术栈</div>
-                    <div class="info-value">Electron + Vue 3</div>
-                  </div>
-                </div>
+        <!-- 开机自启 -->
+        <div class="setting-section">
+          <div class="setting-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 6l-9.5 9.5-5-5L1 18"></path>
+            </svg>
+            <h4>开机自启</h4>
+          </div>
+          <p class="setting-description">开机时自动启动 TodoX</p>
+          <div class="setting-body">
+            <div class="toggle-container">
+              <div class="toggle-info">
+                <div class="toggle-title">启动时自动打开应用</div>
+                <div class="toggle-desc">Windows 系统启动后自动运行 TodoX</div>
               </div>
             </div>
-          </div>
-
-          <!-- 关于 -->
-          <div class="setting-section about-section">
-            <div class="setting-header">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M9 11l3 3L22 4"></path>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-              </svg>
-              <h4>关于 TodoX</h4>
+            <div class="status-badge" :class="{ active: autoLaunch }">
+              <label class="toggle-switch">
+                <input 
+                  type="checkbox" 
+                  :checked="autoLaunch" 
+                  @change="handleToggleAutoLaunch"
+                />
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="status-dot"></span>
+              <span class="status-text">{{ autoLaunch ? '已启用' : '已禁用' }}</span>
             </div>
-            <div class="setting-body">
-              <p class="about-text">
-                TodoX 是一个现代化的桌面任务管理应用，支持项目管理、进度追踪、多图片附件、桌面背景模式等功能。
-              </p>
+          </div>
+        </div>
+
+        <!-- 应用信息 -->
+        <div class="setting-section">
+          <div class="setting-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"></path>
+            </svg>
+            <h4>应用信息</h4>
+          </div>
+          <div class="setting-body">
+            <div class="info-item">
+              <div class="info-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <div class="info-content">
+                <div class="info-label">应用版本</div>
+                <div class="info-value">v{{ appVersion }}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -236,27 +186,25 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   background: var(--bg-primary);
+  width: 100%;
 }
 
-/* 设置内容 - 两栏布局 */
+/* 设置内容 - 单列居中布局 */
 .settings-content {
   flex: 1;
   overflow-y: auto;
   padding: 32px;
+  display: flex;
+  justify-content: center;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.settings-column {
+.settings-container {
+  width: 100%;
+  max-width: 700px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+  margin: 0 auto;
 }
 
 /* 设置分区 */
@@ -489,13 +437,7 @@ onMounted(() => {
   color: var(--success-color);
 }
 
-/* 信息网格 */
-.info-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
+/* 信息项 */
 .info-item {
   display: flex;
   align-items: center;
@@ -509,7 +451,6 @@ onMounted(() => {
 
 .info-item:hover {
   border-color: var(--primary-color);
-  transform: translateX(4px);
 }
 
 .info-icon {
@@ -544,28 +485,5 @@ onMounted(() => {
   color: var(--text-primary);
   font-weight: 600;
   font-family: 'Consolas', 'Monaco', monospace;
-}
-
-/* 关于部分 */
-.about-section .setting-body {
-  margin-top: 12px;
-}
-
-.about-text {
-  margin: 0;
-  padding: 16px;
-  background: var(--bg-primary);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-  font-size: 14px;
-  line-height: 1.8;
-  color: var(--text-secondary);
-}
-
-/* 响应式：小屏幕改为单列 */
-@media (max-width: 1200px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

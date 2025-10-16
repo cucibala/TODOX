@@ -56,7 +56,8 @@
   border-radius: 4px;
 }
 
-.titlebar-nav-btn svg {
+.titlebar-nav-btn svg,
+.titlebar-nav-btn img.nav-icon {
   width: 16px;
   height: 16px;
 }
