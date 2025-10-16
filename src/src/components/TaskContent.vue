@@ -114,14 +114,16 @@
         }"
       >
         <div class="input-group">
-          <input 
+          <textarea 
             v-model="newTaskText" 
-            type="text" 
-            class="task-input" 
+            class="task-input task-textarea" 
             placeholder="添加新任务..." 
             autocomplete="off"
             required
-          />
+            rows="1"
+            @input="adjustTextareaHeight"
+            @keydown.ctrl.enter="handleAddTask"
+          ></textarea>
           <input 
             v-model="newTaskDueDate" 
             type="date" 
@@ -211,6 +213,13 @@ const newTaskText = ref('')
 const newTaskDueDate = ref('')
 const newTaskPriority = ref('medium')
 
+// 自动调整 textarea 高度
+function adjustTextareaHeight(event) {
+  const textarea = event.target
+  textarea.style.height = 'auto'
+  textarea.style.height = textarea.scrollHeight + 'px'
+}
+
 async function handleAddTask() {
   const result = await todoStore.addTask(
     newTaskText.value,
@@ -222,6 +231,11 @@ async function handleAddTask() {
     newTaskText.value = ''
     newTaskDueDate.value = ''
     newTaskPriority.value = 'medium'
+    // 重置 textarea 高度
+    const textarea = document.querySelector('.task-textarea')
+    if (textarea) {
+      textarea.style.height = 'auto'
+    }
   } else if (result.error) {
     appStore.toast(result.error)
   }

@@ -404,7 +404,7 @@
 .add-progress-input-wrapper {
   display: flex;
   gap: 6px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .add-progress-input {
@@ -424,6 +424,35 @@
   box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.1);
 }
 
+/* 进度 Textarea 特殊样式 */
+.add-progress-textarea {
+  min-height: 36px;
+  max-height: 150px;
+  resize: vertical;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.add-progress-textarea::-webkit-scrollbar {
+  width: 4px;
+}
+
+.add-progress-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.add-progress-textarea::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.add-progress-textarea::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
 .btn-add-progress-image,
 .btn-add-progress {
   padding: 8px;
@@ -436,6 +465,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 36px;
+  flex-shrink: 0;
 }
 
 .btn-add-progress-image:hover {

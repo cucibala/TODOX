@@ -222,13 +222,15 @@
       <!-- 添加进度 -->
       <div class="add-progress-section">
         <div class="add-progress-input-wrapper">
-          <input
+          <textarea
             v-model="progressInput"
-            type="text"
             placeholder="添加进度描述..."
-            class="add-progress-input"
-            @keyup.enter="handleAddProgress"
-          />
+            class="add-progress-input add-progress-textarea"
+            rows="1"
+            @input="adjustProgressTextareaHeight"
+            @keydown.ctrl.enter="handleAddProgress"
+            ref="progressTextareaRef"
+          ></textarea>
           <button 
             class="btn-add-progress-image" 
             @click="handleSelectProgressImage"
@@ -328,6 +330,7 @@ const progressImageCache = ref({})
 // 进度记录输入
 const progressInput = ref('')
 const showProgress = ref(false)
+const progressTextareaRef = ref(null)
 // 用于预览的图片数据（base64）
 const progressImagePreviews = ref({})
 // 当前任务的进度图片文件名列表
@@ -441,6 +444,13 @@ function getWeightText(weight) {
   return '低'
 }
 
+// 自动调整进度 textarea 高度
+function adjustProgressTextareaHeight(event) {
+  const textarea = event.target
+  textarea.style.height = 'auto'
+  textarea.style.height = textarea.scrollHeight + 'px'
+}
+
 // 进度记录功能
 async function handleAddProgress() {
   if (!progressInput.value.trim()) {
@@ -452,6 +462,11 @@ async function handleAddProgress() {
   
   await todoStore.addProgress(props.task.id, progressInput.value)
   progressInput.value = ''
+  
+  // 重置 textarea 高度
+  if (progressTextareaRef.value) {
+    progressTextareaRef.value.style.height = 'auto'
+  }
   
   // 立即加载新添加的进度图片
   if (imagesToAdd.length > 0) {
