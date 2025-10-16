@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteDeepSeekKey: () => ipcRenderer.invoke('delete-deepseek-key'),
   aiBreakdownTask: (taskText) => ipcRenderer.invoke('ai-breakdown-task', taskText),
   generateDailySummary: (tasks) => ipcRenderer.invoke('generate-daily-summary', tasks),
+  chatWithDeepSeek: (messages) => ipcRenderer.invoke('chat-with-deepseek', messages),
   
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),

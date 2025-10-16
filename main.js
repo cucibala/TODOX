@@ -1087,6 +1087,60 @@ ipcMain.handle('set-auto-launch', async (event, enabled) => {
   }
 });
 
+// IPC 通信处理 - DeepSeek 聊天
+ipcMain.handle('chat-with-deepseek', async (event, messages) => {
+  try {
+    // 获取 API 密钥
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, error: '未配置 API 密钥' };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.deepseekApiKey) {
+      return { success: false, error: '未配置 API 密钥' };
+    }
+    const apiKey = decryptPassword(settings.deepseekApiKey);
+
+    // 调用 DeepSeek API
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      return { 
+        success: false, 
+        error: errorData.error?.message || `API 请求失败: ${response.status}` 
+      };
+    }
+
+    const data = await response.json();
+    const assistantMessage = data.choices[0]?.message?.content || '';
+
+    return {
+      success: true,
+      content: assistantMessage
+    };
+
+  } catch (error) {
+    console.error('DeepSeek 聊天失败:', error);
+    return { success: false, error: error.message || '聊天失败' };
+  }
+});
+
 // IPC 通信处理 - 获取应用版本
 ipcMain.handle('get-app-version', async () => {
   try {

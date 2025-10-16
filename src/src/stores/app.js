@@ -7,7 +7,7 @@ export const useAppStore = defineStore('app', () => {
   const isAlwaysOnTop = ref(true)
   const isDesktopMode = ref(false)
   const showLockScreen = ref(false)
-  const currentPage = ref('home') // 'home' | 'settings'
+  const currentPage = ref('home') // 'home' | 'settings' | 'chat'
   
   // Toast
   const toastMessage = ref('')

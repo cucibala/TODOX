@@ -16,6 +16,9 @@
 
       <!-- 设置页面 -->
       <SettingsPage v-else-if="currentPage === 'settings'" />
+
+      <!-- 聊天页面 -->
+      <ChatPage v-else-if="currentPage === 'chat'" />
     </main>
 
     <!-- 锁定界面 -->
@@ -67,6 +70,7 @@ import ApiKeyDialog from './components/ApiKeyDialog.vue'
 import SubtaskSuggestionDialog from './components/SubtaskSuggestionDialog.vue'
 import AILoadingDialog from './components/AILoadingDialog.vue'
 import SettingsPage from './components/SettingsPage.vue'
+import ChatPage from './components/ChatPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
