@@ -192,7 +192,7 @@ TodoX/
 
 如有问题或建议，请：
 - 提交 [Issue](../../issues)
-- 发送邮件至：your.email@example.com
+- 发送邮件至：cucibala@gmail.com
 
 ## 🔮 路线图
 
