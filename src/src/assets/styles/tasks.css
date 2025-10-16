@@ -117,6 +117,120 @@
   background: rgba(82, 196, 26, 0.1);
 }
 
+/* AI 总结按钮 */
+.btn-ai-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-left: auto;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(138, 157, 251, 0.3);
+}
+
+.btn-ai-summary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(138, 157, 251, 0.4);
+}
+
+.btn-ai-summary:active {
+  transform: translateY(0);
+}
+
+.btn-ai-summary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-ai-summary svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* AI 总结显示 */
+.daily-summary-container {
+  margin: 16px 20px;
+  background: linear-gradient(135deg, rgba(138, 157, 251, 0.08) 0%, rgba(138, 157, 251, 0.02) 100%);
+  border: 1px solid rgba(138, 157, 251, 0.2);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(138, 157, 251, 0.1);
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  color: white;
+}
+
+.summary-header svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.summary-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.btn-close-summary {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-close-summary:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn-close-summary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.summary-content {
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
 .search-icon {
   position: absolute;
   left: 14px;

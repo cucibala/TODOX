@@ -22,6 +22,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   changePassword: (oldPassword, newPassword) => ipcRenderer.invoke('change-password', oldPassword, newPassword),
   clearPassword: (password) => ipcRenderer.invoke('clear-password', password),
   
+  // DeepSeek API 管理
+  setDeepSeekKey: (apiKey) => ipcRenderer.invoke('set-deepseek-key', apiKey),
+  getDeepSeekKey: () => ipcRenderer.invoke('get-deepseek-key'),
+  hasDeepSeekKey: () => ipcRenderer.invoke('has-deepseek-key'),
+  deleteDeepSeekKey: () => ipcRenderer.invoke('delete-deepseek-key'),
+  generateDailySummary: (tasks) => ipcRenderer.invoke('generate-daily-summary', tasks),
+  
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),
   selectDataPath: () => ipcRenderer.invoke('select-data-path'),

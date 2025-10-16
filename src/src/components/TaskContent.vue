@@ -88,6 +88,42 @@
           低
         </button>
       </div>
+
+      <!-- AI 总结按钮 -->
+      <button 
+        class="btn-ai-summary" 
+        @click="handleGenerateSummary"
+        title="使用 AI 生成每日任务总结"
+        :disabled="isGeneratingSummary"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+        </svg>
+        <span>{{ isGeneratingSummary ? 'AI 生成中...' : 'AI 总结' }}</span>
+      </button>
+    </div>
+
+    <!-- AI 总结显示 -->
+    <div v-if="dailySummary" class="daily-summary-container">
+      <div class="summary-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+        </svg>
+        <h3>今日任务总结</h3>
+        <button class="btn-close-summary" @click="dailySummary = ''" title="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="summary-content">
+        {{ dailySummary }}
+      </div>
     </div>
 
     <!-- 添加任务表单 -->
@@ -212,6 +248,10 @@ const { hasProjects, currentProjectId, currentProject } = storeToRefs(projectSto
 const newTaskText = ref('')
 const newTaskDueDate = ref('')
 const newTaskPriority = ref('medium')
+const dailySummary = ref('')
+const isGeneratingSummary = ref(false)
+
+const electronAPI = window.electronAPI
 
 // 自动调整 textarea 高度
 function adjustTextareaHeight(event) {
@@ -243,6 +283,52 @@ async function handleAddTask() {
 
 async function handleSelectImage() {
   await todoStore.selectImage()
+}
+
+// 生成每日任务总结
+async function handleGenerateSummary() {
+  try {
+    // 检查是否有 API 密钥
+    const hasKeyResult = await electronAPI.hasDeepSeekKey()
+    if (!hasKeyResult.hasKey) {
+      appStore.toast('请先在设置中配置 DeepSeek API 密钥')
+      return
+    }
+
+    // 获取今日任务
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayTimestamp = today.getTime()
+    
+    const todayTasks = todoStore.todos.filter(task => {
+      if (!task.createdAt) return false
+      const taskDate = new Date(task.createdAt)
+      taskDate.setHours(0, 0, 0, 0)
+      return taskDate.getTime() === todayTimestamp
+    })
+
+    if (todayTasks.length === 0) {
+      appStore.toast('今日暂无任务，无法生成总结')
+      return
+    }
+
+    isGeneratingSummary.value = true
+    appStore.toast('正在生成总结，请稍候...')
+    
+    const result = await electronAPI.generateDailySummary(todayTasks)
+    
+    if (result.success) {
+      dailySummary.value = result.summary
+      appStore.toast('总结生成成功')
+    } else {
+      appStore.toast('生成总结失败：' + (result.error || '未知错误'))
+    }
+  } catch (error) {
+    console.error('生成总结失败:', error)
+    appStore.toast('生成总结失败：' + error.message)
+  } finally {
+    isGeneratingSummary.value = false
+  }
 }
 </script>
 

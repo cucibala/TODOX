@@ -694,6 +694,141 @@ ipcMain.handle('clear-password', async (event, password) => {
   }
 });
 
+// IPC 通信处理 - 设置 DeepSeek API 密钥
+ipcMain.handle('set-deepseek-key', async (event, apiKey) => {
+  try {
+    if (!apiKey) {
+      return { success: false, error: 'API 密钥不能为空' };
+    }
+    const encrypted = encryptPassword(apiKey); // 复用加密函数
+    const settingsPath = getSettingsPath();
+    let settings = {};
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
+    }
+    settings.deepseekApiKey = encrypted;
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('设置 DeepSeek API 密钥失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 获取 DeepSeek API 密钥
+ipcMain.handle('get-deepseek-key', async () => {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, key: '' };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.deepseekApiKey) {
+      return { success: false, key: '' };
+    }
+    const decrypted = decryptPassword(settings.deepseekApiKey);
+    return { success: true, key: decrypted };
+  } catch (error) {
+    console.error('获取 DeepSeek API 密钥失败:', error);
+    return { success: false, key: '', error: error.message };
+  }
+});
+
+// IPC 通信处理 - 检查是否设置了 DeepSeek API 密钥
+ipcMain.handle('has-deepseek-key', async () => {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { hasKey: false };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    return { hasKey: !!settings.deepseekApiKey };
+  } catch (error) {
+    console.error('检查 DeepSeek API 密钥失败:', error);
+    return { hasKey: false };
+  }
+});
+
+// IPC 通信处理 - 删除 DeepSeek API 密钥
+ipcMain.handle('delete-deepseek-key', async () => {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: true };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    delete settings.deepseekApiKey;
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('删除 DeepSeek API 密钥失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 生成每日任务总结
+ipcMain.handle('generate-daily-summary', async (event, tasks) => {
+  try {
+    // 获取 API 密钥
+    const keyResult = await ipcMain.emit('get-deepseek-key');
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, error: '未配置 API 密钥' };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.deepseekApiKey) {
+      return { success: false, error: '未配置 API 密钥' };
+    }
+    const apiKey = decryptPassword(settings.deepseekApiKey);
+
+    // 准备任务数据
+    const taskSummary = tasks.map(task => ({
+      text: task.text,
+      completed: task.completed,
+      priority: task.priority,
+      createdAt: task.createdAt,
+      completedAt: task.completedAt || null
+    }));
+
+    // 调用 DeepSeek API
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个专业的任务管理助手，擅长分析用户的任务完成情况，并提供简洁、有洞察力的总结。请用中文回复。'
+          },
+          {
+            role: 'user',
+            content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error?.message || '调用 API 失败');
+    }
+
+    const data = await response.json();
+    const summary = data.choices[0].message.content;
+
+    return { success: true, summary };
+  } catch (error) {
+    console.error('生成任务总结失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 获取当前数据路径
 ipcMain.handle('get-data-path', async () => {
   try {

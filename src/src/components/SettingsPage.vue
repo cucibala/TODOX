@@ -81,6 +81,57 @@
           </div>
         </div>
 
+        <!-- DeepSeek API 密钥 -->
+        <div class="setting-section">
+          <div class="setting-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <h4>DeepSeek API 配置</h4>
+          </div>
+          <p class="setting-description">配置 DeepSeek API 密钥以使用 AI 生成每日任务总结</p>
+          <div class="setting-body">
+            <div class="api-key-container">
+              <div class="api-key-status">
+                <div class="api-key-icon" :class="{ 'has-key': hasApiKey }">
+                  <svg v-if="hasApiKey" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                </div>
+                <div class="api-key-info">
+                  <div class="api-key-label">API 密钥状态</div>
+                  <div class="api-key-value" :class="{ 'has-key': hasApiKey }">
+                    {{ hasApiKey ? '已配置' : '未配置' }}
+                  </div>
+                </div>
+              </div>
+              <button class="btn-api-key" @click="handleApiKeySetting">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                {{ hasApiKey ? '修改密钥' : '设置密钥' }}
+              </button>
+            </div>
+            <div class="api-key-hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>在 <a href="https://platform.deepseek.com" target="_blank">DeepSeek 平台</a> 获取 API 密钥</span>
+            </div>
+          </div>
+        </div>
+
         <!-- 开机自启 -->
         <div class="setting-section">
           <div class="setting-header">
@@ -147,6 +198,7 @@ const dataPath = ref('')
 const autoLaunch = ref(false)
 const appVersion = ref('')
 const hasPassword = ref(false)
+const hasApiKey = ref(false)
 
 // 加载当前设置
 async function loadSettings() {
@@ -173,6 +225,12 @@ async function loadSettings() {
     const versionResult = await electronAPI.getAppVersion()
     if (versionResult.success) {
       appVersion.value = versionResult.version
+    }
+
+    // 获取 API 密钥状态
+    const apiKeyResult = await electronAPI.hasDeepSeekKey()
+    if (apiKeyResult) {
+      hasApiKey.value = apiKeyResult.hasKey
     }
   } catch (error) {
     console.error('加载设置失败:', error)
@@ -208,6 +266,21 @@ function handlePasswordSetting() {
       const passwordResult = await electronAPI.hasPassword()
       if (passwordResult) {
         hasPassword.value = passwordResult.hasPassword
+      }
+    }
+  }, 300)
+}
+
+// 处理 API 密钥设置
+function handleApiKeySetting() {
+  appStore.showApiKeyDialog = true
+  // 监听对话框关闭后重新加载密钥状态
+  const checkInterval = setInterval(async () => {
+    if (!appStore.showApiKeyDialog) {
+      clearInterval(checkInterval)
+      const apiKeyResult = await electronAPI.hasDeepSeekKey()
+      if (apiKeyResult) {
+        hasApiKey.value = apiKeyResult.hasKey
       }
     }
   }, 300)
@@ -560,6 +633,138 @@ onMounted(() => {
 .btn-password svg {
   width: 16px;
   height: 16px;
+}
+
+/* API 密钥设置 */
+.api-key-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+  margin-bottom: 12px;
+}
+
+.api-key-container:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+}
+
+.api-key-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.api-key-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 101, 101, 0.1);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.api-key-icon.has-key {
+  background: rgba(103, 194, 58, 0.1);
+}
+
+.api-key-icon svg {
+  width: 20px;
+  height: 20px;
+  color: var(--danger-color);
+  transition: all 0.3s ease;
+}
+
+.api-key-icon.has-key svg {
+  color: var(--success-color);
+}
+
+.api-key-info {
+  flex: 1;
+}
+
+.api-key-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.api-key-value {
+  font-size: 15px;
+  color: var(--danger-color);
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.api-key-value.has-key {
+  color: var(--success-color);
+}
+
+.btn-api-key {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-api-key:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+.btn-api-key:active {
+  transform: translateY(0);
+}
+
+.btn-api-key svg {
+  width: 16px;
+  height: 16px;
+}
+
+.api-key-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(103, 194, 58, 0.08);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--success-color);
+  border: 1px solid rgba(103, 194, 58, 0.2);
+}
+
+.api-key-hint svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.api-key-hint a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.api-key-hint a:hover {
+  text-decoration: underline;
 }
 
 /* 信息项 */

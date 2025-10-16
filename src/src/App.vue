@@ -38,6 +38,9 @@
 
     <!-- 密码设置对话框 -->
     <PasswordDialog />
+
+    <!-- API 密钥对话框 -->
+    <ApiKeyDialog />
   </div>
 </template>
 
@@ -54,6 +57,7 @@ import ImageViewer from './components/ImageViewer.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import ProjectDialog from './components/ProjectDialog.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
+import ApiKeyDialog from './components/ApiKeyDialog.vue'
 import SettingsPage from './components/SettingsPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
