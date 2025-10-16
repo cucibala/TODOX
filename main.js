@@ -136,12 +136,20 @@ function saveSettings() {
 function createWindow() {
   loadSettings();
 
+  // 设置窗口图标
+  const iconPath = path.join(__dirname, 'assets', 'X.png');
+  let windowIcon;
+  if (fs.existsSync(iconPath)) {
+    windowIcon = nativeImage.createFromPath(iconPath);
+  }
+
   mainWindow = new BrowserWindow({
     width: isCompactMode ? 350 : 1400,
     height: isCompactMode ? 500 : 880,
     minWidth: 350,
     minHeight: 400,
     maxWidth: isCompactMode ? 350 : undefined,
+    icon: windowIcon, // 设置窗口图标
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -265,8 +273,8 @@ function createTray() {
     tray = null;
   }
 
-  // 创建托盘图标
-  const iconPath = path.join(__dirname, 'assets', 'tray-icon.png');
+  // 创建托盘图标 - 使用 X.png
+  const iconPath = path.join(__dirname, 'assets', 'X.png');
   let trayIcon;
   
   // 如果图标文件不存在，创建一个简单的图标
@@ -274,6 +282,8 @@ function createTray() {
     trayIcon = nativeImage.createEmpty();
   } else {
     trayIcon = nativeImage.createFromPath(iconPath);
+    // 调整托盘图标大小（通常托盘图标应该是 16x16 或 32x32）
+    trayIcon = trayIcon.resize({ width: 16, height: 16 });
   }
   
   tray = new Tray(trayIcon);

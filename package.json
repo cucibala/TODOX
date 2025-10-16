@@ -23,6 +23,7 @@
   "build": {
     "appId": "com.todox.app",
     "productName": "TodoX",
+    "icon": "assets/X.png",
     "directories": {
       "output": "dist"
     },
@@ -34,6 +35,7 @@
       "assets/**/*"
     ],
     "win": {
+      "icon": "assets/X.png",
       "target": [
         {
           "target": "nsis",
@@ -42,10 +44,12 @@
       ]
     },
     "mac": {
+      "icon": "assets/X.png",
       "target": "dmg",
       "category": "public.app-category.productivity"
     },
     "linux": {
+      "icon": "assets/X.png",
       "target": ["AppImage", "deb"],
       "category": "Utility"
     },
