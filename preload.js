@@ -41,9 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('chat-stream-error');
   },
   
-  // 聊天历史管理
-  loadChatHistory: () => ipcRenderer.invoke('load-chat-history'),
-  saveChatHistory: (messages) => ipcRenderer.invoke('save-chat-history', messages),
+  // 会话管理
+  loadConversations: () => ipcRenderer.invoke('load-conversations'),
+  saveConversations: (conversationsData) => ipcRenderer.invoke('save-conversations', conversationsData),
   
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),

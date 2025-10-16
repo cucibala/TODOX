@@ -38,6 +38,10 @@ function getChatHistoryPath() {
   return path.join(currentDataPath, 'chat-history.json');
 }
 
+function getConversationsPath() {
+  return path.join(currentDataPath, 'conversations.json');
+}
+
 function getImagesPath() {
   return path.join(currentDataPath, 'images');
 }
@@ -1016,10 +1020,18 @@ ipcMain.handle('change-data-path', async (event, newPath) => {
       migratedFiles.push('projects.json');
     }
 
-    // 复制 chat-history.json
+    // 复制 chat-history.json（旧版）
     if (fs.existsSync(oldChatHistoryPath)) {
       fs.copyFileSync(oldChatHistoryPath, newChatHistoryPath);
       migratedFiles.push('chat-history.json');
+    }
+
+    // 复制 conversations.json
+    const oldConversationsPath = path.join(oldPath, 'conversations.json');
+    const newConversationsPath = path.join(newPath, 'conversations.json');
+    if (fs.existsSync(oldConversationsPath)) {
+      fs.copyFileSync(oldConversationsPath, newConversationsPath);
+      migratedFiles.push('conversations.json');
     }
 
     // 复制 images 文件夹
@@ -1193,29 +1205,43 @@ ipcMain.handle('chat-with-deepseek', async (event, messages) => {
   }
 });
 
-// IPC 通信处理 - 加载聊天历史
-ipcMain.handle('load-chat-history', async () => {
+// IPC 通信处理 - 加载会话列表
+ipcMain.handle('load-conversations', async () => {
   try {
-    const chatHistoryPath = getChatHistoryPath();
-    if (fs.existsSync(chatHistoryPath)) {
-      const data = fs.readFileSync(chatHistoryPath, 'utf-8');
-      return { success: true, messages: JSON.parse(data) };
+    const conversationsPath = getConversationsPath();
+    if (fs.existsSync(conversationsPath)) {
+      const data = fs.readFileSync(conversationsPath, 'utf-8');
+      return { success: true, data: JSON.parse(data) };
     }
-    return { success: true, messages: [] };
+    // 返回默认结构
+    return { 
+      success: true, 
+      data: {
+        conversations: [],
+        currentConversationId: null
+      }
+    };
   } catch (error) {
-    console.error('加载聊天历史失败:', error);
-    return { success: false, error: error.message, messages: [] };
+    console.error('加载会话列表失败:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      data: {
+        conversations: [],
+        currentConversationId: null
+      }
+    };
   }
 });
 
-// IPC 通信处理 - 保存聊天历史
-ipcMain.handle('save-chat-history', async (event, messages) => {
+// IPC 通信处理 - 保存会话列表
+ipcMain.handle('save-conversations', async (event, conversationsData) => {
   try {
-    const chatHistoryPath = getChatHistoryPath();
-    fs.writeFileSync(chatHistoryPath, JSON.stringify(messages, null, 2), 'utf-8');
+    const conversationsPath = getConversationsPath();
+    fs.writeFileSync(conversationsPath, JSON.stringify(conversationsData, null, 2), 'utf-8');
     return { success: true };
   } catch (error) {
-    console.error('保存聊天历史失败:', error);
+    console.error('保存会话列表失败:', error);
     return { success: false, error: error.message };
   }
 });
