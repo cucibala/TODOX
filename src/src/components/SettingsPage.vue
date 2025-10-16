@@ -39,6 +39,48 @@
           </div>
         </div>
 
+        <!-- 锁定密码 -->
+        <div class="setting-section">
+          <div class="setting-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <h4>锁定密码</h4>
+          </div>
+          <p class="setting-description">设置密码以保护您的任务数据</p>
+          <div class="setting-body">
+            <div class="password-status-container">
+              <div class="password-status">
+                <div class="password-status-icon" :class="{ 'has-password': hasPassword }">
+                  <svg v-if="hasPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                </div>
+                <div class="password-status-info">
+                  <div class="password-status-label">密码状态</div>
+                  <div class="password-status-value" :class="{ 'has-password': hasPassword }">
+                    {{ hasPassword ? '已设置' : '未设置' }}
+                  </div>
+                </div>
+              </div>
+              <button class="btn-password" @click="handlePasswordSetting">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                {{ hasPassword ? '修改密码' : '设置密码' }}
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- 开机自启 -->
         <div class="setting-section">
           <div class="setting-header">
@@ -104,6 +146,7 @@ const electronAPI = window.electronAPI
 const dataPath = ref('')
 const autoLaunch = ref(false)
 const appVersion = ref('')
+const hasPassword = ref(false)
 
 // 加载当前设置
 async function loadSettings() {
@@ -112,6 +155,12 @@ async function loadSettings() {
     const pathResult = await electronAPI.getDataPath()
     if (pathResult.success) {
       dataPath.value = pathResult.path
+    }
+
+    // 获取密码状态
+    const passwordResult = await electronAPI.hasPassword()
+    if (passwordResult) {
+      hasPassword.value = passwordResult.hasPassword
     }
 
     // 获取开机自启状态
@@ -147,6 +196,21 @@ async function handleSelectPath() {
     console.error('选择数据路径失败:', error)
     appStore.toast('选择数据路径失败')
   }
+}
+
+// 打开密码设置对话框
+function handlePasswordSetting() {
+  appStore.showPasswordDialog = true
+  // 监听密码对话框关闭后重新加载密码状态
+  const checkInterval = setInterval(async () => {
+    if (!appStore.showPasswordDialog) {
+      clearInterval(checkInterval)
+      const passwordResult = await electronAPI.hasPassword()
+      if (passwordResult) {
+        hasPassword.value = passwordResult.hasPassword
+      }
+    }
+  }, 300)
 }
 
 // 切换开机自启
@@ -394,6 +458,108 @@ onMounted(() => {
 
 .toggle-checkbox:checked + .toggle-slider::before {
   transform: translateX(24px);
+}
+
+/* 密码设置 */
+.password-status-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.password-status-container:hover {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
+}
+
+.password-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.password-status-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(245, 101, 101, 0.1);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.password-status-icon.has-password {
+  background: rgba(103, 194, 58, 0.1);
+}
+
+.password-status-icon svg {
+  width: 20px;
+  height: 20px;
+  color: var(--danger-color);
+  transition: all 0.3s ease;
+}
+
+.password-status-icon.has-password svg {
+  color: var(--success-color);
+}
+
+.password-status-info {
+  flex: 1;
+}
+
+.password-status-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.password-status-value {
+  font-size: 15px;
+  color: var(--danger-color);
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.password-status-value.has-password {
+  color: var(--success-color);
+}
+
+.btn-password {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-password:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+}
+
+.btn-password:active {
+  transform: translateY(0);
+}
+
+.btn-password svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* 信息项 */

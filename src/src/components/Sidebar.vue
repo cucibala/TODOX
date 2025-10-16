@@ -47,10 +47,75 @@
       </div>
     </div>
 
+    <!-- 统计区域 -->
+    <div class="stats-section">
+      <!-- 环形进度条 - 总任务完成情况 -->
+      <div class="circular-progress-container">
+        <svg class="circular-progress" viewBox="0 0 120 120">
+          <circle class="progress-bg" cx="60" cy="60" r="50" />
+          <circle 
+            class="progress-bar" 
+            cx="60" 
+            cy="60" 
+            r="50" 
+            :style="{ strokeDashoffset: circleOffset }"
+          />
+        </svg>
+        <div class="progress-text">
+          <div class="progress-value">{{ completionPercentage }}%</div>
+          <div class="progress-label">完成率</div>
+        </div>
+      </div>
+      
+      <!-- 统计数据 -->
+      <div class="stats-data">
+        <div class="stat-row">
+          <div class="stat-item">
+            <div class="stat-label">总任务</div>
+            <div class="stat-value">{{ totalCount }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">已完成</div>
+            <div class="stat-value success">{{ completedCount }}</div>
+          </div>
+        </div>
+        
+        <!-- 今日统计 - 进度条 -->
+        <div class="daily-stats">
+          <div class="daily-stat-item">
+            <div class="daily-stat-header">
+              <span class="daily-stat-label">今日新增</span>
+              <span class="daily-stat-value">{{ todayAddedCount }}</span>
+            </div>
+            <div class="progress-bar-container">
+              <div 
+                class="progress-bar-fill added" 
+                :style="{ width: todayAddedPercentage + '%' }"
+              ></div>
+            </div>
+          </div>
+          
+          <div class="daily-stat-item">
+            <div class="daily-stat-header">
+              <span class="daily-stat-label">今日完成</span>
+              <span class="daily-stat-value">{{ todayCompletedCount }}</span>
+            </div>
+            <div class="progress-bar-container">
+              <div 
+                class="progress-bar-fill completed" 
+                :style="{ width: todayCompletedPercentage + '%' }"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </aside>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useProjectStore } from '../stores/project'
@@ -61,6 +126,36 @@ const projectStore = useProjectStore()
 const todoStore = useTodoStore()
 
 const { projects, currentProjectId, hasProjects } = storeToRefs(projectStore)
+const { totalCount, completedCount, todayAddedCount, todayCompletedCount } = storeToRefs(todoStore)
+
+// 计算完成百分比
+const completionPercentage = computed(() => {
+  if (totalCount.value === 0) return 0
+  return Math.round((completedCount.value / totalCount.value) * 100)
+})
+
+// 环形进度条的偏移量
+const circleOffset = computed(() => {
+  const circumference = 2 * Math.PI * 50 // r=50
+  const progress = completionPercentage.value / 100
+  return circumference * (1 - progress)
+})
+
+// 今日新增任务百分比（相对于总任务数，最大100%）
+const todayAddedPercentage = computed(() => {
+  if (totalCount.value === 0) return 0
+  const percentage = (todayAddedCount.value / totalCount.value) * 100
+  return Math.min(percentage, 100)
+})
+
+// 今日完成任务百分比（相对于今日新增，如果今日新增为0则相对于总任务）
+const todayCompletedPercentage = computed(() => {
+  if (todayCompletedCount.value === 0) return 0
+  const base = todayAddedCount.value > 0 ? todayAddedCount.value : totalCount.value
+  if (base === 0) return 0
+  const percentage = (todayCompletedCount.value / base) * 100
+  return Math.min(percentage, 100)
+})
 
 function getProjectStats(projectId) {
   return projectStore.getProjectStats(projectId)

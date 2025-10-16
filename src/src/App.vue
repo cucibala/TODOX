@@ -3,9 +3,6 @@
     <!-- 自定义标题栏 -->
     <TitleBar />
 
-    <!-- 头部统计 -->
-    <Header v-if="currentPage === 'home'" />
-
     <!-- 主内容区 -->
     <main class="main-content">
       <!-- 首页 -->
@@ -48,7 +45,6 @@
 import { onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import TitleBar from './components/TitleBar.vue'
-import Header from './components/Header.vue'
 import Sidebar from './components/Sidebar.vue'
 import TaskContent from './components/TaskContent.vue'
 import LockScreen from './components/LockScreen.vue'

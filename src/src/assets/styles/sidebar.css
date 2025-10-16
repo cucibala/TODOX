@@ -1,10 +1,163 @@
 /* 侧边栏 */
 .sidebar {
-  width: 240px;
+  width: 280px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   padding: 24px 16px;
   overflow-y: auto;
+}
+
+/* 统计区域 */
+.stats-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* 环形进度条容器 */
+.circular-progress-container {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 20px;
+}
+
+.circular-progress {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.progress-bg {
+  fill: none;
+  stroke: var(--bg-hover);
+  stroke-width: 8;
+}
+
+.progress-bar {
+  fill: none;
+  stroke: var(--primary-color);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 314.159; /* 2 * PI * 50 */
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.progress-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.progress-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* 统计数据 */
+.stats-data {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-value.success {
+  color: var(--success-color);
+}
+
+/* 今日统计 */
+.daily-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daily-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.daily-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.daily-stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* 进度条容器 */
+.progress-bar-container {
+  height: 8px;
+  background: var(--bg-hover);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  position: relative;
+}
+
+.progress-bar-fill.added {
+  background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+}
+
+.progress-bar-fill.completed {
+  background: linear-gradient(90deg, var(--success-color), #48bb78);
 }
 
 .section-title {

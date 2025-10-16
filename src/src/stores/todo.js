@@ -70,6 +70,28 @@ export const useTodoStore = defineStore('todo', () => {
   const totalCount = computed(() => todos.value.length)
   const completedCount = computed(() => todos.value.filter(t => t.completed).length)
   
+  // 今日统计
+  const todayAddedCount = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return todos.value.filter(t => {
+      const createdDate = new Date(t.createdAt)
+      createdDate.setHours(0, 0, 0, 0)
+      return createdDate.getTime() === today.getTime()
+    }).length
+  })
+  
+  const todayCompletedCount = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return todos.value.filter(t => {
+      if (!t.completed || !t.completedAt) return false
+      const completedDate = new Date(t.completedAt)
+      completedDate.setHours(0, 0, 0, 0)
+      return completedDate.getTime() === today.getTime()
+    }).length
+  })
+  
   // 加载任务
   async function loadTodos() {
     try {
@@ -327,6 +349,8 @@ export const useTodoStore = defineStore('todo', () => {
     filteredTodos,
     totalCount,
     completedCount,
+    todayAddedCount,
+    todayCompletedCount,
     
     // 方法
     loadTodos,
