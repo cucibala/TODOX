@@ -10,11 +10,111 @@
   padding: 20px 30px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .search-box {
   position: relative;
+  flex: 1;
+  min-width: 250px;
   max-width: 400px;
+}
+
+/* 筛选按钮组 */
+.toolbar .filter-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar .filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toolbar .filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--primary-color);
+}
+
+.toolbar .filter-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.toolbar .filter-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toolbar .filter-text {
+  display: inline;
+}
+
+/* 优先级筛选按钮组 */
+.toolbar .priority-filter-buttons {
+  display: flex;
+  gap: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-color);
+}
+
+.toolbar .priority-filter-btn {
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toolbar .priority-filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.toolbar .priority-filter-btn.active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: rgba(64, 158, 255, 0.1);
+  font-weight: 600;
+}
+
+.toolbar .priority-filter-btn.priority-high.active {
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+  background: rgba(245, 101, 101, 0.1);
+}
+
+.toolbar .priority-filter-btn.priority-medium.active {
+  border-color: var(--warning-color);
+  color: var(--warning-color);
+  background: rgba(250, 173, 20, 0.1);
+}
+
+.toolbar .priority-filter-btn.priority-low.active {
+  border-color: var(--success-color);
+  color: var(--success-color);
+  background: rgba(82, 196, 26, 0.1);
 }
 
 .search-icon {
@@ -530,6 +630,24 @@
 /* 迷你模式适配 */
 .compact-mode .toolbar {
   padding: 12px 16px;
+  gap: 10px;
+}
+
+.compact-mode .toolbar .filter-text {
+  display: none;
+}
+
+.compact-mode .toolbar .filter-btn {
+  padding: 6px 8px;
+}
+
+.compact-mode .toolbar .priority-filter-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.compact-mode .toolbar .priority-filter-buttons {
+  padding-left: 8px;
 }
 
 .compact-mode .add-task-section {

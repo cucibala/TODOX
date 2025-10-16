@@ -47,91 +47,6 @@
       </div>
     </div>
 
-    <!-- 筛选部分 -->
-    <div class="filter-section">
-      <h3 class="section-title">筛选</h3>
-      <div class="filter-buttons">
-        <button 
-          class="filter-btn" 
-          :class="{ active: currentFilter === 'all' }"
-          @click="todoStore.currentFilter = 'all'"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          </svg>
-          全部任务
-        </button>
-        <button 
-          class="filter-btn" 
-          :class="{ active: currentFilter === 'active' }"
-          @click="todoStore.currentFilter = 'active'"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-          </svg>
-          未完成
-        </button>
-        <button 
-          class="filter-btn" 
-          :class="{ active: currentFilter === 'completed' }"
-          @click="todoStore.currentFilter = 'completed'"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-          已完成
-        </button>
-      </div>
-    </div>
-
-    <!-- 优先级筛选 -->
-    <div class="priority-section">
-      <h3 class="section-title">优先级</h3>
-      <div class="filter-buttons">
-        <button 
-          class="priority-filter-btn" 
-          :class="{ active: currentPriorityFilter === 'all' }"
-          @click="todoStore.currentPriorityFilter = 'all'"
-        >
-          全部
-        </button>
-        <button 
-          class="priority-filter-btn priority-high" 
-          :class="{ active: currentPriorityFilter === 'high' }"
-          @click="todoStore.currentPriorityFilter = 'high'"
-        >
-          高
-        </button>
-        <button 
-          class="priority-filter-btn priority-medium" 
-          :class="{ active: currentPriorityFilter === 'medium' }"
-          @click="todoStore.currentPriorityFilter = 'medium'"
-        >
-          中
-        </button>
-        <button 
-          class="priority-filter-btn priority-low" 
-          :class="{ active: currentPriorityFilter === 'low' }"
-          @click="todoStore.currentPriorityFilter = 'low'"
-        >
-          低
-        </button>
-      </div>
-    </div>
-
-    <!-- 设置 -->
-    <div class="settings-section">
-      <h3 class="section-title">设置</h3>
-      <div class="settings-buttons">
-        <button class="settings-btn" @click="appStore.showDataPathDialog = true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-          </svg>
-          数据存储路径
-        </button>
-      </div>
-    </div>
   </aside>
 </template>
 
@@ -146,7 +61,6 @@ const projectStore = useProjectStore()
 const todoStore = useTodoStore()
 
 const { projects, currentProjectId, hasProjects } = storeToRefs(projectStore)
-const { currentFilter, currentPriorityFilter } = storeToRefs(todoStore)
 
 function getProjectStats(projectId) {
   return projectStore.getProjectStats(projectId)

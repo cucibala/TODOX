@@ -1,6 +1,6 @@
 <template>
   <section class="content-area">
-    <!-- 搜索和添加栏 -->
+    <!-- 搜索和筛选栏 -->
     <div class="toolbar">
       <div class="search-box">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -13,6 +13,80 @@
           class="search-input" 
           placeholder="搜索任务..." 
         />
+      </div>
+      
+      <!-- 筛选按钮 -->
+      <div class="filter-buttons">
+        <button 
+          class="filter-btn" 
+          :class="{ active: currentFilter === 'all' }"
+          @click="todoStore.currentFilter = 'all'"
+          title="全部任务"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          </svg>
+          <span class="filter-text">全部</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          :class="{ active: currentFilter === 'active' }"
+          @click="todoStore.currentFilter = 'active'"
+          title="未完成"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+          </svg>
+          <span class="filter-text">未完成</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          :class="{ active: currentFilter === 'completed' }"
+          @click="todoStore.currentFilter = 'completed'"
+          title="已完成"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          <span class="filter-text">已完成</span>
+        </button>
+      </div>
+      
+      <!-- 优先级筛选 -->
+      <div class="priority-filter-buttons">
+        <button 
+          class="priority-filter-btn" 
+          :class="{ active: currentPriorityFilter === 'all' }"
+          @click="todoStore.currentPriorityFilter = 'all'"
+          title="全部优先级"
+        >
+          全部
+        </button>
+        <button 
+          class="priority-filter-btn priority-high" 
+          :class="{ active: currentPriorityFilter === 'high' }"
+          @click="todoStore.currentPriorityFilter = 'high'"
+          title="高优先级"
+        >
+          高
+        </button>
+        <button 
+          class="priority-filter-btn priority-medium" 
+          :class="{ active: currentPriorityFilter === 'medium' }"
+          @click="todoStore.currentPriorityFilter = 'medium'"
+          title="中优先级"
+        >
+          中
+        </button>
+        <button 
+          class="priority-filter-btn priority-low" 
+          :class="{ active: currentPriorityFilter === 'low' }"
+          @click="todoStore.currentPriorityFilter = 'low'"
+          title="低优先级"
+        >
+          低
+        </button>
       </div>
     </div>
 
@@ -130,7 +204,7 @@ const appStore = useAppStore()
 const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 
-const { searchQuery, filteredTodos, currentImages } = storeToRefs(todoStore)
+const { searchQuery, filteredTodos, currentImages, currentFilter, currentPriorityFilter } = storeToRefs(todoStore)
 const { hasProjects, currentProjectId, currentProject } = storeToRefs(projectStore)
 
 const newTaskText = ref('')

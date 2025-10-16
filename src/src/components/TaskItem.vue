@@ -161,44 +161,60 @@
 
       <!-- 进度记录 -->
       <div v-if="task.progress && task.progress.length > 0" class="task-progress-section">
-        <div class="progress-list">
-          <div 
-            v-for="progressItem in task.progress" 
-            :key="progressItem.id" 
-            class="progress-item"
+        <button class="btn-toggle-progress" @click="showProgress = !showProgress">
+          <svg 
+            class="progress-toggle-icon" 
+            :style="{ transform: showProgress ? 'rotate(90deg)' : 'rotate(0deg)' }"
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            stroke-width="2"
           >
-            <div class="progress-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="9 11 12 14 22 4"></polyline>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-              </svg>
-            </div>
-            <div class="progress-content">
-              <div class="progress-text">{{ progressItem.text }}</div>
-              <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
-              <!-- 进度图片 -->
-              <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
-                <img
-                  v-for="(image, index) in progressItem.images"
-                  :key="index"
-                  v-show="progressImageCache[image]"
-                  :src="progressImageCache[image]"
-                  class="progress-image"
-                  @click="appStore.viewImage(progressImageCache[image])"
-                  alt="进度图片"
-                />
-              </div>
-            </div>
-            <button 
-              class="btn-delete-progress" 
-              @click="handleDeleteProgress(progressItem.id)"
-              title="删除进度"
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+          <span class="progress-count">进度记录 ({{ task.progress.length }})</span>
+        </button>
+        
+        <div v-show="showProgress" class="task-progress-container">
+          <div class="progress-list">
+            <div 
+              v-for="progressItem in task.progress" 
+              :key="progressItem.id" 
+              class="progress-item"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+              <div class="progress-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 11 12 14 22 4"></polyline>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                </svg>
+              </div>
+              <div class="progress-content">
+                <div class="progress-text">{{ progressItem.text }}</div>
+                <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
+                <!-- 进度图片 -->
+                <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
+                  <img
+                    v-for="(image, index) in progressItem.images"
+                    :key="index"
+                    v-show="progressImageCache[image]"
+                    :src="progressImageCache[image]"
+                    class="progress-image"
+                    @click="appStore.viewImage(progressImageCache[image])"
+                    alt="进度图片"
+                  />
+                </div>
+              </div>
+              <button 
+                class="btn-delete-progress" 
+                @click="handleDeleteProgress(progressItem.id)"
+                title="删除进度"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -236,13 +252,13 @@
           </button>
         </div>
         <!-- 进度图片预览 -->
-        <div v-if="currentProgressImages && currentProgressImages.length > 0" class="progress-images-preview">
+        <div v-if="previewImages.length > 0" class="progress-images-preview">
           <div 
-            v-for="(image, index) in currentProgressImages" 
+            v-for="(image, index) in previewImages" 
             :key="index" 
             class="preview-image-item"
           >
-            <img :src="image" alt="预览" />
+            <img :src="image.base64" alt="预览" />
             <button 
               class="btn-remove-preview-image" 
               @click="handleRemoveProgressImage(index)"
@@ -311,7 +327,21 @@ const progressImageCache = ref({})
 
 // 进度记录输入
 const progressInput = ref('')
-const currentProgressImages = computed(() => todoStore.currentProgressImages[props.task.id] || [])
+const showProgress = ref(false)
+// 用于预览的图片数据（base64）
+const progressImagePreviews = ref({})
+// 当前任务的进度图片文件名列表
+const currentProgressImagesRef = computed(() => {
+  return todoStore.currentProgressImages[props.task.id] || []
+})
+// 预览图片列表
+const previewImages = computed(() => {
+  const fileNames = currentProgressImagesRef.value
+  return fileNames.map(fileName => ({
+    fileName,
+    base64: progressImagePreviews.value[fileName]
+  })).filter(item => item.base64)
+})
 
 // 计算进度
 const progress = computed(() => todoStore.getTaskProgress(props.task))
@@ -417,8 +447,24 @@ async function handleAddProgress() {
     return
   }
   
+  // 获取当前待添加的图片列表
+  const imagesToAdd = [...(todoStore.currentProgressImages[props.task.id] || [])]
+  
   await todoStore.addProgress(props.task.id, progressInput.value)
   progressInput.value = ''
+  
+  // 立即加载新添加的进度图片
+  if (imagesToAdd.length > 0) {
+    await Promise.all(
+      imagesToAdd.map(fileName => loadProgressImage(fileName))
+    )
+  }
+  
+  // 清空预览缓存
+  for (const fileName of imagesToAdd) {
+    delete progressImagePreviews.value[fileName]
+  }
+  
   appStore.toast('进度已添加')
 }
 
@@ -429,20 +475,33 @@ async function handleDeleteProgress(progressId) {
 
 async function handleSelectProgressImage() {
   const result = await electronAPI.selectImage()
-  if (result.success && result.images) {
-    // 初始化当前任务的进度图片数组
+  if (result.success && result.fileName) {
+    // 确保响应式对象存在
     if (!todoStore.currentProgressImages[props.task.id]) {
       todoStore.currentProgressImages[props.task.id] = []
     }
-    // 添加图片到当前进度
-    todoStore.currentProgressImages[props.task.id].push(...result.images)
-    appStore.toast('图片已添加')
+    
+    // 添加文件名到列表（用于保存）
+    todoStore.currentProgressImages[props.task.id].push(result.fileName)
+    
+    // 读取图片为 base64 用于预览
+    const imageResult = await electronAPI.readImage(result.fileName)
+    if (imageResult.success) {
+      progressImagePreviews.value[result.fileName] = imageResult.data
+      appStore.toast('图片已添加')
+    }
   }
 }
 
 function handleRemoveProgressImage(index) {
   if (todoStore.currentProgressImages[props.task.id]) {
+    const fileName = todoStore.currentProgressImages[props.task.id][index]
+    // 移除文件名
     todoStore.currentProgressImages[props.task.id].splice(index, 1)
+    // 移除预览数据
+    if (fileName && progressImagePreviews.value[fileName]) {
+      delete progressImagePreviews.value[fileName]
+    }
   }
 }
 </script>

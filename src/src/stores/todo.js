@@ -11,7 +11,7 @@ export const useTodoStore = defineStore('todo', () => {
   const searchQuery = ref('')
   const editingTaskId = ref(null)
   const currentImages = ref([])
-  const currentProgressImages = ref({})
+  const currentProgressImages = ref({}) // 每个任务ID对应一个图片数组
   const currentSubtaskTaskId = ref(null)
   
   // 获取 electronAPI
