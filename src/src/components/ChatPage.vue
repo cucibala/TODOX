@@ -85,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 
 const appStore = useAppStore()
@@ -97,6 +97,7 @@ const isLoading = ref(false)
 const messagesContainer = ref(null)
 const inputTextarea = ref(null)
 const streamingMessageIndex = ref(-1)
+const isHistoryLoaded = ref(false)
 
 // 检查 API 密钥
 async function checkApiKey() {
@@ -168,7 +169,40 @@ async function handleClearHistory() {
   const confirmed = await appStore.confirm('确定要清空聊天历史吗？')
   if (confirmed) {
     messages.value = []
+    await saveChatHistory()
     appStore.toast('聊天历史已清空')
+  }
+}
+
+// 加载聊天历史
+async function loadChatHistory() {
+  try {
+    const result = await electronAPI.loadChatHistory()
+    if (result.success && result.messages.length > 0) {
+      messages.value = result.messages
+      nextTick(() => {
+        scrollToBottom()
+      })
+    }
+  } catch (error) {
+    console.error('加载聊天历史失败:', error)
+  } finally {
+    isHistoryLoaded.value = true
+  }
+}
+
+// 保存聊天历史
+async function saveChatHistory() {
+  try {
+    // 将 Vue 响应式对象转换为普通对象数组
+    const plainMessages = messages.value.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp
+    }))
+    await electronAPI.saveChatHistory(plainMessages)
+  } catch (error) {
+    console.error('保存聊天历史失败:', error)
   }
 }
 
@@ -220,6 +254,8 @@ function setupStreamListeners() {
     isLoading.value = false
     streamingMessageIndex.value = -1
     scrollToBottom()
+    // 流式结束后保存历史
+    saveChatHistory()
   })
 
   // 流式响应错误
@@ -234,13 +270,32 @@ function setupStreamListeners() {
   })
 }
 
+// 监听消息变化，自动保存（防抖）
+let saveTimer = null
+watch(messages, () => {
+  if (!isHistoryLoaded.value) return
+  
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+  }
+  saveTimer = setTimeout(() => {
+    saveChatHistory()
+  }, 1000)
+}, { deep: true })
+
 onMounted(async () => {
   await checkApiKey()
+  await loadChatHistory()
   setupStreamListeners()
 })
 
 onUnmounted(() => {
   electronAPI.removeChatStreamListeners()
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+  }
+  // 退出时保存一次
+  saveChatHistory()
 })
 </script>
 

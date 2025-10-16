@@ -34,6 +34,10 @@ function getProjectsPath() {
   return path.join(currentDataPath, 'projects.json');
 }
 
+function getChatHistoryPath() {
+  return path.join(currentDataPath, 'chat-history.json');
+}
+
 function getImagesPath() {
   return path.join(currentDataPath, 'images');
 }
@@ -983,11 +987,13 @@ ipcMain.handle('change-data-path', async (event, newPath) => {
     const oldPath = currentDataPath;
     const oldTodosPath = getDataPath();
     const oldProjectsPath = getProjectsPath();
+    const oldChatHistoryPath = getChatHistoryPath();
     const oldImagesPath = getImagesPath();
 
     // 创建新的数据目录结构
     const newTodosPath = path.join(newPath, 'todos.json');
     const newProjectsPath = path.join(newPath, 'projects.json');
+    const newChatHistoryPath = path.join(newPath, 'chat-history.json');
     const newImagesPath = path.join(newPath, 'images');
 
     // 初始化新数据目录
@@ -1008,6 +1014,12 @@ ipcMain.handle('change-data-path', async (event, newPath) => {
     if (fs.existsSync(oldProjectsPath)) {
       fs.copyFileSync(oldProjectsPath, newProjectsPath);
       migratedFiles.push('projects.json');
+    }
+
+    // 复制 chat-history.json
+    if (fs.existsSync(oldChatHistoryPath)) {
+      fs.copyFileSync(oldChatHistoryPath, newChatHistoryPath);
+      migratedFiles.push('chat-history.json');
     }
 
     // 复制 images 文件夹
@@ -1178,6 +1190,33 @@ ipcMain.handle('chat-with-deepseek', async (event, messages) => {
     console.error('DeepSeek 聊天失败:', error);
     event.sender.send('chat-stream-error', error.message || '聊天失败');
     return { success: false, error: error.message || '聊天失败' };
+  }
+});
+
+// IPC 通信处理 - 加载聊天历史
+ipcMain.handle('load-chat-history', async () => {
+  try {
+    const chatHistoryPath = getChatHistoryPath();
+    if (fs.existsSync(chatHistoryPath)) {
+      const data = fs.readFileSync(chatHistoryPath, 'utf-8');
+      return { success: true, messages: JSON.parse(data) };
+    }
+    return { success: true, messages: [] };
+  } catch (error) {
+    console.error('加载聊天历史失败:', error);
+    return { success: false, error: error.message, messages: [] };
+  }
+});
+
+// IPC 通信处理 - 保存聊天历史
+ipcMain.handle('save-chat-history', async (event, messages) => {
+  try {
+    const chatHistoryPath = getChatHistoryPath();
+    fs.writeFileSync(chatHistoryPath, JSON.stringify(messages, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('保存聊天历史失败:', error);
+    return { success: false, error: error.message };
   }
 });
 
