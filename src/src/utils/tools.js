@@ -97,6 +97,27 @@ export const availableTools = [
         required: ['description', 'projectName']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'updateProjectTasks',
+      description: '根据用户反馈调整现有项目的任务。用于修改、优化或重新规划项目任务，如"第3天太难了，简化一下"、"增加一些饮食控制的任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'number',
+            description: '要更新的项目ID'
+          },
+          feedback: {
+            type: 'string',
+            description: '用户的反馈和调整要求'
+          }
+        },
+        required: ['projectId', 'feedback']
+      }
+    }
   }
 ]
 
@@ -137,30 +158,19 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         return includeCompleted ? todos : todos.filter(t => !t.completed)
       
       case 'getTasksByProject':
-        // 处理类型转换：args.projectId 可能是字符串，需要转换为数字或 null
         const targetProjectId = args.projectId === 'null' || args.projectId === null 
           ? null 
           : Number(args.projectId)
         return todos.filter(t => t.projectId === targetProjectId)
       
       case 'getProjects':
-        // 如果有选中的项目，只返回这些项目
-        const filteredProjects = selectedProjectIds && selectedProjectIds.length > 0
-          ? projects.filter(p => selectedProjectIds.includes(p.id))
-          : projects
-        
-        return filteredProjects.map(p => {
-          const projectTasks = todos.filter(t => t.projectId === p.id)
-          const completed = projectTasks.filter(t => t.completed).length
-          return {
-            ...p,
-            stats: {
-              total: projectTasks.length,
-              completed: completed,
-              pending: projectTasks.length - completed
-            }
-          }
-        })
+        return projects.map(p => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          taskCount: todos.filter(t => t.projectId === p.id).length,
+          completedCount: todos.filter(t => t.projectId === p.id && t.completed).length
+        }))
       
       case 'searchTasks':
         const keyword = args.keyword.toLowerCase()
@@ -174,6 +184,14 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         return {
           _async: true,
           functionName: 'createProjectWithTasks',
+          args
+        }
+      
+      case 'updateProjectTasks':
+        // 异步工具，用于调整现有项目的任务
+        return {
+          _async: true,
+          functionName: 'updateProjectTasks',
           args
         }
       
@@ -201,6 +219,11 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     throw new Error('DeepSeek 客户端未初始化')
   }
   
+  // 检测是否是多天计划（用于渐进式创建）
+  const daysMatch = description.match(/(\d+)\s*[天日]/)
+  const totalDays = daysMatch ? parseInt(daysMatch[1]) : 0
+  const isProgressiveMode = totalDays > 10 // 超过10天采用渐进式创建
+  
   // 更新进度：开始生成计划
   if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
   
@@ -208,12 +231,16 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   const today = new Date()
   const todayStr = today.toISOString().split('T')[0] // YYYY-MM-DD
   
-  // 调用 DeepSeek API 生成项目计划
-  const prompt = `请根据以下描述，生成一个详细的项目计划。返回 JSON 格式，包含项目信息和任务列表。
+  // 调用 DeepSeek API 生成项目信息和初始任务
+  const batchSize = isProgressiveMode ? 7 : 999 // 渐进模式每批7天
+  const promptDays = isProgressiveMode ? batchSize : totalDays
+  
+  const prompt = `请根据以下描述，生成一个项目计划。${isProgressiveMode ? `这是一个${totalDays}天的计划，现在先生成前${promptDays}天的内容。` : ''}返回 JSON 格式，包含项目信息和任务列表。
 
 【当前日期】：${todayStr}（今天）
 【项目描述】：${description}
 【项目名称】：${projectName}
+${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：前${promptDays}天` : ''}
 
 返回格式要求：
 {
@@ -238,7 +265,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
 }
 
 重要要求：
-1. **如果用户提到具体天数（如"30天"、"一个月"、"一周"），必须为每一天创建一个独立的任务**
+1. **如果是每日计划，为每一天创建一个独立的任务**
    - 任务命名：第1天、第2天、第3天...（或Day 1、Day 2...）
    - 每天的任务要有具体的日期（从 ${todayStr} 开始，依次递增）
    - 每天的子任务要具体可执行，类似每日打卡清单
@@ -262,7 +289,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
 
 6. 只返回 JSON，不要其他解释文字
 
-示例（假设今天是 ${todayStr}，30天减肥计划）：
+示例（假设今天是 ${todayStr}，减肥计划）：
 {
   "project": {
     "name": "30天减肥挑战",
@@ -276,11 +303,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
       "subtasks": [
         {"text": "晨跑30分钟（6:30-7:00）", "weight": 4},
         {"text": "记录早晨体重", "weight": 5, "requiresInput": true},
-        {"text": "喝水2000ml（分8次）", "weight": 3},
-        {"text": "早餐：燕麦+鸡蛋（350卡）", "weight": 3},
-        {"text": "午餐：鸡胸肉+蔬菜（500卡）", "weight": 3},
-        {"text": "晚餐：水煮青菜+豆腐（400卡）", "weight": 3},
-        {"text": "睡前拉伸15分钟", "weight": 2}
+        {"text": "喝水2000ml（分8次）", "weight": 3}
       ]
     },
     {
@@ -356,16 +379,16 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   projectStore.currentProjectId = project.id
   await projectStore.saveProjects()
   
-  // 创建任务
+  // 创建第一批任务
   const createdTasks = []
-  const totalTasks = projectPlan.tasks.length
+  const firstBatchTasks = projectPlan.tasks
   
-  for (let i = 0; i < totalTasks; i++) {
-    const taskData = projectPlan.tasks[i]
+  for (let i = 0; i < firstBatchTasks.length; i++) {
+    const taskData = firstBatchTasks[i]
     
     // 更新进度：创建任务
     if (onProgress) {
-      onProgress(`📝 正在创建任务 ${i + 1}/${totalTasks}: ${taskData.text.substring(0, 20)}...`)
+      onProgress(`✅ 正在创建任务 ${i + 1}/${firstBatchTasks.length}: ${taskData.text.substring(0, 20)}...`)
     }
     
     // 如果 AI 没有指定截止日期，默认设置为从今天开始递增
@@ -402,27 +425,287 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     createdTasks.push(task)
     
     // 避免 ID 冲突，添加小延迟
-    if (i < totalTasks - 1) {
+    if (i < firstBatchTasks.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 10))
     }
   }
   
-  // 更新进度：保存数据
-  if (onProgress) onProgress('💾 正在保存数据...')
   await todoStore.saveTodos()
   
-  // 更新进度：完成
-  if (onProgress) onProgress(`✅ 项目创建完成！共创建 ${createdTasks.length} 个任务`)
+  // 如果是渐进模式且还有剩余天数，继续创建
+  if (isProgressiveMode && firstBatchTasks.length < totalDays) {
+    await createRemainingDays(project, totalDays, firstBatchTasks.length, description, stores, deepseekClient, onProgress)
+  }
+  
+  if (onProgress) onProgress(`🎉 项目"${finalProjectName}"创建成功！共创建 ${createdTasks.length} 个任务`)
   
   return {
     success: true,
-    project: {
-      id: project.id,
-      name: project.name,
-      color: project.color
-    },
-    tasksCreated: createdTasks.length,
-    message: `成功创建项目"${finalProjectName}"，包含 ${createdTasks.length} 个任务`
+    projectId: project.id,
+    projectName: finalProjectName,
+    tasksCreated: createdTasks.length
   }
 }
 
+/**
+ * 创建剩余的每日任务（渐进式创建的后续批次）
+ */
+async function createRemainingDays(project, totalDays, currentDay, description, stores, deepseekClient, onProgress) {
+  const { todoStore } = stores
+  const batchSize = 7
+  
+  while (currentDay < totalDays) {
+    const startDay = currentDay + 1
+    const endDay = Math.min(currentDay + batchSize, totalDays)
+    const daysToCreate = endDay - currentDay
+    
+    if (onProgress) onProgress(`📅 正在生成第 ${startDay}-${endDay} 天的任务...`)
+    
+    // 计算这批任务的起始日期
+    const today = new Date()
+    const startDate = new Date(today)
+    startDate.setDate(today.getDate() + currentDay)
+    const startDateStr = startDate.toISOString().split('T')[0]
+    
+    const prompt = `继续为"${project.name}"项目生成任务。这是一个${totalDays}天的计划，现在生成第${startDay}-${endDay}天的任务。
+
+【项目描述】：${description}
+【起始日期】：${startDateStr}（第${startDay}天）
+【结束日期】：第${endDay}天
+
+请生成第${startDay}天到第${endDay}天的任务，每天一个任务。返回 JSON 数组格式：
+[
+  {
+    "text": "第${startDay}天 - 任务标题",
+    "priority": "medium",
+    "dueDate": "${startDateStr}",
+    "subtasks": [
+      {"text": "具体可执行的子任务", "weight": 3, "requiresInput": false}
+    ]
+  }
+]
+
+要求：
+1. 每天的任务要循序渐进，符合整体计划的节奏
+2. 子任务要具体可执行
+3. 对需要记录结果的子任务设置 requiresInput: true
+4. 只返回 JSON 数组，不要其他内容`
+
+    try {
+      const content = await deepseekClient.chatCompletions([
+        { role: 'system', content: '你是一个专业的项目管理助手。' },
+        { role: 'user', content: prompt }
+      ], { maxTokens: 3000 })
+      
+      let tasks
+      try {
+        tasks = JSON.parse(content.trim())
+      } catch (e) {
+        const jsonMatch = content.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          tasks = JSON.parse(jsonMatch[0])
+        } else {
+          console.error('AI返回内容:', content)
+          tasks = [] // 失败时跳过这批
+        }
+      }
+      
+      // 创建这批任务
+      for (let i = 0; i < tasks.length; i++) {
+        const taskData = tasks[i]
+        
+        if (onProgress) {
+          onProgress(`✅ 正在创建第 ${startDay + i} 天的任务...`)
+        }
+        
+        const task = {
+          id: Date.now() + (currentDay + i),
+          text: taskData.text,
+          completed: false,
+          priority: taskData.priority || 'medium',
+          projectId: project.id,
+          createdAt: new Date().toISOString(),
+          completedAt: null,
+          dueDate: taskData.dueDate,
+          images: [],
+          pinned: false,
+          subtasks: (taskData.subtasks || []).map((st, idx) => ({
+            id: Date.now() + (currentDay + i) * 1000 + idx,
+            text: st.text,
+            completed: false,
+            weight: st.weight || 3,
+            requiresInput: st.requiresInput || false,
+            inputValue: ''
+          })),
+          progressRecords: []
+        }
+        
+        todoStore.todos.push(task)
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+      
+      await todoStore.saveTodos()
+      currentDay = endDay
+      
+    } catch (error) {
+      console.error(`创建第${startDay}-${endDay}天任务失败:`, error)
+      // 失败时跳过这批，继续下一批
+      currentDay = endDay
+    }
+  }
+}
+
+/**
+ * 执行异步工具函数 - 更新项目任务
+ * @param {object} args - { projectId, feedback }
+ * @param {object} stores - { todoStore, projectStore }
+ * @param {object} deepseekClient - DeepSeek 客户端
+ * @param {function} onProgress - 进度更新回调
+ * @returns {Promise<object>} 更新结果
+ */
+export async function executeUpdateProjectTasks(args, stores, deepseekClient, onProgress = null) {
+  const { todoStore, projectStore } = stores
+  const { projectId, feedback } = args
+  
+  if (!deepseekClient) {
+    throw new Error('DeepSeek 客户端未初始化')
+  }
+  
+  // 查找项目
+  const project = projectStore.projects.find(p => p.id === projectId)
+  if (!project) {
+    throw new Error(`找不到ID为${projectId}的项目`)
+  }
+  
+  // 获取项目的所有任务
+  const projectTasks = todoStore.todos.filter(t => t.projectId === projectId)
+  if (projectTasks.length === 0) {
+    throw new Error(`项目"${project.name}"还没有任务`)
+  }
+  
+  if (onProgress) onProgress(`🤔 正在分析您对"${project.name}"的反馈...`)
+  
+  // 准备当前任务信息
+  const tasksInfo = projectTasks.map((t, i) => ({
+    index: i + 1,
+    text: t.text,
+    dueDate: t.dueDate,
+    subtasks: t.subtasks.map(st => st.text)
+  }))
+  
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
+  
+  const prompt = `你正在帮助用户调整项目"${project.name}"的任务计划。
+
+【当前任务列表】：
+${JSON.stringify(tasksInfo, null, 2)}
+
+【用户反馈】：${feedback}
+
+请根据用户的反馈，生成调整后的完整任务列表。返回 JSON 格式：
+{
+  "tasks": [
+    {
+      "text": "任务标题",
+      "priority": "high/medium/low",
+      "dueDate": "YYYY-MM-DD",
+      "subtasks": [
+        {"text": "子任务", "weight": 3, "requiresInput": false}
+      ]
+    }
+  ]
+}
+
+要求：
+1. 保持原有任务的合理部分
+2. 根据反馈进行调整（简化、增加、修改等）
+3. 确保任务仍然循序渐进
+4. 日期从今天（${todayStr}）开始
+5. 只返回 JSON，不要其他内容`
+
+  const content = await deepseekClient.chatCompletions([
+    { role: 'system', content: '你是一个专业的项目管理助手，擅长根据用户反馈优化项目计划。' },
+    { role: 'user', content: prompt }
+  ], { maxTokens: 8000 })
+  
+  if (onProgress) onProgress('📋 正在应用调整方案...')
+  
+  // 解析 JSON
+  let updatedPlan
+  try {
+    updatedPlan = JSON.parse(content.trim())
+  } catch (e) {
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      updatedPlan = JSON.parse(jsonMatch[0])
+    } else {
+      throw new Error('AI 返回的调整方案格式不正确')
+    }
+  }
+  
+  if (!updatedPlan.tasks || !Array.isArray(updatedPlan.tasks)) {
+    throw new Error('调整方案结构不完整')
+  }
+  
+  // 删除原有任务
+  todoStore.todos = todoStore.todos.filter(t => t.projectId !== projectId)
+  
+  // 创建新任务
+  const createdTasks = []
+  
+  for (let i = 0; i < updatedPlan.tasks.length; i++) {
+    const taskData = updatedPlan.tasks[i]
+    
+    if (onProgress) {
+      onProgress(`✅ 正在更新任务 ${i + 1}/${updatedPlan.tasks.length}...`)
+    }
+    
+    let finalDueDate = taskData.dueDate
+    if (!finalDueDate) {
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + i)
+      finalDueDate = dueDate.toISOString().split('T')[0]
+    }
+    
+    const task = {
+      id: Date.now() + i,
+      text: taskData.text,
+      completed: false,
+      priority: taskData.priority || 'medium',
+      projectId: project.id,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      dueDate: finalDueDate,
+      images: [],
+      pinned: false,
+      subtasks: (taskData.subtasks || []).map((st, idx) => ({
+        id: Date.now() + i * 1000 + idx,
+        text: st.text,
+        completed: false,
+        weight: st.weight || 3,
+        requiresInput: st.requiresInput || false,
+        inputValue: ''
+      })),
+      progressRecords: []
+    }
+    
+    todoStore.todos.push(task)
+    createdTasks.push(task)
+    
+    if (i < updatedPlan.tasks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  }
+  
+  await todoStore.saveTodos()
+  
+  if (onProgress) onProgress(`🎉 项目"${project.name}"已更新！共 ${createdTasks.length} 个任务`)
+  
+  return {
+    success: true,
+    projectId: project.id,
+    projectName: project.name,
+    tasksUpdated: createdTasks.length
+  }
+}

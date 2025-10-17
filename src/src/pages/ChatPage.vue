@@ -258,7 +258,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
-import { availableTools, executeToolFunction, executeCreateProjectWithTasks } from '../utils/tools'
+import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks } from '../utils/tools'
 import { DeepSeekClient } from '../utils/deepseek'
 
 const appStore = useAppStore()
@@ -288,6 +288,9 @@ const showInputRoleSelector = ref(false)
 
 // 角色系统（从当前对话读取）
 const showRoleSelector = ref(false)
+
+// 最近创建/操作的项目ID（用于AI上下文）
+const recentProjectId = ref(null)
 
 const currentRoleId = computed(() => {
   const conv = conversations.value.find(c => c.id === currentConversationId.value)
@@ -548,6 +551,14 @@ async function sendToAI(isContinuation = false) {
       }
     }
     
+    // 如果有最近创建/操作的项目，添加上下文提示
+    if (recentProjectId.value) {
+      const recentProject = projectStore.projects.find(p => p.id === recentProjectId.value)
+      if (recentProject) {
+        systemContent += `\n\n【最近操作的项目】：${recentProject.name}（ID: ${recentProject.id}）\n提示：如果用户反馈与这个项目相关，可以使用 updateProjectTasks 工具调整任务。`
+      }
+    }
+    
     // 添加系统提示词（如果是第一条消息或者没有 system 消息）
     const hasSystemMessage = messagesToSend.some(m => m.role === 'system')
     if (!hasSystemMessage && systemContent) {
@@ -613,12 +624,13 @@ async function sendToAI(isContinuation = false) {
           
           // 处理异步工具
           if (result && result._async) {
-            if (result.functionName === 'createProjectWithTasks') {
+            if (result.functionName === 'createProjectWithTasks' || result.functionName === 'updateProjectTasks') {
               // 添加进度提示消息
               const progressMessageIndex = messages.value.length
+              const actionText = result.functionName === 'updateProjectTasks' ? '调整项目' : '创建项目'
               messages.value.push({
                 role: 'assistant',
-                content: '🚀 开始创建项目...',
+                content: `🚀 开始${actionText}...`,
                 timestamp: Date.now(),
                 isProgress: true
               })
@@ -626,7 +638,7 @@ async function sendToAI(isContinuation = false) {
               
               // 计时器：记录等待秒数
               let elapsedSeconds = 0
-              let currentStatus = '🚀 开始创建项目...'
+              let currentStatus = `🚀 开始${actionText}...`
               const startTime = Date.now()
               const timerInterval = setInterval(() => {
                 elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
@@ -647,14 +659,31 @@ async function sendToAI(isContinuation = false) {
               }
               
               try {
-                // 执行创建项目
-                result = await executeCreateProjectWithTasks(
-                  result.args,
-                  { todoStore, projectStore },
-                  deepseekClient.value,
-                  onProgress,
-                  selectedProjectIds.value // 传递选中的项目ID
-                )
+                // 执行异步工具
+                if (result.functionName === 'createProjectWithTasks') {
+                  result = await executeCreateProjectWithTasks(
+                    result.args,
+                    { todoStore, projectStore },
+                    deepseekClient.value,
+                    onProgress,
+                    selectedProjectIds.value
+                  )
+                  // 记录新创建的项目ID
+                  if (result.projectId) {
+                    recentProjectId.value = result.projectId
+                  }
+                } else if (result.functionName === 'updateProjectTasks') {
+                  // 如果参数中没有projectId，使用最近创建的项目
+                  if (!result.args.projectId && recentProjectId.value) {
+                    result.args.projectId = recentProjectId.value
+                  }
+                  result = await executeUpdateProjectTasks(
+                    result.args,
+                    { todoStore, projectStore },
+                    deepseekClient.value,
+                    onProgress
+                  )
+                }
               } finally {
                 // 清除计时器
                 clearInterval(timerInterval)
