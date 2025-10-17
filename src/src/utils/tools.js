@@ -95,6 +95,7 @@ export function executeToolFunction(functionName, args, stores) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
+  console.log(functionName, "->>>>>", todos, args);
   try {
     switch (functionName) {
       case 'getTodayTasks':
@@ -109,7 +110,11 @@ export function executeToolFunction(functionName, args, stores) {
         return includeCompleted ? todos : todos.filter(t => !t.completed)
       
       case 'getTasksByProject':
-        return todos.filter(t => t.projectId === args.projectId)
+        // 处理类型转换：args.projectId 可能是字符串，需要转换为数字或 null
+        const targetProjectId = args.projectId === 'null' || args.projectId === null 
+          ? null 
+          : Number(args.projectId)
+        return todos.filter(t => t.projectId === targetProjectId)
       
       case 'getProjects':
         return projects.map(p => {

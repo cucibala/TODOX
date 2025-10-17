@@ -362,8 +362,8 @@ async function sendToAI(isContinuation = false) {
         content: '',
         timestamp: Date.now()
       })
-
       streamingMessageIndex.value = messages.value.length - 1
+      
       // 继续调用 API，让模型根据工具结果生成最终回复
       await sendToAI(true)
     }
