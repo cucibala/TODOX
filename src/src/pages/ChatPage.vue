@@ -89,6 +89,7 @@
             :key="index" 
             class="message-item"
             :class="message.role"
+            v-show="message.role !== 'tool'"
           >
             <div class="message-avatar">
               <svg v-if="message.role === 'assistant'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -102,7 +103,18 @@
               </svg>
             </div>
             <div class="message-content">
-              <div class="message-text">{{ message.content }}</div>
+              <div class="message-text" v-if="message.content">{{ message.content }}</div>
+              <div class="tool-calls" v-if="message.tool_calls">
+                <div class="tool-call-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                    <path d="M2 2l7.586 7.586"></path>
+                    <circle cx="11" cy="11" r="2"></circle>
+                  </svg>
+                  调用了 {{ message.tool_calls.length }} 个工具
+                </div>
+              </div>
               <div class="message-time">{{ formatTime(message.timestamp) }}</div>
             </div>
           </div>
@@ -155,6 +167,8 @@ const inputTextarea = ref(null)
 const streamingMessageIndex = ref(-1)
 const isDataLoaded = ref(false)
 const sidebarCollapsed = ref(false)
+const apiKey = ref('')
+const availableTools = ref([])
 
 // 当前对话标题
 const currentConversationTitle = computed(() => {
@@ -163,14 +177,22 @@ const currentConversationTitle = computed(() => {
   return conv ? conv.title : '新对话'
 })
 
-// 检查 API 密钥
+// 检查并获取 API 密钥
 async function checkApiKey() {
-  const result = await electronAPI.hasDeepSeekKey()
-  if (!result.hasKey) {
+  const result = await electronAPI.getDeepSeekKey()
+  if (!result.success || !result.key) {
     appStore.toast('请先在设置中配置 DeepSeek API 密钥')
     appStore.currentPage = 'settings'
     return false
   }
+  apiKey.value = result.key
+  
+  // 获取可用的工具列表
+  const toolsResult = await electronAPI.getAvailableTools()
+  if (toolsResult.success) {
+    availableTools.value = toolsResult.tools
+  }
+  
   return true
 }
 
@@ -205,7 +227,9 @@ function handleSelectConversation(convId) {
   currentConversationId.value = convId
   const conv = conversations.value.find(c => c.id === convId)
   if (conv) {
-    messages.value = conv.messages
+    console.log(`📂 切换到会话: ${conv.title} (${conv.messages?.length || 0} 条消息)`)
+    // 清理不完整的消息序列
+    messages.value = cleanMessageSequence(conv.messages || [])
     nextTick(() => {
       scrollToBottom()
     })
@@ -270,26 +294,191 @@ async function handleSend() {
   streamingMessageIndex.value = messages.value.length - 1
 
   // 调用 API（流式）
+  await sendToAI()
+}
+
+// 发送消息到 AI（支持函数调用循环）
+async function sendToAI(isContinuation = false) {
   isLoading.value = true
   try {
-    const plainMessages = messages.value.slice(0, -1).map(msg => ({
-      role: msg.role,
-      content: msg.content
-    }))
-    const result = await electronAPI.chatWithDeepSeek(plainMessages)
+    // 准备发送的消息列表
+    let messagesToSend = messages.value.slice(0, -1)
     
-    if (!result.success) {
-      appStore.toast('AI 回复失败：' + (result.error || '未知错误'))
-      messages.value.pop()
-      messages.value.pop()
+    const plainMessages = messagesToSend.map(msg => {
+      const plainMsg = {
+        role: msg.role,
+        content: msg.content || ''
+      }
+      
+      // 只在有这些字段时才添加
+      if (msg.tool_calls) {
+        plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
+      }
+      if (msg.tool_call_id) {
+        plainMsg.tool_call_id = msg.tool_call_id
+      }
+      if (msg.name) {
+        plainMsg.name = msg.name
+      }
+      
+      return plainMsg
+    })
+    
+    // 打印发送给 API 的消息序列
+    console.log('📤 发送给 DeepSeek API 的消息序列:')
+    plainMessages.forEach((msg, index) => {
+      console.log(`  [${index}] ${msg.role}:`, {
+        content: msg.content?.substring(0, 50) + (msg.content?.length > 50 ? '...' : ''),
+        tool_calls: msg.tool_calls ? `${msg.tool_calls.length} 个调用` : undefined,
+        tool_call_id: msg.tool_call_id,
+        name: msg.name
+      })
+    })
+    
+    // 调用 DeepSeek API
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey.value}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: plainMessages,
+        tools: availableTools.value,
+        temperature: 0.7,
+        max_tokens: 2000,
+        stream: true
+      })
+    })
+    
+    if (!response.ok) {
+      const errorData = await response.json()
+      const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
+      console.error('DeepSeek API 请求失败:', errorMsg, errorData)
+      throw new Error(errorMsg)
+    }
+    
+    // 处理流式响应
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let toolCallsBuffer = []
+    
+    while (true) {
+      const { done, value } = await reader.read()
+      
+      if (done) break
+      
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        if (!trimmedLine || trimmedLine === 'data: [DONE]') continue
+        
+        if (trimmedLine.startsWith('data: ')) {
+          try {
+            const jsonStr = trimmedLine.slice(6)
+            const data = JSON.parse(jsonStr)
+            const delta = data.choices[0]?.delta
+            
+            // 处理普通内容
+            if (delta?.content && streamingMessageIndex.value >= 0) {
+              messages.value[streamingMessageIndex.value].content += delta.content
+              scrollToBottom()
+            }
+            
+            // 处理工具调用
+            if (delta?.tool_calls) {
+              for (const toolCall of delta.tool_calls) {
+                if (toolCall.index !== undefined) {
+                  if (!toolCallsBuffer[toolCall.index]) {
+                    toolCallsBuffer[toolCall.index] = {
+                      id: '',
+                      type: 'function',
+                      function: {
+                        name: '',
+                        arguments: ''
+                      }
+                    }
+                  }
+                  
+                  const currentTool = toolCallsBuffer[toolCall.index]
+                  if (toolCall.id) currentTool.id = toolCall.id
+                  if (toolCall.function?.name) currentTool.function.name += toolCall.function.name
+                  if (toolCall.function?.arguments) currentTool.function.arguments += toolCall.function.arguments
+                }
+              }
+            }
+          } catch (e) {
+            console.error('解析流式数据失败:', e)
+          }
+        }
+      }
+    }
+    
+    // 如果有工具调用，执行并继续
+    if (toolCallsBuffer.length > 0) {
+      console.log('🔧 工具调用:', toolCallsBuffer)
+      
+      // 更新当前消息为工具调用
+      if (streamingMessageIndex.value >= 0) {
+        messages.value[streamingMessageIndex.value].tool_calls = toolCallsBuffer
+        messages.value[streamingMessageIndex.value].content = ''
+      }
+      
+      // 执行所有工具调用
+      for (const toolCall of toolCallsBuffer) {
+        try {
+          const args = JSON.parse(toolCall.function.arguments)
+          const result = await electronAPI.executeToolFunction(toolCall.function.name, args)
+          
+          messages.value.push({
+            role: 'tool',
+            content: result.success ? JSON.stringify(result.result, null, 2) : JSON.stringify({ error: result.error }),
+            name: toolCall.function.name,
+            tool_call_id: toolCall.id,
+            timestamp: Date.now()
+          })
+        } catch (error) {
+          messages.value.push({
+            role: 'tool',
+            content: JSON.stringify({ error: error.message }),
+            name: toolCall.function.name,
+            tool_call_id: toolCall.id,
+            timestamp: Date.now()
+          })
+        }
+      }
+      
+      // 添加新的 assistant 消息槽位
+      messages.value.push({
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now()
+      })
+      streamingMessageIndex.value = messages.value.length - 1
+      
+      // 继续调用 API
+      await sendToAI(true)
+    } else {
+      // 完成
+      isLoading.value = false
       streamingMessageIndex.value = -1
+      scrollToBottom()
+      saveConversations()
     }
   } catch (error) {
     console.error('聊天失败:', error)
-    appStore.toast('聊天失败，请重试')
+    appStore.toast('AI 回复失败：' + error.message)
     messages.value.pop()
-    messages.value.pop()
+    if (messages.value.length > 0 && messages.value[messages.value.length - 1].role === 'user') {
+      messages.value.pop()
+    }
     streamingMessageIndex.value = -1
+    isLoading.value = false
   }
 }
 
@@ -309,6 +498,89 @@ async function handleClearHistory() {
   }
 }
 
+// 清理消息序列（移除不完整的 tool 消息和相关的 assistant 消息）
+function cleanMessageSequence(messages) {
+  if (!messages || messages.length === 0) return []
+  
+  console.log('🧹 开始清理消息序列，原始消息数:', messages.length)
+  
+  const cleaned = []
+  let removedCount = 0
+  
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+    
+    // 如果是 tool 消息，检查前面是否有对应的 assistant 消息
+    if (msg.role === 'tool') {
+      // 向前查找最近的 assistant 消息
+      let foundValidPreceding = false
+      let precedingAssistant = null
+      
+      for (let j = cleaned.length - 1; j >= 0; j--) {
+        if (cleaned[j].role === 'assistant') {
+          precedingAssistant = cleaned[j]
+          // 检查是否有有效的 tool_calls
+          if (precedingAssistant.tool_calls && 
+              Array.isArray(precedingAssistant.tool_calls) && 
+              precedingAssistant.tool_calls.length > 0) {
+            foundValidPreceding = true
+          }
+          break
+        }
+      }
+      
+      // 只有找到有效的前置消息才保留 tool 消息
+      if (foundValidPreceding) {
+        cleaned.push(msg)
+      } else {
+        console.warn('🗑️  移除孤立的 tool 消息:', {
+          role: msg.role,
+          name: msg.name,
+          tool_call_id: msg.tool_call_id,
+          content: msg.content?.substring(0, 50)
+        })
+        removedCount++
+      }
+    } 
+    // 如果是 assistant 消息且有 tool_calls，检查后面是否有对应的 tool 消息
+    else if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+      // 先添加这条消息
+      cleaned.push(msg)
+      
+      // 检查后面是否有对应的 tool 消息
+      let hasCorrespondingTool = false
+      for (let j = i + 1; j < messages.length; j++) {
+        if (messages[j].role === 'tool') {
+          hasCorrespondingTool = true
+          break
+        }
+        // 如果遇到其他类型的消息，说明没有对应的 tool 消息
+        if (messages[j].role !== 'tool') {
+          break
+        }
+      }
+      
+      // 如果没有对应的 tool 消息，移除这条 assistant 消息
+      if (!hasCorrespondingTool) {
+        console.warn('🗑️  移除没有对应 tool 消息的 assistant 消息 (tool_calls 数量:', msg.tool_calls.length, ')')
+        cleaned.pop()
+        removedCount++
+      }
+    }
+    else {
+      cleaned.push(msg)
+    }
+  }
+  
+  if (removedCount > 0) {
+    console.log(`✅ 清理完成，移除了 ${removedCount} 条消息，剩余 ${cleaned.length} 条`)
+  } else {
+    console.log('✅ 消息序列无需清理')
+  }
+  
+  return cleaned
+}
+
 // 加载会话列表
 async function loadConversations() {
   try {
@@ -321,7 +593,9 @@ async function loadConversations() {
       if (currentConversationId.value) {
         const conv = conversations.value.find(c => c.id === currentConversationId.value)
         if (conv) {
-          messages.value = conv.messages
+          console.log(`📂 加载会话: ${conv.title} (${conv.messages?.length || 0} 条消息)`)
+          // 清理不完整的消息序列（移除孤立的 tool 消息）
+          messages.value = cleanMessageSequence(conv.messages || [])
           nextTick(() => {
             scrollToBottom()
           })
@@ -347,11 +621,24 @@ async function saveConversations() {
     // 更新当前对话的消息和时间
     const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
     if (currentConv) {
-      currentConv.messages = messages.value.map(msg => ({
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp
-      }))
+      currentConv.messages = messages.value.map(msg => {
+        const plainMsg = {
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
+        }
+        // 保存函数调用相关字段
+        if (msg.tool_calls) {
+          plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
+        }
+        if (msg.tool_call_id) {
+          plainMsg.tool_call_id = msg.tool_call_id
+        }
+        if (msg.name) {
+          plainMsg.name = msg.name
+        }
+        return plainMsg
+      })
       currentConv.updatedAt = Date.now()
     }
     
@@ -360,11 +647,24 @@ async function saveConversations() {
       conversations: conversations.value.map(conv => ({
         id: conv.id,
         title: conv.title,
-        messages: (conv.messages || []).map(msg => ({
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp
-        })),
+        messages: (conv.messages || []).map(msg => {
+          const plainMsg = {
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp
+          }
+          // 保存函数调用相关字段
+          if (msg.tool_calls) {
+            plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
+          }
+          if (msg.tool_call_id) {
+            plainMsg.tool_call_id = msg.tool_call_id
+          }
+          if (msg.name) {
+            plainMsg.name = msg.name
+          }
+          return plainMsg
+        }),
         createdAt: conv.createdAt,
         updatedAt: conv.updatedAt
       })),
@@ -429,31 +729,6 @@ function formatConversationTime(timestamp) {
   return date.toLocaleDateString()
 }
 
-// 设置流式数据监听
-function setupStreamListeners() {
-  electronAPI.onChatStreamData((content) => {
-    if (streamingMessageIndex.value >= 0) {
-      messages.value[streamingMessageIndex.value].content += content
-      scrollToBottom()
-    }
-  })
-
-  electronAPI.onChatStreamEnd(() => {
-    isLoading.value = false
-    streamingMessageIndex.value = -1
-    scrollToBottom()
-    saveConversations()
-  })
-
-  electronAPI.onChatStreamError((error) => {
-    isLoading.value = false
-    appStore.toast('AI 回复失败：' + error)
-    if (streamingMessageIndex.value >= 0) {
-      messages.value.splice(streamingMessageIndex.value - 1, 2)
-      streamingMessageIndex.value = -1
-    }
-  })
-}
 
 // 监听消息变化，自动保存（防抖）
 let saveTimer = null
@@ -471,11 +746,9 @@ watch([messages, conversations], () => {
 onMounted(async () => {
   await checkApiKey()
   await loadConversations()
-  setupStreamListeners()
 })
 
 onUnmounted(() => {
-  electronAPI.removeChatStreamListeners()
   if (saveTimer) {
     clearTimeout(saveTimer)
   }

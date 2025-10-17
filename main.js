@@ -815,7 +815,9 @@ ipcMain.handle('ai-breakdown-task', async (event, taskText) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error?.message || '调用 API 失败');
+      const errorMsg = errorData.error?.message || '调用 API 失败';
+      console.error('DeepSeek API 调用失败 (任务拆解):', errorMsg, errorData);
+      throw new Error(errorMsg);
     }
 
     const data = await response.json();
@@ -906,7 +908,9 @@ ipcMain.handle('generate-daily-summary', async (event, tasks) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error?.message || '调用 API 失败');
+      const errorMsg = errorData.error?.message || '调用 API 失败';
+      console.error('DeepSeek API 调用失败 (任务总结):', errorMsg, errorData);
+      throw new Error(errorMsg);
     }
 
     const data = await response.json();
@@ -1111,97 +1115,165 @@ ipcMain.handle('set-auto-launch', async (event, enabled) => {
   }
 });
 
-// IPC 通信处理 - DeepSeek 聊天（流式）
-ipcMain.handle('chat-with-deepseek', async (event, messages) => {
-  try {
-    // 获取 API 密钥
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
-      return { success: false, error: '未配置 API 密钥' };
-    }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    if (!settings.deepseekApiKey) {
-      return { success: false, error: '未配置 API 密钥' };
-    }
-    const apiKey = decryptPassword(settings.deepseekApiKey);
-
-    // 调用 DeepSeek API（流式）
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages.map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
-        temperature: 0.7,
-        max_tokens: 2000,
-        stream: true
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      return { 
-        success: false, 
-        error: errorData.error?.message || `API 请求失败: ${response.status}` 
-      };
-    }
-
-    // 处理流式响应
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) {
-        break;
+// 定义可用的工具函数
+const availableTools = [
+  {
+    type: 'function',
+    function: {
+      name: 'getTodayTasks',
+      description: '获取今天添加的任务列表，包括任务内容、优先级、完成状态、子任务等信息',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
       }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || trimmedLine === 'data: [DONE]') {
-          continue;
-        }
-
-        if (trimmedLine.startsWith('data: ')) {
-          try {
-            const jsonStr = trimmedLine.slice(6);
-            const data = JSON.parse(jsonStr);
-            const content = data.choices[0]?.delta?.content;
-            
-            if (content) {
-              // 发送流式数据块到渲染进程
-              event.sender.send('chat-stream-data', content);
-            }
-          } catch (e) {
-            console.error('解析流式数据失败:', e);
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getAllTasks',
+      description: '获取所有任务列表，包括已完成和未完成的任务',
+      parameters: {
+        type: 'object',
+        properties: {
+          includeCompleted: {
+            type: 'boolean',
+            description: '是否包括已完成的任务，默认为 true'
           }
-        }
+        },
+        required: []
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getTasksByProject',
+      description: '获取指定项目下的任务',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'string',
+            description: '项目 ID，如果为 null 则获取未分类的任务'
+          }
+        },
+        required: ['projectId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getProjects',
+      description: '获取所有项目列表，包括项目名称、颜色、统计信息等',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'searchTasks',
+      description: '搜索包含关键词的任务',
+      parameters: {
+        type: 'object',
+        properties: {
+          keyword: {
+            type: 'string',
+            description: '搜索关键词'
+          }
+        },
+        required: ['keyword']
+      }
+    }
+  }
+];
 
-    // 发送完成信号
-    event.sender.send('chat-stream-end');
-
-    return {
-      success: true
-    };
-
+// 执行工具函数
+function executeToolFunction(functionName, args) {
+  console.log(functionName, args);
+  try {
+    const todosPath = getDataPath();
+    const projectsPath = getProjectsPath();
+    
+    let todos = [];
+    let projects = [];
+    
+    if (fs.existsSync(todosPath)) {
+      todos = JSON.parse(fs.readFileSync(todosPath, 'utf-8'));
+    }
+    
+    if (fs.existsSync(projectsPath)) {
+      const projectData = JSON.parse(fs.readFileSync(projectsPath, 'utf-8'));
+      projects = projectData.projects || [];
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    switch (functionName) {
+      case 'getTodayTasks':
+        return todos.filter(task => {
+          const taskDate = new Date(task.createdAt);
+          taskDate.setHours(0, 0, 0, 0);
+          return taskDate.getTime() === today.getTime();
+        });
+      
+      case 'getAllTasks':
+        const includeCompleted = args.includeCompleted !== false;
+        return includeCompleted ? todos : todos.filter(t => !t.completed);
+      
+      case 'getTasksByProject':
+        return todos.filter(t => t.projectId === args.projectId);
+      
+      case 'getProjects':
+        return projects.map(p => {
+          const projectTasks = todos.filter(t => t.projectId === p.id);
+          const completed = projectTasks.filter(t => t.completed).length;
+          return {
+            ...p,
+            stats: {
+              total: projectTasks.length,
+              completed: completed,
+              pending: projectTasks.length - completed
+            }
+          };
+        });
+      
+      case 'searchTasks':
+        const keyword = args.keyword.toLowerCase();
+        return todos.filter(t => 
+          t.text.toLowerCase().includes(keyword) ||
+          (t.subtasks && t.subtasks.some(st => st.text.toLowerCase().includes(keyword)))
+        );
+      
+      default:
+        return { error: `未知的函数: ${functionName}` };
+    }
   } catch (error) {
-    console.error('DeepSeek 聊天失败:', error);
-    event.sender.send('chat-stream-error', error.message || '聊天失败');
-    return { success: false, error: error.message || '聊天失败' };
+    return { error: error.message };
+  }
+}
+
+// IPC 通信处理 - 获取可用的工具列表
+ipcMain.handle('get-available-tools', async () => {
+  return { success: true, tools: availableTools };
+});
+
+// IPC 通信处理 - 执行工具函数
+ipcMain.handle('execute-tool-function', async (event, functionName, args) => {
+  try {
+    console.log(`🔧 执行工具函数: ${functionName}`, args);
+    const result = executeToolFunction(functionName, args);
+    return { success: true, result };
+  } catch (error) {
+    console.error(`工具函数执行失败: ${functionName}`, error);
+    return { success: false, error: error.message };
   }
 });
 

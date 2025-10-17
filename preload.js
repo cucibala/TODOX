@@ -29,17 +29,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteDeepSeekKey: () => ipcRenderer.invoke('delete-deepseek-key'),
   aiBreakdownTask: (taskText) => ipcRenderer.invoke('ai-breakdown-task', taskText),
   generateDailySummary: (tasks) => ipcRenderer.invoke('generate-daily-summary', tasks),
-  chatWithDeepSeek: (messages) => ipcRenderer.invoke('chat-with-deepseek', messages),
   
-  // 流式聊天监听
-  onChatStreamData: (callback) => ipcRenderer.on('chat-stream-data', (event, data) => callback(data)),
-  onChatStreamEnd: (callback) => ipcRenderer.on('chat-stream-end', () => callback()),
-  onChatStreamError: (callback) => ipcRenderer.on('chat-stream-error', (event, error) => callback(error)),
-  removeChatStreamListeners: () => {
-    ipcRenderer.removeAllListeners('chat-stream-data');
-    ipcRenderer.removeAllListeners('chat-stream-end');
-    ipcRenderer.removeAllListeners('chat-stream-error');
-  },
+  // 工具函数执行
+  executeToolFunction: (functionName, args) => ipcRenderer.invoke('execute-tool-function', functionName, args),
+  getAvailableTools: () => ipcRenderer.invoke('get-available-tools'),
   
   // 会话管理
   loadConversations: () => ipcRenderer.invoke('load-conversations'),
