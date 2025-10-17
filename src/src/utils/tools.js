@@ -222,7 +222,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   // 检测是否是多天计划（用于渐进式创建）
   const daysMatch = description.match(/(\d+)\s*[天日]/)
   const totalDays = daysMatch ? parseInt(daysMatch[1]) : 0
-  const isProgressiveMode = totalDays > 10 // 超过10天采用渐进式创建
+  const isProgressiveMode = totalDays > 1 // 超过1天就采用渐进式创建
   
   // 更新进度：开始生成计划
   if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
@@ -232,15 +232,15 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   const todayStr = today.toISOString().split('T')[0] // YYYY-MM-DD
   
   // 调用 DeepSeek API 生成项目信息和初始任务
-  const batchSize = isProgressiveMode ? 7 : 999 // 渐进模式每批7天
-  const promptDays = isProgressiveMode ? batchSize : totalDays
+  const batchSize = 1 // 首批生成3天，让用户快速看到效果
+  const promptDays = isProgressiveMode ? Math.min(batchSize, totalDays) : totalDays
   
-  const prompt = `请根据以下描述，生成一个项目计划。${isProgressiveMode ? `这是一个${totalDays}天的计划，现在先生成前${promptDays}天的内容。` : ''}返回 JSON 格式，包含项目信息和任务列表。
+  const prompt = `请根据以下描述，生成一个项目计划。${isProgressiveMode ? `这是一个${totalDays}天的计划，现在先生成前${promptDays}天的内容，后续会逐天生成。` : ''}返回 JSON 格式，包含项目信息和任务列表。
 
 【当前日期】：${todayStr}（今天）
 【项目描述】：${description}
 【项目名称】：${projectName}
-${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：前${promptDays}天` : ''}
+${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：前${promptDays}天（后续将逐天生成剩余${totalDays - promptDays}天）` : ''}
 
 返回格式要求：
 {
@@ -265,11 +265,13 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
 }
 
 重要要求：
-1. **如果是每日计划，为每一天创建一个独立的任务**
+1. **如果是每日计划，必须为每一天创建一个独立的任务**
    - 任务命名：第1天、第2天、第3天...（或Day 1、Day 2...）
+   - ${isProgressiveMode ? `本次只需生成前${promptDays}天的任务（第1天到第${promptDays}天），剩余天数会逐天自动生成` : ''}
    - 每天的任务要有具体的日期（从 ${todayStr} 开始，依次递增）
    - 每天的子任务要具体可执行，类似每日打卡清单
    - **截止日期格式：YYYY-MM-DD，从今天（${todayStr}）开始计算**
+   - **第1天的dueDate是${todayStr}，第2天是次日，第3天是第三天，以此类推**
    
 2. **每日任务的子任务要非常具体**，例如：
    - ✅ 好的：晨跑30分钟（6:30-7:00）、喝水2000ml、晚餐控制在500卡以内
@@ -289,7 +291,7 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
 
 6. 只返回 JSON，不要其他解释文字
 
-示例（假设今天是 ${todayStr}，减肥计划）：
+示例（假设今天是 2025-10-24）：
 {
   "project": {
     "name": "30天减肥挑战",
@@ -299,7 +301,7 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
     {
       "text": "第1天 - 启动计划",
       "priority": "high",
-      "dueDate": "${todayStr}",
+      "dueDate": "2025-10-24",
       "subtasks": [
         {"text": "晨跑30分钟（6:30-7:00）", "weight": 4},
         {"text": "记录早晨体重", "weight": 5, "requiresInput": true},
@@ -309,20 +311,28 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
     {
       "text": "第2天 - 保持节奏",
       "priority": "medium",
-      "dueDate": "2025-10-18",
+      "dueDate": "2025-10-25",
       "subtasks": [
         {"text": "继续晨跑30分钟", "weight": 4},
         {"text": "记录体重变化", "weight": 5, "requiresInput": true}
       ]
+    },
+    {
+      "text": "第3天 - 继续前进",
+      "priority": "medium",
+      "dueDate": "2025-10-26",
+      "subtasks": [...]
     }
+    // ${isProgressiveMode ? `... 继续生成到第${promptDays}天` : '... 继续生成所有任务'}
   ]
 }
 
-注意：
-- 第1天的 dueDate 是今天（${todayStr}）
-- 第2天的 dueDate 是明天（${todayStr} + 1天）
-- 第3天的 dueDate 是后天（${todayStr} + 2天）
-- 以此类推，第N天的 dueDate 是今天 + (N-1) 天`
+**关键**：
+- 第1天的 dueDate 必须是 ${todayStr}（今天）
+- 第2天的 dueDate 必须是次日
+- 第3天的 dueDate 必须是第三天
+- 每天的日期必须连续递增，不能跳过或重复
+- ${isProgressiveMode ? `本次只生成 ${promptDays} 个任务即可（第${promptDays + 1}天及以后会自动生成）` : '必须为所有天数生成任务'}`
 
   const messages = [
     {
@@ -386,9 +396,14 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
   for (let i = 0; i < firstBatchTasks.length; i++) {
     const taskData = firstBatchTasks[i]
     
-    // 更新进度：创建任务
+    // 更新进度：创建任务（带总体进度）
+    const dayNumber = i + 1
+    const overallProgress = isProgressiveMode 
+      ? Math.round((dayNumber / totalDays) * 100)
+      : Math.round((dayNumber / firstBatchTasks.length) * 100)
+    
     if (onProgress) {
-      onProgress(`✅ 正在创建任务 ${i + 1}/${firstBatchTasks.length}: ${taskData.text.substring(0, 20)}...`)
+      onProgress(`✅ 正在创建第 ${dayNumber} 天的任务... ${isProgressiveMode ? `(${overallProgress}%)` : ''}`)
     }
     
     // 如果 AI 没有指定截止日期，默认设置为从今天开始递增
@@ -434,10 +449,11 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
   
   // 如果是渐进模式且还有剩余天数，继续创建
   if (isProgressiveMode && firstBatchTasks.length < totalDays) {
-    await createRemainingDays(project, totalDays, firstBatchTasks.length, description, stores, deepseekClient, onProgress)
+    const baseDate = new Date(today) // 保存项目起始日期
+    await createRemainingDays(project, totalDays, firstBatchTasks.length, description, stores, deepseekClient, onProgress, baseDate)
   }
   
-  if (onProgress) onProgress(`🎉 项目"${finalProjectName}"创建成功！共创建 ${createdTasks.length} 个任务`)
+  if (onProgress) onProgress(`🎉 项目"${finalProjectName}"创建成功！共创建 ${todoStore.todos.filter(t => t.projectId === project.id).length} 个任务 (100%)`)
   
   return {
     success: true,
@@ -448,109 +464,111 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
 }
 
 /**
- * 创建剩余的每日任务（渐进式创建的后续批次）
+ * 创建剩余的每日任务（渐进式创建，每次生成1天）
  */
-async function createRemainingDays(project, totalDays, currentDay, description, stores, deepseekClient, onProgress) {
+async function createRemainingDays(project, totalDays, currentDay, description, stores, deepseekClient, onProgress, baseDate) {
   const { todoStore } = stores
-  const batchSize = 7
   
+  // 逐天生成任务
   while (currentDay < totalDays) {
-    const startDay = currentDay + 1
-    const endDay = Math.min(currentDay + batchSize, totalDays)
-    const daysToCreate = endDay - currentDay
+    const dayNumber = currentDay + 1
+    const overallProgress = Math.round((dayNumber / totalDays) * 100)
+    console.log('createRemainingDays', dayNumber, overallProgress)
     
-    if (onProgress) onProgress(`📅 正在生成第 ${startDay}-${endDay} 天的任务...`)
+    if (onProgress) onProgress(`📅 正在生成第 ${dayNumber} 天的任务... (${overallProgress}%)`)
     
-    // 计算这批任务的起始日期
-    const today = new Date()
-    const startDate = new Date(today)
-    startDate.setDate(today.getDate() + currentDay)
-    const startDateStr = startDate.toISOString().split('T')[0]
+    // 计算当天的日期（基于项目起始日期）
+    const taskDate = new Date(baseDate)
+    taskDate.setDate(baseDate.getDate() + currentDay)
+    const taskDateStr = taskDate.toISOString().split('T')[0]
     
-    const prompt = `继续为"${project.name}"项目生成任务。这是一个${totalDays}天的计划，现在生成第${startDay}-${endDay}天的任务。
+    const prompt = `继续为"${project.name}"项目生成任务。这是一个${totalDays}天的计划，现在生成第${dayNumber}天的任务。
 
 【项目描述】：${description}
-【起始日期】：${startDateStr}（第${startDay}天）
-【结束日期】：第${endDay}天
+【当前日期】：${taskDateStr}（第${dayNumber}天）
+【总天数】：${totalDays}天
 
-请生成第${startDay}天到第${endDay}天的任务，每天一个任务。返回 JSON 数组格式：
-[
-  {
-    "text": "第${startDay}天 - 任务标题",
-    "priority": "medium",
-    "dueDate": "${startDateStr}",
-    "subtasks": [
-      {"text": "具体可执行的子任务", "weight": 3, "requiresInput": false}
-    ]
-  }
-]
+请为第${dayNumber}天生成一个任务。返回 JSON 对象格式：
+{
+  "text": "第${dayNumber}天 - 任务标题",
+  "priority": "medium",
+  "dueDate": "${taskDateStr}",
+  "subtasks": [
+    {"text": "具体可执行的子任务", "weight": 3, "requiresInput": false}
+  ]
+}
 
-要求：
-1. 每天的任务要循序渐进，符合整体计划的节奏
-2. 子任务要具体可执行
-3. 对需要记录结果的子任务设置 requiresInput: true
-4. 只返回 JSON 数组，不要其他内容`
+**重要**：
+1. 只生成第${dayNumber}天这一天的任务
+2. 任务标题格式：第${dayNumber}天 - 具体描述
+3. dueDate 必须是 ${taskDateStr}
+4. 子任务要具体可执行，符合整体计划在第${dayNumber}天的进度
+5. 对需要记录结果的子任务设置 requiresInput: true
+6. 只返回 JSON 对象，不要其他内容`
 
     try {
       const content = await deepseekClient.chatCompletions([
         { role: 'system', content: '你是一个专业的项目管理助手。' },
         { role: 'user', content: prompt }
-      ], { maxTokens: 3000 })
+      ], { maxTokens: 1500 })
       
-      let tasks
+      let taskData
       try {
-        tasks = JSON.parse(content.trim())
+        taskData = JSON.parse(content.trim())
       } catch (e) {
-        const jsonMatch = content.match(/\[[\s\S]*\]/)
+        const jsonMatch = content.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
-          tasks = JSON.parse(jsonMatch[0])
+          taskData = JSON.parse(jsonMatch[0])
         } else {
           console.error('AI返回内容:', content)
-          tasks = [] // 失败时跳过这批
+          console.error(`第${dayNumber}天任务生成失败，跳过`)
+          currentDay++
+          continue
         }
       }
       
-      // 创建这批任务
-      for (let i = 0; i < tasks.length; i++) {
-        const taskData = tasks[i]
-        
-        if (onProgress) {
-          onProgress(`✅ 正在创建第 ${startDay + i} 天的任务...`)
-        }
-        
-        const task = {
-          id: Date.now() + (currentDay + i),
-          text: taskData.text,
+      // 确保日期正确
+      let taskDueDate = taskData.dueDate
+      if (!taskDueDate || taskDueDate !== taskDateStr) {
+        taskDueDate = taskDateStr
+      }
+      
+      // 创建任务
+      const task = {
+        id: Date.now() + currentDay,
+        text: taskData.text,
+        completed: false,
+        priority: taskData.priority || 'medium',
+        projectId: project.id,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        dueDate: taskDueDate,
+        images: [],
+        pinned: false,
+        subtasks: (taskData.subtasks || []).map((st, idx) => ({
+          id: Date.now() + currentDay * 1000 + idx,
+          text: st.text,
           completed: false,
-          priority: taskData.priority || 'medium',
-          projectId: project.id,
-          createdAt: new Date().toISOString(),
-          completedAt: null,
-          dueDate: taskData.dueDate,
-          images: [],
-          pinned: false,
-          subtasks: (taskData.subtasks || []).map((st, idx) => ({
-            id: Date.now() + (currentDay + i) * 1000 + idx,
-            text: st.text,
-            completed: false,
-            weight: st.weight || 3,
-            requiresInput: st.requiresInput || false,
-            inputValue: ''
-          })),
-          progressRecords: []
-        }
-        
-        todoStore.todos.push(task)
-        await new Promise(resolve => setTimeout(resolve, 10))
+          weight: st.weight || 3,
+          requiresInput: st.requiresInput || false,
+          inputValue: ''
+        })),
+        progressRecords: []
       }
       
+      todoStore.todos.push(task)
       await todoStore.saveTodos()
-      currentDay = endDay
+      
+      // 进入下一天
+      currentDay++
+      
+      // 小延迟，避免ID冲突和API限流
+      await new Promise(resolve => setTimeout(resolve, 100))
       
     } catch (error) {
-      console.error(`创建第${startDay}-${endDay}天任务失败:`, error)
-      // 失败时跳过这批，继续下一批
-      currentDay = endDay
+      console.error(`创建第${dayNumber}天任务失败:`, error)
+      // 失败时跳过这一天，继续下一天
+      currentDay++
     }
   }
 }
@@ -709,3 +727,4 @@ ${JSON.stringify(tasksInfo, null, 2)}
     tasksUpdated: createdTasks.length
   }
 }
+
