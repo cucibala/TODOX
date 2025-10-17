@@ -193,11 +193,16 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   // 更新进度：开始生成计划
   if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
   
+  // 获取今天的日期
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0] // YYYY-MM-DD
+  
   // 调用 DeepSeek API 生成项目计划
   const prompt = `请根据以下描述，生成一个详细的项目计划。返回 JSON 格式，包含项目信息和任务列表。
 
-项目描述：${description}
-项目名称：${projectName}
+【当前日期】：${todayStr}（今天）
+【项目描述】：${description}
+【项目名称】：${projectName}
 
 返回格式要求：
 {
@@ -223,8 +228,9 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
 重要要求：
 1. **如果用户提到具体天数（如"30天"、"一个月"、"一周"），必须为每一天创建一个独立的任务**
    - 任务命名：第1天、第2天、第3天...（或Day 1、Day 2...）
-   - 每天的任务要有具体的日期（从今天开始计算）
+   - 每天的任务要有具体的日期（从 ${todayStr} 开始，依次递增）
    - 每天的子任务要具体可执行，类似每日打卡清单
+   - **截止日期格式：YYYY-MM-DD，从今天（${todayStr}）开始计算**
    
 2. **每日任务的子任务要非常具体**，例如：
    - ✅ 好的：晨跑30分钟（6:30-7:00）、喝水2000ml、晚餐控制在500卡以内
@@ -243,7 +249,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
 
 6. 只返回 JSON，不要其他解释文字
 
-示例（30天减肥计划）：
+示例（假设今天是 ${todayStr}，30天减肥计划）：
 {
   "project": {
     "name": "30天减肥挑战",
@@ -253,7 +259,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     {
       "text": "第1天 - 启动计划",
       "priority": "high",
-      "dueDate": "2025-10-18",
+      "dueDate": "${todayStr}",
       "subtasks": [
         {"text": "晨跑30分钟（6:30-7:00）", "weight": 4},
         {"text": "喝水2000ml（分8次）", "weight": 3},
@@ -266,11 +272,23 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     {
       "text": "第2天 - 保持节奏",
       "priority": "medium",
-      "dueDate": "2025-10-19",
+      "dueDate": "${getDateStr(1)}",
+      "subtasks": [...]
+    },
+    {
+      "text": "第3天 - 强化训练",
+      "priority": "medium",
+      "dueDate": "${getDateStr(2)}",
       "subtasks": [...]
     }
   ]
-}`
+}
+
+注意：
+- 第1天的 dueDate 是今天（${todayStr}）
+- 第2天的 dueDate 是明天（${todayStr} + 1天）
+- 第3天的 dueDate 是后天（${todayStr} + 2天）
+- 以此类推，第N天的 dueDate 是今天 + (N-1) 天`
 
   const messages = [
     {
@@ -339,6 +357,14 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
       onProgress(`📝 正在创建任务 ${i + 1}/${totalTasks}: ${taskData.text.substring(0, 20)}...`)
     }
     
+    // 如果 AI 没有指定截止日期，默认设置为从今天开始递增
+    let finalDueDate = taskData.dueDate
+    if (!finalDueDate) {
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + i) // 第 i 个任务的截止日期为今天 + i 天
+      finalDueDate = dueDate.toISOString().split('T')[0]
+    }
+    
     const task = {
       id: Date.now() + i,
       text: taskData.text,
@@ -347,7 +373,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
       projectId: project.id,
       createdAt: new Date().toISOString(),
       completedAt: null,
-      dueDate: taskData.dueDate || null,
+      dueDate: finalDueDate,
       images: [],
       pinned: false,
       subtasks: (taskData.subtasks || []).map((st, idx) => ({

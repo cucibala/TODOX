@@ -45,8 +45,9 @@ export const useTodoStore = defineStore('todo', () => {
       filtered = filtered.filter(t => t.text.toLowerCase().includes(query))
     }
     
-    // 排序：置顶 > 完成状态 > 创建时间
+    // 排序：置顶 > 完成状态 > 截止日期 > 创建时间
     filtered.sort((a, b) => {
+      // 1. 置顶优先
       if (a.pinned !== b.pinned) {
         if(a.pinned === undefined || b.pinned === undefined) {
           if(a.pinned){
@@ -58,9 +59,27 @@ export const useTodoStore = defineStore('todo', () => {
         }
       }
 
+      // 2. 未完成的任务排在已完成前面
       if (a.completed !== b.completed) {
         return a.completed ? 1 : -1
       }
+      
+      // 3. 按截止日期排序（倒序：最近的截止日期在前）
+      const aHasDueDate = a.dueDate && a.dueDate !== null
+      const bHasDueDate = b.dueDate && b.dueDate !== null
+      
+      if (aHasDueDate && bHasDueDate) {
+        // 都有截止日期，按日期倒序（早的在前）
+        return new Date(a.dueDate) - new Date(b.dueDate)
+      } else if (aHasDueDate && !bHasDueDate) {
+        // a 有截止日期，b 没有，a 排在前面
+        return -1
+      } else if (!aHasDueDate && bHasDueDate) {
+        // b 有截止日期，a 没有，b 排在前面
+        return 1
+      }
+      
+      // 4. 都没有截止日期，按创建时间倒序
       return new Date(b.createdAt) - new Date(a.createdAt)
     })
     
@@ -124,6 +143,14 @@ export const useTodoStore = defineStore('todo', () => {
       return { success: false, error: '请输入任务内容' }
     }
     
+    // 如果没有指定截止日期，默认设置为3天后
+    let finalDueDate = dueDate
+    if (!dueDate) {
+      const threeDaysLater = new Date()
+      threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+      finalDueDate = threeDaysLater.toISOString().split('T')[0] // YYYY-MM-DD 格式
+    }
+    
     const task = {
       id: Date.now(),
       text: text.trim(),
@@ -131,7 +158,7 @@ export const useTodoStore = defineStore('todo', () => {
       completed: false,
       priority: priority || 'medium',
       createdAt: new Date().toISOString(),
-      dueDate: dueDate || null,
+      dueDate: finalDueDate,
       images: [...currentImages.value],
       progress: [],
       pinned: false,
