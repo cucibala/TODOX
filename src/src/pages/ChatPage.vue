@@ -293,7 +293,6 @@ async function sendToAI(isContinuation = false) {
   try {
     // 准备发送的消息列表
     let messagesToSend = messages.value.slice(0, -1)
-    
     const plainMessages = messagesToSend.map(msg => {
       const plainMsg = {
         role: msg.role,
@@ -324,10 +323,9 @@ async function sendToAI(isContinuation = false) {
     
     // 工具调用回调
     const onToolCalls = async (toolCalls) => {
-      // 更新当前消息为工具调用
+      // 更新当前 assistant 消息，添加 tool_calls（保留可能已有的 content）
       if (streamingMessageIndex.value >= 0) {
         messages.value[streamingMessageIndex.value].tool_calls = toolCalls
-        messages.value[streamingMessageIndex.value].content = ''
       }
       
       // 执行所有工具调用（使用前端 store 数据）
@@ -358,15 +356,15 @@ async function sendToAI(isContinuation = false) {
         }
       }
       
-      // 添加新的 assistant 消息槽位
+      // 【关键】添加新的 assistant 消息槽位，用于接收模型基于工具结果的最终回复
       messages.value.push({
         role: 'assistant',
         content: '',
         timestamp: Date.now()
       })
+
       streamingMessageIndex.value = messages.value.length - 1
-      
-      // 继续调用 API
+      // 继续调用 API，让模型根据工具结果生成最终回复
       await sendToAI(true)
     }
     

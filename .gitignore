@@ -16,3 +16,4 @@ release/
 *.deb
 *.rpm
 dist-vue/*
+test/

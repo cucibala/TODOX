@@ -18,16 +18,6 @@ export class DeepSeekClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, tools, onContent, onToolCalls) {
-    console.log('📤 发送给 DeepSeek API 的消息序列:')
-    messages.forEach((msg, index) => {
-      console.log(`  [${index}] ${msg.role}:`, {
-        content: msg.content?.substring(0, 50) + (msg.content?.length > 50 ? '...' : ''),
-        tool_calls: msg.tool_calls ? `${msg.tool_calls.length} 个调用` : undefined,
-        tool_call_id: msg.tool_call_id,
-        name: msg.name
-      })
-    })
-
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -112,8 +102,7 @@ export class DeepSeekClient {
 
     // 如果有工具调用，返回
     if (toolCallsBuffer.length > 0) {
-      console.log('🔧 工具调用:', toolCallsBuffer)
-      onToolCalls(toolCallsBuffer)
+      await onToolCalls(toolCallsBuffer)
     }
   }
 
