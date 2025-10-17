@@ -143,6 +143,87 @@ export const availableTools = [
         required: ['projectId', 'description']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'updateTaskSubtasks',
+      description: '修改指定任务的子任务列表。用于增加、删除或修改子任务，如"给第一个任务增加权限申请的子任务"、"删除第二个任务的第3个子任务"、"修改环境准备任务的子任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '要修改的任务ID'
+          },
+          taskText: {
+            type: 'string',
+            description: '任务标题（用于AI确认是否是正确的任务）'
+          },
+          operation: {
+            type: 'string',
+            enum: ['add', 'delete', 'update', 'replace'],
+            description: '操作类型：add=添加新子任务, delete=删除指定子任务, update=修改特定子任务, replace=完全替换所有子任务'
+          },
+          feedback: {
+            type: 'string',
+            description: '用户的具体要求，如"增加权限申请相关的子任务"、"删除第3个子任务"、"把子任务改得更详细一些"'
+          }
+        },
+        required: ['taskId', 'operation', 'feedback']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deleteTask',
+      description: '删除指定的任务。用于移除不需要的任务，如"删除第3个任务"、"删除环境准备这个任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '要删除的任务ID'
+          },
+          taskText: {
+            type: 'string',
+            description: '任务标题（用于确认）'
+          }
+        },
+        required: ['taskId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'addTask',
+      description: '为项目添加一个新任务。用于补充单个任务，如"添加一个部署任务"、"增加代码审查任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'number',
+            description: '要添加任务的项目ID'
+          },
+          taskDescription: {
+            type: 'string',
+            description: '新任务的描述，包括任务内容、要求等'
+          },
+          position: {
+            type: 'string',
+            enum: ['beginning', 'end', 'after'],
+            description: '插入位置：beginning=开头, end=结尾, after=指定任务之后'
+          },
+          afterTaskId: {
+            type: 'number',
+            description: '如果position为after，指定在哪个任务之后插入'
+          }
+        },
+        required: ['projectId', 'taskDescription', 'position']
+      }
+    }
   }
 ]
 
@@ -225,6 +306,37 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         return {
           _async: true,
           functionName: 'addProjectTasks',
+          args
+        }
+      
+      case 'updateTaskSubtasks':
+        // 异步工具，用于修改任务的子任务
+        return {
+          _async: true,
+          functionName: 'updateTaskSubtasks',
+          args
+        }
+      
+      case 'deleteTask':
+        // 同步工具，删除任务
+        const task = todoStore.todos.find(t => t.id === args.taskId)
+        if (!task) {
+          throw new Error(`找不到ID为${args.taskId}的任务`)
+        }
+        todoStore.todos = todoStore.todos.filter(t => t.id !== args.taskId)
+        todoStore.saveTodos()
+        return {
+          success: true,
+          taskId: args.taskId,
+          taskText: task.text,
+          message: `已删除任务"${task.text}"`
+        }
+      
+      case 'addTask':
+        // 异步工具，添加单个任务
+        return {
+          _async: true,
+          functionName: 'addTask',
           args
         }
       
@@ -991,6 +1103,319 @@ export async function executeAddProjectTasks(args, stores, deepseekClient, onPro
     tasksAdded: addedTasks.length,
     startDay: actualStartDay,
     endDay: actualStartDay + addedTasks.length - 1
+  }
+}
+
+/**
+ * 执行异步工具函数 - 修改任务的子任务
+ * @param {object} args - { taskId, taskText, operation, feedback }
+ * @param {object} stores - { todoStore, projectStore }
+ * @param {object} deepseekClient - DeepSeek 客户端
+ * @param {function} onProgress - 进度更新回调
+ * @returns {Promise<object>} 修改结果
+ */
+export async function executeUpdateTaskSubtasks(args, stores, deepseekClient, onProgress = null) {
+  const { todoStore, projectStore } = stores
+  const { taskId, taskText, operation, feedback } = args
+  
+  if (!deepseekClient) {
+    throw new Error('DeepSeek 客户端未初始化')
+  }
+  
+  // 查找任务
+  const task = todoStore.todos.find(t => t.id === taskId)
+  if (!task) {
+    throw new Error(`找不到ID为${taskId}的任务`)
+  }
+  
+  // 获取项目信息
+  const project = projectStore.projects.find(p => p.id === task.projectId)
+  const projectName = project ? project.name : '未分类'
+  
+  if (onProgress) onProgress(`🤔 正在分析对任务"${task.text}"的子任务修改要求...`)
+  
+  // 准备当前子任务信息
+  const currentSubtasks = (task.subtasks || []).map((st, idx) => ({
+    index: idx + 1,
+    text: st.text,
+    weight: st.weight,
+    completed: st.completed,
+    requiresInput: st.requiresInput
+  }))
+  
+  const operationDesc = {
+    add: '添加新的子任务',
+    delete: '删除指定的子任务',
+    update: '修改现有子任务',
+    replace: '完全替换所有子任务'
+  }
+  
+  const prompt = `你正在帮助用户修改任务的子任务列表。
+
+【任务信息】：
+- 所属项目：${projectName}
+- 任务标题：${task.text}
+- 当前子任务数量：${currentSubtasks.length}个
+
+【当前子任务列表】：
+${JSON.stringify(currentSubtasks, null, 2)}
+
+【操作类型】：${operationDesc[operation]}
+【用户要求】：${feedback}
+
+请根据用户的要求，生成修改后的子任务列表。返回 JSON 数组格式：
+[
+  {
+    "text": "子任务描述（要具体可执行）",
+    "weight": 1-5,
+    "requiresInput": false,
+    "completed": false
+  }
+]
+
+**重要要求**：
+1. **${operation === 'add' ? '在现有子任务基础上添加新子任务' : operation === 'delete' ? '删除用户指定的子任务，保留其他' : operation === 'update' ? '根据要求修改特定子任务，其他保持不变' : '完全重新生成所有子任务'}**
+2. ${operation === 'replace' ? '不需要' : '需要'}保留已完成子任务的完成状态（completed: true）
+3. 子任务要具体可执行，避免含糊描述
+4. 对于需要记录结果的关键步骤，设置 requiresInput: true（如：记录配置信息、填写测试结果等）
+5. 权重（weight）：1=很简单，2=简单，3=中等，4=困难，5=很困难
+6. 只返回 JSON 数组，不要其他内容
+
+**操作指南**：
+${operation === 'add' ? `- 在现有 ${currentSubtasks.length} 个子任务基础上，添加新的子任务
+- 新子任务应该与现有子任务风格一致
+- 返回的数组应包含原有子任务 + 新增子任务` : ''}
+${operation === 'delete' ? `- 根据用户描述（如"第3个"、"关于XX的"）识别要删除的子任务
+- 保留其他所有子任务
+- 保持原有子任务的顺序` : ''}
+${operation === 'update' ? `- 识别用户要修改的子任务（通过序号、描述等）
+- 只修改该子任务，其他保持不变
+- 保持原有子任务的顺序` : ''}
+${operation === 'replace' ? `- 根据用户要求重新设计所有子任务
+- 子任务数量建议 3-8 个
+- 确保覆盖任务的关键步骤` : ''}`
+
+  const content = await deepseekClient.chatCompletions([
+    { role: 'system', content: '你是一个专业的项目管理助手，擅长将任务细化为具体可执行的子任务。' },
+    { role: 'user', content: prompt }
+  ], { maxTokens: 3000 })
+  
+  if (onProgress) onProgress('📋 正在应用子任务修改...')
+  
+  // 解析 JSON
+  let newSubtasks
+  try {
+    newSubtasks = JSON.parse(content.trim())
+  } catch (e) {
+    const jsonMatch = content.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      newSubtasks = JSON.parse(jsonMatch[0])
+    } else {
+      throw new Error('AI 返回的子任务列表格式不正确')
+    }
+  }
+  
+  if (!Array.isArray(newSubtasks)) {
+    throw new Error('子任务列表结构不正确')
+  }
+  
+  // 更新任务的子任务
+  const oldSubtasksCount = task.subtasks ? task.subtasks.length : 0
+  
+  task.subtasks = newSubtasks.map((st, idx) => {
+    // 尝试匹配原有子任务（如果是 add/update 操作）
+    const originalSubtask = task.subtasks?.[idx]
+    
+    return {
+      id: originalSubtask?.id || (Date.now() + idx),
+      text: st.text,
+      completed: st.completed || false,
+      weight: st.weight || 3,
+      requiresInput: st.requiresInput || false,
+      inputValue: originalSubtask?.inputValue || '',
+      completedAt: st.completed && originalSubtask?.completedAt ? originalSubtask.completedAt : null,
+      createdAt: originalSubtask?.createdAt || new Date().toISOString()
+    }
+  })
+  
+  await todoStore.saveTodos()
+  
+  const changeDesc = operation === 'add' ? `新增 ${newSubtasks.length - oldSubtasksCount} 个子任务`
+    : operation === 'delete' ? `删除 ${oldSubtasksCount - newSubtasks.length} 个子任务`
+    : operation === 'update' ? '已更新子任务'
+    : `已替换为 ${newSubtasks.length} 个新子任务`
+  
+  if (onProgress) onProgress(`🎉 任务"${task.text}"的子任务已更新！${changeDesc}`)
+  
+  return {
+    success: true,
+    taskId: task.id,
+    taskText: task.text,
+    operation,
+    oldSubtasksCount,
+    newSubtasksCount: newSubtasks.length,
+    changeDesc
+  }
+}
+
+/**
+ * 执行异步工具函数 - 添加单个新任务
+ * @param {object} args - { projectId, taskDescription, position, afterTaskId }
+ * @param {object} stores - { todoStore, projectStore }
+ * @param {object} deepseekClient - DeepSeek 客户端
+ * @param {function} onProgress - 进度更新回调
+ * @returns {Promise<object>} 添加结果
+ */
+export async function executeAddTask(args, stores, deepseekClient, onProgress = null) {
+  const { todoStore, projectStore } = stores
+  const { projectId, taskDescription, position, afterTaskId } = args
+  
+  if (!deepseekClient) {
+    throw new Error('DeepSeek 客户端未初始化')
+  }
+  
+  // 查找项目
+  const project = projectStore.projects.find(p => p.id === projectId)
+  if (!project) {
+    throw new Error(`找不到ID为${projectId}的项目`)
+  }
+  
+  // 获取项目的现有任务
+  const projectTasks = todoStore.todos.filter(t => t.projectId === projectId)
+  
+  if (onProgress) onProgress(`🤔 正在为项目"${project.name}"生成新任务...`)
+  
+  // 计算任务的截止日期
+  let dueDate
+  if (position === 'beginning' && projectTasks.length > 0) {
+    // 插入到开头，日期设为第一个任务的前一天
+    const firstTask = projectTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0]
+    dueDate = new Date(firstTask.dueDate)
+    dueDate.setDate(dueDate.getDate() - 1)
+  } else if (position === 'after' && afterTaskId) {
+    // 插入到指定任务之后
+    const afterTask = projectTasks.find(t => t.id === afterTaskId)
+    if (afterTask) {
+      dueDate = new Date(afterTask.dueDate)
+      dueDate.setDate(dueDate.getDate() + 1)
+    } else {
+      dueDate = new Date()
+    }
+  } else {
+    // 插入到结尾，日期设为最后一个任务的后一天
+    if (projectTasks.length > 0) {
+      const lastTask = projectTasks.sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))[0]
+      dueDate = new Date(lastTask.dueDate)
+      dueDate.setDate(dueDate.getDate() + 1)
+    } else {
+      dueDate = new Date()
+    }
+  }
+  const dueDateStr = dueDate.toISOString().split('T')[0]
+  
+  // 准备项目上下文
+  const projectContext = projectTasks.length > 0 
+    ? `\n【项目现有任务示例】：\n${projectTasks.slice(0, 3).map(t => `- ${t.text}\n  子任务数：${t.subtasks?.length || 0}`).join('\n')}`
+    : ''
+  
+  const prompt = `你正在为项目"${project.name}"添加一个新任务。
+${projectContext}
+
+【新任务要求】：${taskDescription}
+【截止日期】：${dueDateStr}
+【插入位置】：${position === 'beginning' ? '项目开头' : position === 'after' ? '指定任务之后' : '项目结尾'}
+
+请生成这个新任务。返回 JSON 对象格式：
+{
+  "text": "任务标题（要简洁明确）",
+  "priority": "high/medium/low",
+  "dueDate": "${dueDateStr}",
+  "subtasks": [
+    {
+      "text": "子任务描述（要具体可执行）",
+      "weight": 1-5,
+      "requiresInput": false
+    }
+  ]
+}
+
+**重要要求**：
+1. 任务标题要简洁明确，体现任务的核心内容
+2. 子任务要具体可执行，数量建议 3-6 个
+3. 子任务风格要与项目现有任务保持一致
+4. 对于需要记录结果的关键步骤，设置 requiresInput: true
+5. 权重（weight）：1=很简单，2=简单，3=中等，4=困难，5=很困难
+6. 只返回 JSON 对象，不要其他内容`
+
+  const content = await deepseekClient.chatCompletions([
+    { role: 'system', content: '你是一个专业的项目管理助手。' },
+    { role: 'user', content: prompt }
+  ], { maxTokens: 2000 })
+  
+  if (onProgress) onProgress('📋 正在添加新任务...')
+  
+  // 解析 JSON
+  let taskData
+  try {
+    taskData = JSON.parse(content.trim())
+  } catch (e) {
+    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      taskData = JSON.parse(jsonMatch[0])
+    } else {
+      throw new Error('AI 返回的任务格式不正确')
+    }
+  }
+  
+  // 创建新任务
+  const newTask = {
+    id: Date.now(),
+    text: taskData.text,
+    completed: false,
+    priority: taskData.priority || 'medium',
+    projectId: project.id,
+    createdAt: new Date().toISOString(),
+    completedAt: null,
+    dueDate: taskData.dueDate || dueDateStr,
+    images: [],
+    pinned: false,
+    subtasks: (taskData.subtasks || []).map((st, idx) => ({
+      id: Date.now() + idx + 1,
+      text: st.text,
+      completed: false,
+      weight: st.weight || 3,
+      requiresInput: st.requiresInput || false,
+      inputValue: '',
+      createdAt: new Date().toISOString()
+    })),
+    progressRecords: []
+  }
+  
+  // 根据位置插入任务
+  if (position === 'beginning') {
+    todoStore.todos.unshift(newTask)
+  } else if (position === 'after' && afterTaskId) {
+    const afterIndex = todoStore.todos.findIndex(t => t.id === afterTaskId)
+    if (afterIndex !== -1) {
+      todoStore.todos.splice(afterIndex + 1, 0, newTask)
+    } else {
+      todoStore.todos.push(newTask)
+    }
+  } else {
+    todoStore.todos.push(newTask)
+  }
+  
+  await todoStore.saveTodos()
+  
+  if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加新任务！`)
+  
+  return {
+    success: true,
+    taskId: newTask.id,
+    taskText: newTask.text,
+    projectId: project.id,
+    projectName: project.name,
+    subtasksCount: newTask.subtasks.length
   }
 }
 
