@@ -258,7 +258,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
-import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks } from '../utils/tools'
+import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks } from '../utils/tools'
 import { DeepSeekClient } from '../utils/deepseek'
 
 const appStore = useAppStore()
@@ -624,10 +624,12 @@ async function sendToAI(isContinuation = false) {
           
           // 处理异步工具
           if (result && result._async) {
-            if (result.functionName === 'createProjectWithTasks' || result.functionName === 'updateProjectTasks') {
+            if (result.functionName === 'createProjectWithTasks' || result.functionName === 'updateProjectTasks' || result.functionName === 'addProjectTasks') {
               // 添加进度提示消息
               const progressMessageIndex = messages.value.length
-              const actionText = result.functionName === 'updateProjectTasks' ? '调整项目' : '创建项目'
+              const actionText = result.functionName === 'updateProjectTasks' ? '调整项目' 
+                : result.functionName === 'addProjectTasks' ? '添加任务'
+                : '创建项目'
               messages.value.push({
                 role: 'assistant',
                 content: `🚀 开始${actionText}...`,
@@ -678,6 +680,17 @@ async function sendToAI(isContinuation = false) {
                     result.args.projectId = recentProjectId.value
                   }
                   result = await executeUpdateProjectTasks(
+                    result.args,
+                    { todoStore, projectStore },
+                    deepseekClient.value,
+                    onProgress
+                  )
+                } else if (result.functionName === 'addProjectTasks') {
+                  // 如果参数中没有projectId，使用最近创建的项目
+                  if (!result.args.projectId && recentProjectId.value) {
+                    result.args.projectId = recentProjectId.value
+                  }
+                  result = await executeAddProjectTasks(
                     result.args,
                     { todoStore, projectStore },
                     deepseekClient.value,
