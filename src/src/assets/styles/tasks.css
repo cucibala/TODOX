@@ -1052,3 +1052,139 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
+/* 子任务评论样式 */
+.subtask-comments-wrapper {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.subtask-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.subtask-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--primary-color);
+}
+
+.comment-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.comment-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.comment-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+.comment-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.btn-delete-comment {
+  width: 20px;
+  height: 20px;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  flex-shrink: 0;
+  opacity: 0;
+}
+
+.subtask-comment:hover .btn-delete-comment {
+  opacity: 1;
+}
+
+.btn-delete-comment:hover {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--error-color);
+}
+
+.subtask-comment-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.subtask-comment-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.subtask-comment-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(138, 157, 251, 0.1);
+}
+
+.btn-add-comment {
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-add-comment:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.btn-add-comment:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-add-comment:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-add-comment svg {
+  width: 16px;
+  height: 16px;
+}
+

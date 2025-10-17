@@ -62,6 +62,109 @@
           </svg>
           <h2>{{ currentConversationTitle }}</h2>
         </div>
+        
+        <!-- 角色选择器 -->
+        <div class="role-selector">
+          <button 
+            class="btn-role"
+            @click="showRoleSelector = !showRoleSelector"
+            :title="`当前角色：${currentRole.name}`"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span>{{ currentRole.name }}</span>
+            <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          
+          <!-- 角色下拉菜单 -->
+          <div v-if="showRoleSelector" class="role-dropdown" @click.stop>
+            <div class="role-dropdown-header">
+              <span>选择 AI 角色</span>
+              <button @click="showRoleSelector = false" class="btn-close-dropdown">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div class="role-dropdown-list">
+              <div 
+                v-for="role in availableRoles" 
+                :key="role.id"
+                class="role-dropdown-item"
+                :class="{ selected: currentRoleId === role.id }"
+                @click="switchRole(role.id)"
+              >
+                <div class="role-icon" :style="{ backgroundColor: role.color + '20', color: role.color }">
+                  <svg v-html="role.icon"></svg>
+                </div>
+                <div class="role-info">
+                  <div class="role-name">{{ role.name }}</div>
+                  <div class="role-description">{{ role.description }}</div>
+                </div>
+                <div v-if="currentRoleId === role.id" class="role-check">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 项目选择器（仅项目助手角色显示） -->
+        <div v-if="currentRole.enableProjects" class="project-selector">
+          <button 
+            class="btn-project-filter"
+            @click="showProjectSelector = !showProjectSelector"
+            title="选择项目范围"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+            <span>{{ selectedProjectIds.length === 0 ? '全部项目' : `${selectedProjectIds.length} 个项目` }}</span>
+          </button>
+          
+          <!-- 项目下拉菜单 -->
+          <div v-if="showProjectSelector" class="project-dropdown" @click.stop>
+            <div class="project-dropdown-header">
+              <span>选择项目范围</span>
+              <button @click="showProjectSelector = false" class="btn-close-dropdown">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div class="project-dropdown-actions">
+              <button class="btn-select-all" @click="selectAllProjects">全选</button>
+              <button class="btn-clear-all" @click="clearAllProjects">清空</button>
+            </div>
+            <div class="project-dropdown-list">
+              <div 
+                v-for="project in projectStore.projects" 
+                :key="project.id"
+                class="project-dropdown-item"
+                :class="{ selected: selectedProjectIds.includes(project.id) }"
+                @click="toggleProject(project.id)"
+              >
+                <div class="project-checkbox">
+                  <svg v-if="selectedProjectIds.includes(project.id)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <div class="project-color-indicator" :style="{ backgroundColor: project.color }"></div>
+                <span class="project-name">{{ project.name }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <button class="btn-clear" @click="handleClearHistory" title="清空当前对话">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"></polyline>
@@ -140,7 +243,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
@@ -163,6 +266,54 @@ const streamingMessageIndex = ref(-1)
 const isDataLoaded = ref(false)
 const sidebarCollapsed = ref(false)
 const deepseekClient = ref(null)
+
+// 角色系统
+const currentRoleId = ref('general')
+const showRoleSelector = ref(false)
+
+// 定义可用角色
+const availableRoles = [
+  {
+    id: 'general',
+    name: '通用助手',
+    description: '适合日常对话、问答、知识咨询',
+    color: '#8A9DFB',
+    icon: '<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>',
+    systemPrompt: '你是一个友好、专业的 AI 助手，擅长回答各种问题，提供有价值的建议和信息。',
+    enableTools: false,
+    enableProjects: false
+  },
+  {
+    id: 'project',
+    name: '项目助手',
+    description: '帮助管理任务、项目、制定计划',
+    color: '#4ECDC4',
+    icon: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>',
+    systemPrompt: '你是一个专业的项目管理助手，擅长帮助用户管理任务、制定计划、跟踪进度。你可以查询用户的任务和项目数据，并提供个性化的建议。',
+    enableTools: true,
+    enableProjects: true
+  },
+  // 可以在这里继续添加更多角色
+  // {
+  //   id: 'code',
+  //   name: '编程助手',
+  //   description: '专注于编程、代码审查、技术问题',
+  //   color: '#FF6B6B',
+  //   icon: '<polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline>',
+  //   systemPrompt: '你是一个专业的编程助手...',
+  //   enableTools: false,
+  //   enableProjects: false
+  // }
+]
+
+// 当前角色
+const currentRole = computed(() => {
+  return availableRoles.find(r => r.id === currentRoleId.value) || availableRoles[0]
+})
+
+// 项目选择器（仅项目助手使用）
+const selectedProjectIds = ref([])
+const showProjectSelector = ref(false)
 
 // 当前对话标题
 const currentConversationTitle = computed(() => {
@@ -293,6 +444,34 @@ async function sendToAI(isContinuation = false) {
   try {
     // 准备发送的消息列表
     let messagesToSend = messages.value.slice(0, -1)
+    
+    // 构建系统提示词
+    let systemContent = currentRole.value.systemPrompt || ''
+    
+    // 如果选择了项目，添加项目上下文信息
+    if (currentRole.value.enableProjects && selectedProjectIds.value.length > 0) {
+      const contextInfo = buildProjectContext()
+      if (contextInfo) {
+        systemContent += '\n\n' + contextInfo
+      }
+    }
+    
+    // 添加系统提示词（如果是第一条消息或者没有 system 消息）
+    const hasSystemMessage = messagesToSend.some(m => m.role === 'system')
+    if (!hasSystemMessage && systemContent) {
+      messagesToSend = [
+        { role: 'system', content: systemContent },
+        ...messagesToSend
+      ]
+    } else if (hasSystemMessage && systemContent) {
+      // 如果已有系统消息，更新它
+      messagesToSend = messagesToSend.map(msg => 
+        msg.role === 'system' 
+          ? { ...msg, content: systemContent }
+          : msg
+      )
+    }
+    
     const plainMessages = messagesToSend.map(msg => {
       const plainMsg = {
         role: msg.role,
@@ -335,7 +514,9 @@ async function sendToAI(isContinuation = false) {
           let result = executeToolFunction(
             toolCall.function.name, 
             args, 
-            { todoStore, projectStore }
+            { todoStore, projectStore },
+            null,
+            selectedProjectIds.value // 传递选中的项目ID列表
           )
           
           // 处理异步工具
@@ -364,7 +545,8 @@ async function sendToAI(isContinuation = false) {
                 result.args,
                 { todoStore, projectStore },
                 deepseekClient.value,
-                onProgress
+                onProgress,
+                selectedProjectIds.value // 传递选中的项目ID
               )
               
               // 移除进度消息
@@ -404,9 +586,11 @@ async function sendToAI(isContinuation = false) {
     }
     
     // 调用 DeepSeek API
+    // 根据当前角色决定是否启用工具
+    const tools = currentRole.value.enableTools ? availableTools : []
     await deepseekClient.value.chatCompletionsStream(
       plainMessages,
-      availableTools,
+      tools,
       onContent,
       onToolCalls
     )
@@ -691,9 +875,61 @@ watch([messages, conversations], () => {
   }, 1000)
 }, { deep: true })
 
+// 项目选择器相关方法
+function toggleProject(projectId) {
+  const index = selectedProjectIds.value.indexOf(projectId)
+  if (index > -1) {
+    selectedProjectIds.value.splice(index, 1)
+  } else {
+    selectedProjectIds.value.push(projectId)
+  }
+}
+
+function selectAllProjects() {
+  selectedProjectIds.value = projectStore.projects.map(p => p.id)
+}
+
+function clearAllProjects() {
+  selectedProjectIds.value = []
+}
+
+// 切换角色
+function switchRole(roleId) {
+  currentRoleId.value = roleId
+  showRoleSelector.value = false
+  
+  // 切换到非项目助手角色时，关闭项目选择器
+  const newRole = availableRoles.find(r => r.id === roleId)
+  if (newRole && !newRole.enableProjects) {
+    showProjectSelector.value = false
+    selectedProjectIds.value = []
+  }
+  
+  appStore.toast(`已切换到：${newRole.name}`)
+}
+
+// 点击外部关闭下拉菜单
+function handleClickOutside(event) {
+  const roleSelector = event.target.closest('.role-selector')
+  const projectSelector = event.target.closest('.project-selector')
+  
+  if (!roleSelector) {
+    showRoleSelector.value = false
+  }
+  if (!projectSelector) {
+    showProjectSelector.value = false
+  }
+}
+
 onMounted(async () => {
   await checkApiKey()
   await loadConversations()
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  saveConversations()
+  document.removeEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {

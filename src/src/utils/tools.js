@@ -106,13 +106,19 @@ export const availableTools = [
  * @param {object} args - 参数
  * @param {object} stores - { todoStore, projectStore }
  * @param {object} deepseekClient - DeepSeek 客户端（用于异步工具）
+ * @param {Array} selectedProjectIds - 选中的项目ID列表
  * @returns {any} 执行结果
  */
-export function executeToolFunction(functionName, args, stores, deepseekClient = null) {
+export function executeToolFunction(functionName, args, stores, deepseekClient = null, selectedProjectIds = []) {
   const { todoStore, projectStore } = stores
   
-  const todos = todoStore.todos || []
+  let todos = todoStore.todos || []
   const projects = projectStore.projects || []
+  
+  // 如果有选中的项目，只返回这些项目的任务
+  if (selectedProjectIds && selectedProjectIds.length > 0) {
+    todos = todos.filter(t => selectedProjectIds.includes(t.projectId))
+  }
   
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -138,7 +144,12 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         return todos.filter(t => t.projectId === targetProjectId)
       
       case 'getProjects':
-        return projects.map(p => {
+        // 如果有选中的项目，只返回这些项目
+        const filteredProjects = selectedProjectIds && selectedProjectIds.length > 0
+          ? projects.filter(p => selectedProjectIds.includes(p.id))
+          : projects
+        
+        return filteredProjects.map(p => {
           const projectTasks = todos.filter(t => t.projectId === p.id)
           const completed = projectTasks.filter(t => t.completed).length
           return {
