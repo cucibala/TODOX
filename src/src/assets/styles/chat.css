@@ -438,22 +438,245 @@
 
 .input-wrapper {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* 输入框左侧角色选择器 */
+.input-role-selector {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.btn-role-selector {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-color);
+  background: var(--bg-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-role-selector:hover {
+  border-color: currentColor;
+  background: var(--bg-secondary);
+}
+
+.btn-role-selector.is-unselected {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    border-color: var(--border-color);
+  }
+  50% {
+    border-color: var(--primary-color);
+  }
+}
+
+.btn-role-selector svg {
+  width: 22px;
+  height: 22px;
+}
+
+.input-role-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 320px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+}
+
+.input-role-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.input-role-dropdown-list {
+  padding: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.input-role-item {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+}
+
+.input-role-item:hover {
+  background: var(--bg-secondary);
+}
+
+.input-role-item.selected {
+  background: rgba(138, 157, 251, 0.1);
+}
+
+.role-icon-mini {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.role-icon-mini svg {
+  width: 18px;
+  height: 18px;
+}
+
+.role-info-mini {
+  flex: 1;
+  min-width: 0;
+}
+
+.role-name-mini {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.role-description-mini {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.role-check-mini {
+  width: 20px;
+  height: 20px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.role-check-mini svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* 项目列表（在角色选择器中） */
+.input-project-section {
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.input-project-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.input-project-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-project-action {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-project-action:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.input-project-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px 8px 8px;
+}
+
+.input-project-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+
+.input-project-item:hover {
+  background: rgba(138, 157, 251, 0.08);
+}
+
+.input-project-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.input-project-item:hover .input-project-checkbox {
+  border-color: var(--primary-color);
+}
+
+.input-project-checkbox svg {
+  width: 14px;
+  height: 14px;
+  color: var(--primary-color);
+}
+
+.input-project-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .input-wrapper textarea {
-  width: 100%;
+  flex: 1;
   min-height: 44px;
-  max-height: 120px;
+  max-height: 200px;
   padding: 12px 16px;
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 14px;
+  line-height: 1.5;
   font-family: inherit;
   resize: none;
+  overflow-y: auto;
   transition: border-color 0.2s ease;
   box-sizing: border-box;
 }
@@ -467,17 +690,13 @@
   color: var(--text-muted);
 }
 
-.input-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
 .btn-send {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 12px;
   border: none;
   border-radius: var(--radius-md);
   font-size: 13px;
@@ -486,7 +705,7 @@
   transition: all 0.2s ease;
   background: var(--primary-color);
   color: white;
-  min-width: 80px;
+  flex-shrink: 0;
 }
 
 .btn-send:hover:not(:disabled) {
@@ -500,8 +719,8 @@
 }
 
 .btn-send svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 /* 角色选择器 */
@@ -813,3 +1032,350 @@
 .btn-clear {
   flex-shrink: 0;
 }
+
+/* 新建对话对话框 */
+.dialog-new-conversation {
+  width: 600px;
+  max-width: 90vw;
+}
+
+.dialog-body {
+  padding: 24px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+/* 角色选择器 */
+.role-selector-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.role-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-card:hover {
+  border-color: var(--primary-color);
+  background: var(--bg-secondary);
+}
+
+.role-card.selected {
+  border-color: var(--primary-color);
+  background: rgba(138, 157, 251, 0.08);
+}
+
+.role-card-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.role-card-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.role-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.role-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.role-card-description {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.role-card-check {
+  width: 24px;
+  height: 24px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.role-card-check svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* 项目选择器 */
+.project-selector-dialog {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.project-selector-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.btn-action {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-action:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.project-list-dialog {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.project-item-dialog {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.project-item-dialog:hover {
+  background: var(--bg-secondary);
+}
+
+.project-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.project-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* 对话信息显示 */
+.conversation-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.info-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.info-badge-project {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* 项目查看器 */
+.project-viewer {
+  position: relative;
+}
+
+.btn-view-projects {
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+}
+
+.btn-view-projects:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.btn-view-projects svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.project-dropdown-readonly .project-dropdown-item-readonly {
+  cursor: default;
+}
+
+.project-dropdown-readonly .project-dropdown-item-readonly:hover {
+  background: transparent;
+}
+
+/* 对话框基础样式 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog-content {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dialog-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.btn-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-close:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.btn-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-cancel,
+.btn-confirm {
+  padding: 10px 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+}
+
+.btn-cancel:hover {
+  background: var(--bg-tertiary);
+}
+
+.btn-confirm {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-confirm:hover {
+  background: #7289e9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(138, 157, 251, 0.3);
+}
+
