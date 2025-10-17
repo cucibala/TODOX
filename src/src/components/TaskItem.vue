@@ -159,12 +159,24 @@
               {{ getWeightText(subtask.weight) }}
             </span>
             <div class="subtask-content">
-              <span 
-                class="subtask-text" 
-                :class="{ completed: subtask.completed }"
-              >
-                {{ subtask.text }}
-              </span>
+              <div class="subtask-text-line">
+                <span 
+                  class="subtask-text" 
+                  :class="{ completed: subtask.completed }"
+                >
+                  {{ subtask.text }}
+                </span>
+                <!-- 子任务输入值（直接跟在文字后面） -->
+                <input
+                  v-if="subtask.requiresInput"
+                  v-model="subtask.inputValue"
+                  @blur="handleSubtaskInputChange(subtask.id)"
+                  type="text"
+                  placeholder="输入结果..."
+                  class="subtask-input-inline"
+                  :disabled="subtask.completed"
+                />
+              </div>
               <div v-if="subtask.createdAt" class="subtask-time-info">
                 <span v-if="subtask.completed && subtask.completedAt" class="subtask-time">
                   完成于 {{ formatDate(subtask.completedAt) }}
@@ -178,25 +190,6 @@
                 >
                   耗时 {{ calculateTaskDuration(subtask.createdAt, subtask.completedAt) }}
                 </span>
-              </div>
-              
-              <!-- 子任务输入值（需要输入时显示） -->
-              <div v-if="subtask.requiresInput" class="subtask-input-wrapper">
-                <div class="subtask-input-label">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                  <span>{{ subtask.inputPrompt || '请输入结果' }}</span>
-                </div>
-                <input
-                  v-model="subtask.inputValue"
-                  @blur="handleSubtaskInputChange(subtask.id)"
-                  type="text"
-                  :placeholder="subtask.inputPlaceholder || '输入...'"
-                  class="subtask-input"
-                  :disabled="subtask.completed"
-                />
               </div>
             </div>
             <button 

@@ -100,6 +100,22 @@
           </div>
         </div>
         
+        <!-- 需要输入值选项 -->
+        <div class="subtask-form-group">
+          <label class="subtask-checkbox-label">
+            <input type="checkbox" v-model="requiresInput" class="subtask-checkbox-input" />
+            <span class="checkbox-custom"></span>
+            <div class="checkbox-label-content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              <span>需要输入值才能完成</span>
+              <span class="checkbox-hint">如：记录体重、测量数据等。完成时必须输入结果</span>
+            </div>
+          </label>
+        </div>
+        
         <div class="dialog-footer">
           <button type="button" class="dialog-btn dialog-btn-cancel" @click="handleClose">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -134,12 +150,14 @@ const { currentSubtaskTaskId } = storeToRefs(todoStore)
 
 const subtaskText = ref('')
 const subtaskWeight = ref('3')
+const requiresInput = ref(false)
 const inputRef = ref(null)
 
 watch(showSubtaskDialog, (show) => {
   if (show) {
     subtaskText.value = ''
     subtaskWeight.value = '3'
+    requiresInput.value = false
     setTimeout(() => {
       inputRef.value?.focus()
     }, 100)
@@ -161,7 +179,8 @@ async function handleConfirm() {
     await todoStore.addSubtask(
       currentSubtaskTaskId.value,
       subtaskText.value,
-      parseInt(subtaskWeight.value)
+      parseInt(subtaskWeight.value),
+      requiresInput.value
     )
   }
   

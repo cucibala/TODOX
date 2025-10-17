@@ -161,11 +161,11 @@ export async function aiBreakdownTask(taskText, apiKey) {
   const content = await client.chatCompletions([
     {
       role: 'system',
-      content: '你是一个专业的任务管理助手，擅长将复杂任务拆解为可执行的子任务。对于需要记录结果的子任务（如测量、检查、记录数据等），请标记为需要输入。请以 JSON 数组格式返回子任务列表。'
+      content: '你是一个专业的任务管理助手，擅长将复杂任务拆解为可执行的子任务。对于需要记录结果的子任务（如测量、检查、记录数据等），请标记为需要输入，用户完成时必须输入结果。请以 JSON 数组格式返回子任务列表。'
     },
     {
       role: 'user',
-      content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 对于需要记录结果的子任务（如测量体重、检查数据、记录进度等），设置 requiresInput: true，并提供 inputPrompt 和 inputPlaceholder\n5. 只返回 JSON 数组，不要其他解释\n\n返回格式：\n[\n  {"text":"子任务1","weight":3},\n  {"text":"检查体重","weight":5,"requiresInput":true,"inputPrompt":"请输入体重（kg）","inputPlaceholder":"如: 65.5"}\n]`
+      content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 对于需要记录结果的子任务（如测量体重、检查数据、记录进度等），设置 requiresInput: true\n5. 只返回 JSON 数组，不要其他解释\n\n返回格式：\n[\n  {"text":"子任务1","weight":3},\n  {"text":"检查体重","weight":5,"requiresInput":true}\n]`
     }
   ], { maxTokens: 800 })
   
@@ -192,8 +192,6 @@ export async function aiBreakdownTask(taskText, apiKey) {
     weight: st.weight || 3,
     completed: false,
     requiresInput: st.requiresInput || false,
-    inputPrompt: st.inputPrompt || '',
-    inputPlaceholder: st.inputPlaceholder || '',
     inputValue: '',
     id: Date.now() + Math.random()
   }))

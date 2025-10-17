@@ -230,9 +230,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
         {
           "text": "子任务描述（要具体可执行）",
           "weight": 1-5,
-          "requiresInput": false,
-          "inputPrompt": "如果需要记录结果，填写提示文字，如：请输入体重（kg）",
-          "inputPlaceholder": "如果需要记录结果，填写占位符，如：65.5"
+          "requiresInput": false
         }
       ]
     }
@@ -249,7 +247,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
 2. **每日任务的子任务要非常具体**，例如：
    - ✅ 好的：晨跑30分钟（6:30-7:00）、喝水2000ml、晚餐控制在500卡以内
    - ❌ 不好的：运动、注意饮食、保持健康
-   - 对于需要记录结果的子任务（如：测量体重、记录卡路里、检查数据等），设置 requiresInput: true，并提供 inputPrompt 和 inputPlaceholder
+   - 对于需要记录结果的子任务（如：测量体重、记录卡路里、检查数据等），设置 requiresInput: true。用户完成这类子任务时必须输入结果
    
 3. **如果是阶段性计划（没有明确每天），可以按阶段/模块划分**
    - 任务数量：5-15个
@@ -277,7 +275,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
       "dueDate": "${todayStr}",
       "subtasks": [
         {"text": "晨跑30分钟（6:30-7:00）", "weight": 4},
-        {"text": "记录早晨体重", "weight": 5, "requiresInput": true, "inputPrompt": "请输入今日体重（kg）", "inputPlaceholder": "65.5"},
+        {"text": "记录早晨体重", "weight": 5, "requiresInput": true},
         {"text": "喝水2000ml（分8次）", "weight": 3},
         {"text": "早餐：燕麦+鸡蛋（350卡）", "weight": 3},
         {"text": "午餐：鸡胸肉+蔬菜（500卡）", "weight": 3},
@@ -288,14 +286,11 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     {
       "text": "第2天 - 保持节奏",
       "priority": "medium",
-      "dueDate": "${getDateStr(1)}",
-      "subtasks": [...]
-    },
-    {
-      "text": "第3天 - 强化训练",
-      "priority": "medium",
-      "dueDate": "${getDateStr(2)}",
-      "subtasks": [...]
+      "dueDate": "2025-10-18",
+      "subtasks": [
+        {"text": "继续晨跑30分钟", "weight": 4},
+        {"text": "记录体重变化", "weight": 5, "requiresInput": true}
+      ]
     }
   ]
 }
@@ -398,8 +393,6 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
         completed: false,
         weight: st.weight || 3,
         requiresInput: st.requiresInput || false,
-        inputPrompt: st.inputPrompt || '',
-        inputPlaceholder: st.inputPlaceholder || '',
         inputValue: ''
       })),
       progressRecords: []

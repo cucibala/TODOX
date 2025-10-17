@@ -264,7 +264,7 @@ export const useTodoStore = defineStore('todo', () => {
   }
   
   // 添加子任务
-  async function addSubtask(taskId, text, weight = 3) {
+  async function addSubtask(taskId, text, weight = 3, requiresInput = false) {
     const task = todos.value.find(t => t.id === taskId)
     if (task && text.trim()) {
       if (!task.subtasks) {
@@ -276,6 +276,8 @@ export const useTodoStore = defineStore('todo', () => {
         text: text.trim(),
         weight,
         completed: false,
+        requiresInput,
+        inputValue: '',
         createdAt: new Date().toISOString()
       })
       

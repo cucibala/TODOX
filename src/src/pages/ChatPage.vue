@@ -624,25 +624,43 @@ async function sendToAI(isContinuation = false) {
               })
               scrollToBottom()
               
-              // 进度更新回调
-              const onProgress = (status) => {
+              // 计时器：记录等待秒数
+              let elapsedSeconds = 0
+              let currentStatus = '🚀 开始创建项目...'
+              const startTime = Date.now()
+              const timerInterval = setInterval(() => {
+                elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+                // 实时更新进度消息
                 if (messages.value[progressMessageIndex]) {
-                  messages.value[progressMessageIndex].content = status
+                  messages.value[progressMessageIndex].content = `${currentStatus}\n⏱️ 已等待 ${elapsedSeconds} 秒`
+                  scrollToBottom()
+                }
+              }, 1000)
+              
+              // 进度更新回调（带计时显示）
+              const onProgress = (status) => {
+                currentStatus = status
+                if (messages.value[progressMessageIndex]) {
+                  messages.value[progressMessageIndex].content = `${status}\n⏱️ 已等待 ${elapsedSeconds} 秒`
                   scrollToBottom()
                 }
               }
               
-              // 执行创建项目
-              result = await executeCreateProjectWithTasks(
-                result.args,
-                { todoStore, projectStore },
-                deepseekClient.value,
-                onProgress,
-                selectedProjectIds.value // 传递选中的项目ID
-              )
-              
-              // 移除进度消息
-              messages.value.splice(progressMessageIndex, 1)
+              try {
+                // 执行创建项目
+                result = await executeCreateProjectWithTasks(
+                  result.args,
+                  { todoStore, projectStore },
+                  deepseekClient.value,
+                  onProgress,
+                  selectedProjectIds.value // 传递选中的项目ID
+                )
+              } finally {
+                // 清除计时器
+                clearInterval(timerInterval)
+                // 移除进度消息
+                messages.value.splice(progressMessageIndex, 1)
+              }
             }
           }
           
