@@ -144,7 +144,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
-import { availableTools, executeToolFunction } from '../utils/tools'
+import { availableTools, executeToolFunction, executeCreateProjectWithTasks } from '../utils/tools'
 import { DeepSeekClient } from '../utils/deepseek'
 
 const appStore = useAppStore()
@@ -315,6 +315,7 @@ async function sendToAI(isContinuation = false) {
     
     // 内容回调
     const onContent = (content) => {
+      console.log(content, "->>>>>");
       if (streamingMessageIndex.value >= 0) {
         messages.value[streamingMessageIndex.value].content += content
         scrollToBottom()
@@ -323,6 +324,7 @@ async function sendToAI(isContinuation = false) {
     
     // 工具调用回调
     const onToolCalls = async (toolCalls) => {
+      console.log(toolCalls, "->>>>>");
       // 更新当前 assistant 消息，添加 tool_calls（保留可能已有的 content）
       if (streamingMessageIndex.value >= 0) {
         messages.value[streamingMessageIndex.value].tool_calls = toolCalls
@@ -332,11 +334,22 @@ async function sendToAI(isContinuation = false) {
       for (const toolCall of toolCalls) {
         try {
           const args = JSON.parse(toolCall.function.arguments)
-          const result = executeToolFunction(
+          let result = executeToolFunction(
             toolCall.function.name, 
             args, 
             { todoStore, projectStore }
           )
+          
+          // 处理异步工具
+          if (result && result._async) {
+            if (result.functionName === 'createProjectWithTasks') {
+              result = await executeCreateProjectWithTasks(
+                result.args,
+                { todoStore, projectStore },
+                deepseekClient.value
+              )
+            }
+          }
           
           messages.value.push({
             role: 'tool',
@@ -346,6 +359,7 @@ async function sendToAI(isContinuation = false) {
             timestamp: Date.now()
           })
         } catch (error) {
+          console.error('工具执行失败:', error)
           messages.value.push({
             role: 'tool',
             content: JSON.stringify({ error: error.message }),
