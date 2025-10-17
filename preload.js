@@ -27,12 +27,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDeepSeekKey: () => ipcRenderer.invoke('get-deepseek-key'),
   hasDeepSeekKey: () => ipcRenderer.invoke('has-deepseek-key'),
   deleteDeepSeekKey: () => ipcRenderer.invoke('delete-deepseek-key'),
-  aiBreakdownTask: (taskText) => ipcRenderer.invoke('ai-breakdown-task', taskText),
-  generateDailySummary: (tasks) => ipcRenderer.invoke('generate-daily-summary', tasks),
-  
-  // 工具函数执行
-  executeToolFunction: (functionName, args) => ipcRenderer.invoke('execute-tool-function', functionName, args),
-  getAvailableTools: () => ipcRenderer.invoke('get-available-tools'),
   
   // 会话管理
   loadConversations: () => ipcRenderer.invoke('load-conversations'),

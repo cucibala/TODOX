@@ -104,17 +104,6 @@
             </div>
             <div class="message-content">
               <div class="message-text" v-if="message.content">{{ message.content }}</div>
-              <div class="tool-calls" v-if="message.tool_calls">
-                <div class="tool-call-badge">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-                    <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-                    <path d="M2 2l7.586 7.586"></path>
-                    <circle cx="11" cy="11" r="2"></circle>
-                  </svg>
-                  调用了 {{ message.tool_calls.length }} 个工具
-                </div>
-              </div>
               <div class="message-time">{{ formatTime(message.timestamp) }}</div>
             </div>
           </div>
@@ -153,8 +142,14 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '../stores/app'
+import { useTodoStore } from '../stores/todo'
+import { useProjectStore } from '../stores/project'
+import { availableTools, executeToolFunction } from '../utils/tools'
+import { DeepSeekClient } from '../utils/deepseek'
 
 const appStore = useAppStore()
+const todoStore = useTodoStore()
+const projectStore = useProjectStore()
 const electronAPI = window.electronAPI
 
 const conversations = ref([])
@@ -167,8 +162,7 @@ const inputTextarea = ref(null)
 const streamingMessageIndex = ref(-1)
 const isDataLoaded = ref(false)
 const sidebarCollapsed = ref(false)
-const apiKey = ref('')
-const availableTools = ref([])
+const deepseekClient = ref(null)
 
 // 当前对话标题
 const currentConversationTitle = computed(() => {
@@ -185,13 +179,9 @@ async function checkApiKey() {
     appStore.currentPage = 'settings'
     return false
   }
-  apiKey.value = result.key
   
-  // 获取可用的工具列表
-  const toolsResult = await electronAPI.getAvailableTools()
-  if (toolsResult.success) {
-    availableTools.value = toolsResult.tools
-  }
+  // 创建 DeepSeek 客户端
+  deepseekClient.value = new DeepSeekClient(result.key)
   
   return true
 }
@@ -324,120 +314,35 @@ async function sendToAI(isContinuation = false) {
       return plainMsg
     })
     
-    // 打印发送给 API 的消息序列
-    console.log('📤 发送给 DeepSeek API 的消息序列:')
-    plainMessages.forEach((msg, index) => {
-      console.log(`  [${index}] ${msg.role}:`, {
-        content: msg.content?.substring(0, 50) + (msg.content?.length > 50 ? '...' : ''),
-        tool_calls: msg.tool_calls ? `${msg.tool_calls.length} 个调用` : undefined,
-        tool_call_id: msg.tool_call_id,
-        name: msg.name
-      })
-    })
-    
-    // 调用 DeepSeek API
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey.value}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: plainMessages,
-        tools: availableTools.value,
-        temperature: 0.7,
-        max_tokens: 2000,
-        stream: true
-      })
-    })
-    
-    if (!response.ok) {
-      const errorData = await response.json()
-      const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
-      console.error('DeepSeek API 请求失败:', errorMsg, errorData)
-      throw new Error(errorMsg)
-    }
-    
-    // 处理流式响应
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let toolCallsBuffer = []
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      
-      if (done) break
-      
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      
-      for (const line of lines) {
-        const trimmedLine = line.trim()
-        if (!trimmedLine || trimmedLine === 'data: [DONE]') continue
-        
-        if (trimmedLine.startsWith('data: ')) {
-          try {
-            const jsonStr = trimmedLine.slice(6)
-            const data = JSON.parse(jsonStr)
-            const delta = data.choices[0]?.delta
-            
-            // 处理普通内容
-            if (delta?.content && streamingMessageIndex.value >= 0) {
-              messages.value[streamingMessageIndex.value].content += delta.content
-              scrollToBottom()
-            }
-            
-            // 处理工具调用
-            if (delta?.tool_calls) {
-              for (const toolCall of delta.tool_calls) {
-                if (toolCall.index !== undefined) {
-                  if (!toolCallsBuffer[toolCall.index]) {
-                    toolCallsBuffer[toolCall.index] = {
-                      id: '',
-                      type: 'function',
-                      function: {
-                        name: '',
-                        arguments: ''
-                      }
-                    }
-                  }
-                  
-                  const currentTool = toolCallsBuffer[toolCall.index]
-                  if (toolCall.id) currentTool.id = toolCall.id
-                  if (toolCall.function?.name) currentTool.function.name += toolCall.function.name
-                  if (toolCall.function?.arguments) currentTool.function.arguments += toolCall.function.arguments
-                }
-              }
-            }
-          } catch (e) {
-            console.error('解析流式数据失败:', e)
-          }
-        }
+    // 内容回调
+    const onContent = (content) => {
+      if (streamingMessageIndex.value >= 0) {
+        messages.value[streamingMessageIndex.value].content += content
+        scrollToBottom()
       }
     }
     
-    // 如果有工具调用，执行并继续
-    if (toolCallsBuffer.length > 0) {
-      console.log('🔧 工具调用:', toolCallsBuffer)
-      
+    // 工具调用回调
+    const onToolCalls = async (toolCalls) => {
       // 更新当前消息为工具调用
       if (streamingMessageIndex.value >= 0) {
-        messages.value[streamingMessageIndex.value].tool_calls = toolCallsBuffer
+        messages.value[streamingMessageIndex.value].tool_calls = toolCalls
         messages.value[streamingMessageIndex.value].content = ''
       }
       
-      // 执行所有工具调用
-      for (const toolCall of toolCallsBuffer) {
+      // 执行所有工具调用（使用前端 store 数据）
+      for (const toolCall of toolCalls) {
         try {
           const args = JSON.parse(toolCall.function.arguments)
-          const result = await electronAPI.executeToolFunction(toolCall.function.name, args)
+          const result = executeToolFunction(
+            toolCall.function.name, 
+            args, 
+            { todoStore, projectStore }
+          )
           
           messages.value.push({
             role: 'tool',
-            content: result.success ? JSON.stringify(result.result, null, 2) : JSON.stringify({ error: result.error }),
+            content: JSON.stringify(result, null, 2),
             name: toolCall.function.name,
             tool_call_id: toolCall.id,
             timestamp: Date.now()
@@ -463,8 +368,18 @@ async function sendToAI(isContinuation = false) {
       
       // 继续调用 API
       await sendToAI(true)
-    } else {
-      // 完成
+    }
+    
+    // 调用 DeepSeek API
+    await deepseekClient.value.chatCompletionsStream(
+      plainMessages,
+      availableTools,
+      onContent,
+      onToolCalls
+    )
+    
+    // 如果没有工具调用，完成
+    if (isLoading.value) {
       isLoading.value = false
       streamingMessageIndex.value = -1
       scrollToBottom()

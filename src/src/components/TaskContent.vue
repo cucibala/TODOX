@@ -237,6 +237,7 @@ import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
 import TaskItem from './TaskItem.vue'
 import ImagePreview from './ImagePreview.vue'
+import { generateDailySummary } from '../utils/deepseek'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
@@ -312,10 +313,17 @@ async function handleGenerateSummary() {
       return
     }
 
+    // 获取 API 密钥
+    const keyResult = await window.electronAPI.getDeepSeekKey()
+    if (!keyResult.success || !keyResult.key) {
+      appStore.toast('请先在设置中配置 DeepSeek API 密钥')
+      return
+    }
+
     isGeneratingSummary.value = true
     appStore.toast('正在生成总结，请稍候...')
     
-    // 转换为纯 JavaScript 对象，避免传递响应式对象
+    // 转换为纯 JavaScript 对象
     const plainTasks = todayTasks.map(task => ({
       id: task.id,
       text: task.text,
@@ -323,17 +331,14 @@ async function handleGenerateSummary() {
       priority: task.priority,
       createdAt: task.createdAt,
       completedAt: task.completedAt || null,
-      dueDate: task.dueDate || null
+      dueDate: task.dueDate || null,
+      subtasks: task.subtasks || []
     }))
     
-    const result = await electronAPI.generateDailySummary(plainTasks)
-    
-    if (result.success) {
-      dailySummary.value = result.summary
-      appStore.toast('总结生成成功')
-    } else {
-      appStore.toast('生成总结失败：' + (result.error || '未知错误'))
-    }
+    // 使用工具类生成总结
+    const summary = await generateDailySummary(plainTasks, keyResult.key)
+    dailySummary.value = summary
+    appStore.toast('总结生成成功')
   } catch (error) {
     console.error('生成总结失败:', error)
     appStore.toast('生成总结失败：' + error.message)

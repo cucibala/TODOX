@@ -369,6 +369,7 @@ import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
 import { createProgressCircleData } from '../utils/progress'
+import { aiBreakdownTask } from '../utils/deepseek'
 
 const props = defineProps({
   task: {
@@ -552,8 +553,9 @@ function handleAddSubtask() {
 async function handleAIBreakdown() {
   try {
     // 检查是否有 API 密钥
-    const hasKeyResult = await electronAPI.hasDeepSeekKey()
-    if (!hasKeyResult.hasKey) {
+    // 获取 API 密钥
+    const keyResult = await electronAPI.getDeepSeekKey()
+    if (!keyResult.success || !keyResult.key) {
       appStore.toast('请先在设置中配置 DeepSeek API 密钥')
       return
     }
@@ -561,29 +563,28 @@ async function handleAIBreakdown() {
     isAIBreakingDown.value = true
     appStore.showAILoadingDialog = true
     
-    // 调用 AI 拆解
-    const result = await electronAPI.aiBreakdownTask(props.task.text)
-    
-    appStore.showAILoadingDialog = false
-    
-    if (!result.success) {
-      appStore.toast('AI 拆解失败：' + (result.error || '未知错误'))
-      return
-    }
-
-    if (!result.subtasks || result.subtasks.length === 0) {
-      appStore.toast('AI 未能生成有效的子任务建议')
-      return
-    }
-
-    // 通过事件总线或全局状态显示对话框
-    // 这里我们需要访问 SubtaskSuggestionDialog，我们通过自定义事件来实现
-    window.dispatchEvent(new CustomEvent('show-subtask-suggestion', {
-      detail: {
-        taskId: props.task.id,
-        subtasks: result.subtasks
+    try {
+      // 调用 AI 拆解（使用工具类）
+      const subtasks = await aiBreakdownTask(props.task.text, keyResult.key)
+      
+      appStore.showAILoadingDialog = false
+      
+      if (!subtasks || subtasks.length === 0) {
+        appStore.toast('AI 未能生成有效的子任务建议')
+        return
       }
-    }))
+
+      // 通过事件总线或全局状态显示对话框
+      window.dispatchEvent(new CustomEvent('show-subtask-suggestion', {
+        detail: {
+          taskId: props.task.id,
+          subtasks: subtasks
+        }
+      }))
+    } catch (error) {
+      appStore.showAILoadingDialog = false
+      appStore.toast('AI 拆解失败：' + error.message)
+    }
 
   } catch (error) {
     console.error('AI 拆解失败:', error)
