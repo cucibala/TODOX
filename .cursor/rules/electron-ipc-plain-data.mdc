@@ -1,0 +1,12 @@
+---
+alwaysApply: true
+description: 通过 IPC 传递的数据必须是可序列化的普通对象，禁止传递 Proxy/函数/循环引用
+---
+# Electron IPC 传参规则
+
+- 只传递可被结构化克隆的普通数据（Object/Array/number/string/boolean/null）。
+- 禁止传递 Vue `ref/reactive` 产生的 Proxy、函数、类实例、含循环引用对象。
+- 在发送前将响应式对象转换为普通对象：
+  - 使用 `map`/解构创建新对象，或 `JSON.parse(JSON.stringify(x))`。
+- 典型场景：保存 todos、projects、chat 历史、调用外部 API。
+- 参考示例：见 [src/src/pages/ChatPage.vue](mdc:src/src/pages/ChatPage.vue)。
