@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectImage: () => ipcRenderer.invoke('select-image'),
   readImage: (fileName) => ipcRenderer.invoke('read-image', fileName),
   deleteImage: (fileName) => ipcRenderer.invoke('delete-image', fileName),
+  saveImageFromClipboard: (base64Data) => ipcRenderer.invoke('save-image-from-clipboard', base64Data),
   
   // 密码管理
   setPassword: (password) => ipcRenderer.invoke('set-password', password),

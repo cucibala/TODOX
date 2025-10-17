@@ -602,6 +602,36 @@ ipcMain.handle('delete-image', async (event, fileName) => {
   }
 });
 
+// IPC 通信处理 - 保存粘贴的图片（base64）
+ipcMain.handle('save-image-from-clipboard', async (event, base64Data) => {
+  try {
+    // 解析 base64 数据
+    const matches = base64Data.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+    if (!matches) {
+      return { success: false, error: '无效的图片数据格式' };
+    }
+
+    const ext = matches[1];
+    const base64Content = matches[2];
+    const fileName = `${Date.now()}.${ext}`;
+    const imagesPath = getImagesPath();
+    const destPath = path.join(imagesPath, fileName);
+
+    // 将 base64 转换为 buffer 并保存
+    const buffer = Buffer.from(base64Content, 'base64');
+    fs.writeFileSync(destPath, buffer);
+
+    return { 
+      success: true, 
+      imagePath: destPath,
+      fileName: fileName
+    };
+  } catch (error) {
+    console.error('保存粘贴图片失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 设置密码
 ipcMain.handle('set-password', async (event, password) => {
   try {

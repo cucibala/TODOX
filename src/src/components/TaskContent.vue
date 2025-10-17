@@ -153,12 +153,14 @@
           <textarea 
             v-model="newTaskText" 
             class="task-input task-textarea" 
-            placeholder="添加新任务..." 
+            placeholder="添加新任务（支持粘贴图片）..." 
             autocomplete="off"
             required
             rows="1"
             @input="adjustTextareaHeight"
             @keydown.ctrl.enter="handleAddTask"
+            @paste="handlePaste"
+            ref="taskInputRef"
           ></textarea>
           <input 
             v-model="newTaskDueDate" 
@@ -251,6 +253,7 @@ const newTaskDueDate = ref('')
 const newTaskPriority = ref('medium')
 const dailySummary = ref('')
 const isGeneratingSummary = ref(false)
+const taskInputRef = ref(null)
 
 const electronAPI = window.electronAPI
 
@@ -284,6 +287,39 @@ async function handleAddTask() {
 
 async function handleSelectImage() {
   await todoStore.selectImage()
+}
+
+// 处理粘贴事件
+async function handlePaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault()
+      
+      const file = item.getAsFile()
+      if (!file) continue
+
+      // 读取图片为 base64
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const base64Data = e.target.result
+        
+        // 保存图片到应用数据目录
+        const result = await electronAPI.saveImageFromClipboard(base64Data)
+        if (result.success) {
+          // 添加到当前图片列表
+          todoStore.currentImages.push(result.fileName)
+          appStore.toast('图片已粘贴')
+        } else {
+          appStore.toast('粘贴图片失败：' + result.error)
+        }
+      }
+      reader.readAsDataURL(file)
+      break // 只处理第一张图片
+    }
+  }
 }
 
 // 生成每日任务总结

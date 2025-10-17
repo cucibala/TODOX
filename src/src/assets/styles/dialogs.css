@@ -622,3 +622,107 @@
   box-shadow: none;
 }
 
+/* 子任务输入包装器 */
+.subtask-input-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.subtask-input-wrapper .subtask-dialog-input {
+  flex: 1;
+}
+
+.btn-add-subtask-image {
+  padding: 12px;
+  background: var(--bg-hover);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-add-subtask-image:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-add-subtask-image:hover svg {
+  color: white;
+}
+
+.btn-add-subtask-image svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+/* 子任务图片预览 */
+.subtask-images-preview {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.subtask-image-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 2px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.subtask-image-item:hover {
+  border-color: var(--primary-color);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.subtask-image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.btn-remove-subtask-image {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.subtask-image-item:hover .btn-remove-subtask-image {
+  opacity: 1;
+}
+
+.btn-remove-subtask-image:hover {
+  background: var(--danger-color);
+  transform: scale(1.1);
+}
+
+.btn-remove-subtask-image svg {
+  width: 14px;
+  height: 14px;
+  color: white;
+}
+

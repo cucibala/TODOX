@@ -191,6 +191,18 @@
                   耗时 {{ calculateTaskDuration(subtask.createdAt, subtask.completedAt) }}
                 </span>
               </div>
+              <!-- 子任务图片 -->
+              <div v-if="subtask.images && subtask.images.length > 0" class="subtask-images-container">
+                <img
+                  v-for="(image, imgIndex) in subtask.images"
+                  :key="imgIndex"
+                  v-show="subtaskImageCache[image]"
+                  :src="subtaskImageCache[image]"
+                  class="subtask-image"
+                  @click="appStore.viewImage(subtaskImageCache[image])"
+                  alt="子任务图片"
+                />
+              </div>
             </div>
             <button 
               class="btn-delete-subtask" 
@@ -282,11 +294,12 @@
         <div class="add-progress-input-wrapper">
           <textarea
             v-model="progressInput"
-            placeholder="添加进度描述..."
+            placeholder="添加进度描述（支持粘贴图片）..."
             class="add-progress-input add-progress-textarea"
             rows="1"
             @input="adjustProgressTextareaHeight"
             @keydown.ctrl.enter="handleAddProgress"
+            @paste="handleProgressPaste"
             ref="progressTextareaRef"
           ></textarea>
           <button 
@@ -397,6 +410,7 @@ const electronAPI = window.electronAPI
 // 图片缓存 - 存储图片的 base64 数据
 const imageCache = ref({})
 const progressImageCache = ref({})
+const subtaskImageCache = ref({})
 
 // 编辑状态
 const isEditing = ref(false)
@@ -465,6 +479,18 @@ async function loadProgressImage(fileName) {
   }
 }
 
+// 加载子任务图片
+async function loadSubtaskImage(fileName) {
+  if (subtaskImageCache.value[fileName]) {
+    return // 已加载，跳过
+  }
+  
+  const result = await electronAPI.readImage(fileName)
+  if (result.success) {
+    subtaskImageCache.value[fileName] = result.data
+  }
+}
+
 // 加载所有图片
 onMounted(async () => {
   // 加载任务图片
@@ -480,6 +506,16 @@ onMounted(async () => {
     if (allProgressImages.length > 0) {
       await Promise.all(
         allProgressImages.map(image => loadProgressImage(image))
+      )
+    }
+  }
+  
+  // 加载子任务图片
+  if (props.task.subtasks && props.task.subtasks.length > 0) {
+    const allSubtaskImages = props.task.subtasks.flatMap(st => st.images || [])
+    if (allSubtaskImages.length > 0) {
+      await Promise.all(
+        allSubtaskImages.map(image => loadSubtaskImage(image))
       )
     }
   }
@@ -696,6 +732,48 @@ async function handleSelectProgressImage() {
     if (imageResult.success) {
       progressImagePreviews.value[result.fileName] = imageResult.data
       appStore.toast('图片已添加')
+    }
+  }
+}
+
+// 处理进度输入框的粘贴事件
+async function handleProgressPaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault()
+      
+      const file = item.getAsFile()
+      if (!file) continue
+
+      // 读取图片为 base64
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const base64Data = e.target.result
+        
+        // 保存图片到应用数据目录
+        const result = await electronAPI.saveImageFromClipboard(base64Data)
+        if (result.success) {
+          // 确保响应式对象存在
+          if (!todoStore.currentProgressImages[props.task.id]) {
+            todoStore.currentProgressImages[props.task.id] = []
+          }
+          
+          // 添加到当前进度图片列表
+          todoStore.currentProgressImages[props.task.id].push(result.fileName)
+          
+          // 添加预览数据
+          progressImagePreviews.value[result.fileName] = base64Data
+          
+          appStore.toast('图片已粘贴')
+        } else {
+          appStore.toast('粘贴图片失败：' + result.error)
+        }
+      }
+      reader.readAsDataURL(file)
+      break // 只处理第一张图片
     }
   }
 }

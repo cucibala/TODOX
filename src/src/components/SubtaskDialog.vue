@@ -31,16 +31,52 @@
             </svg>
             子任务内容
           </label>
-          <input 
-            v-model="subtaskText" 
-            type="text" 
-            class="subtask-dialog-input" 
-            placeholder="例如：编写文档、测试功能..." 
-            ref="inputRef"
-            maxlength="100"
-          />
+          <div class="subtask-input-wrapper">
+            <input 
+              v-model="subtaskText" 
+              type="text" 
+              class="subtask-dialog-input" 
+              placeholder="例如：编写文档、测试功能（支持粘贴图片）..." 
+              ref="inputRef"
+              maxlength="100"
+              @paste="handlePaste"
+            />
+            <button 
+              type="button"
+              class="btn-add-subtask-image" 
+              @click="handleSelectImage"
+              title="添加图片"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </button>
+          </div>
           <div class="input-hint">
             <span class="char-count">{{ subtaskText.length }}/100</span>
+          </div>
+          <!-- 图片预览 -->
+          <div v-if="subtaskImages.length > 0" class="subtask-images-preview">
+            <div 
+              v-for="(imageData, index) in subtaskImages" 
+              :key="index" 
+              class="subtask-image-item"
+            >
+              <img :src="imageData.base64" alt="预览" />
+              <button 
+                type="button"
+                class="btn-remove-subtask-image" 
+                @click="handleRemoveImage(index)"
+                title="删除图片"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
         
@@ -152,12 +188,16 @@ const subtaskText = ref('')
 const subtaskWeight = ref('3')
 const requiresInput = ref(false)
 const inputRef = ref(null)
+const subtaskImages = ref([])
+
+const electronAPI = window.electronAPI
 
 watch(showSubtaskDialog, (show) => {
   if (show) {
     subtaskText.value = ''
     subtaskWeight.value = '3'
     requiresInput.value = false
+    subtaskImages.value = []
     setTimeout(() => {
       inputRef.value?.focus()
     }, 100)
@@ -167,6 +207,7 @@ watch(showSubtaskDialog, (show) => {
 function handleClose() {
   appStore.showSubtaskDialog = false
   todoStore.currentSubtaskTaskId = null
+  subtaskImages.value = []
 }
 
 async function handleConfirm() {
@@ -176,15 +217,80 @@ async function handleConfirm() {
   }
   
   if (currentSubtaskTaskId.value) {
+    // 提取图片文件名
+    const imageFileNames = subtaskImages.value.map(img => img.fileName)
+    
     await todoStore.addSubtask(
       currentSubtaskTaskId.value,
       subtaskText.value,
       parseInt(subtaskWeight.value),
-      requiresInput.value
+      requiresInput.value,
+      imageFileNames
     )
   }
   
   handleClose()
+}
+
+// 选择图片
+async function handleSelectImage() {
+  const result = await electronAPI.selectImage()
+  if (result.success && result.fileName) {
+    // 读取图片为 base64 用于预览
+    const imageResult = await electronAPI.readImage(result.fileName)
+    if (imageResult.success) {
+      subtaskImages.value.push({
+        fileName: result.fileName,
+        base64: imageResult.data
+      })
+      appStore.toast('图片已添加')
+    }
+  }
+}
+
+// 处理粘贴事件
+async function handlePaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault()
+      
+      const file = item.getAsFile()
+      if (!file) continue
+
+      // 读取图片为 base64
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const base64Data = e.target.result
+        
+        // 保存图片到应用数据目录
+        const result = await electronAPI.saveImageFromClipboard(base64Data)
+        if (result.success) {
+          subtaskImages.value.push({
+            fileName: result.fileName,
+            base64: base64Data
+          })
+          appStore.toast('图片已粘贴')
+        } else {
+          appStore.toast('粘贴图片失败：' + result.error)
+        }
+      }
+      reader.readAsDataURL(file)
+      break // 只处理第一张图片
+    }
+  }
+}
+
+// 删除图片
+function handleRemoveImage(index) {
+  const imageData = subtaskImages.value[index]
+  if (imageData?.fileName) {
+    // 异步删除图片文件
+    electronAPI.deleteImage(imageData.fileName)
+  }
+  subtaskImages.value.splice(index, 1)
 }
 </script>
 
