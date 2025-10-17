@@ -179,15 +179,19 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
  * @param {object} args - { description, projectName }
  * @param {object} stores - { todoStore, projectStore }
  * @param {object} deepseekClient - DeepSeek 客户端
+ * @param {function} onProgress - 进度更新回调
  * @returns {Promise<object>} 创建结果
  */
-export async function executeCreateProjectWithTasks(args, stores, deepseekClient) {
+export async function executeCreateProjectWithTasks(args, stores, deepseekClient, onProgress = null) {
   const { todoStore, projectStore } = stores
   const { description, projectName } = args
   
   if (!deepseekClient) {
     throw new Error('DeepSeek 客户端未初始化')
   }
+  
+  // 更新进度：开始生成计划
+  if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
   
   // 调用 DeepSeek API 生成项目计划
   const prompt = `请根据以下描述，生成一个项目计划。返回 JSON 格式，包含项目信息和任务列表。
@@ -236,6 +240,9 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   
   const content = await deepseekClient.chatCompletions(messages, { maxTokens: 4000 })
   
+  // 更新进度：解析计划
+  if (onProgress) onProgress('📋 项目计划已生成，正在解析...')
+  
   // 解析 JSON
   let projectPlan
   try {
@@ -257,9 +264,12 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     throw new Error('项目计划结构不完整，缺少必要字段')
   }
   
+  // 更新进度：创建项目
+  const finalProjectName = projectPlan.project.name || projectName
+  if (onProgress) onProgress(`📁 正在创建项目"${finalProjectName}"...`)
+  
   // 创建项目
   const projectColor = projectPlan.project.color || '#8A9DFB'
-  const finalProjectName = projectPlan.project.name || projectName
   
   const project = {
     id: Date.now(),
@@ -274,8 +284,15 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   
   // 创建任务
   const createdTasks = []
-  for (let i = 0; i < projectPlan.tasks.length; i++) {
+  const totalTasks = projectPlan.tasks.length
+  
+  for (let i = 0; i < totalTasks; i++) {
     const taskData = projectPlan.tasks[i]
+    
+    // 更新进度：创建任务
+    if (onProgress) {
+      onProgress(`📝 正在创建任务 ${i + 1}/${totalTasks}: ${taskData.text.substring(0, 20)}...`)
+    }
     
     const task = {
       id: Date.now() + i,
@@ -301,12 +318,17 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     createdTasks.push(task)
     
     // 避免 ID 冲突，添加小延迟
-    if (i < projectPlan.tasks.length - 1) {
+    if (i < totalTasks - 1) {
       await new Promise(resolve => setTimeout(resolve, 10))
     }
   }
   
+  // 更新进度：保存数据
+  if (onProgress) onProgress('💾 正在保存数据...')
   await todoStore.saveTodos()
+  
+  // 更新进度：完成
+  if (onProgress) onProgress(`✅ 项目创建完成！共创建 ${createdTasks.length} 个任务`)
   
   return {
     success: true,

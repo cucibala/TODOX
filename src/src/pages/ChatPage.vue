@@ -315,7 +315,6 @@ async function sendToAI(isContinuation = false) {
     
     // 内容回调
     const onContent = (content) => {
-      console.log(content, "->>>>>");
       if (streamingMessageIndex.value >= 0) {
         messages.value[streamingMessageIndex.value].content += content
         scrollToBottom()
@@ -324,7 +323,6 @@ async function sendToAI(isContinuation = false) {
     
     // 工具调用回调
     const onToolCalls = async (toolCalls) => {
-      console.log(toolCalls, "->>>>>");
       // 更新当前 assistant 消息，添加 tool_calls（保留可能已有的 content）
       if (streamingMessageIndex.value >= 0) {
         messages.value[streamingMessageIndex.value].tool_calls = toolCalls
@@ -343,11 +341,34 @@ async function sendToAI(isContinuation = false) {
           // 处理异步工具
           if (result && result._async) {
             if (result.functionName === 'createProjectWithTasks') {
+              // 添加进度提示消息
+              const progressMessageIndex = messages.value.length
+              messages.value.push({
+                role: 'assistant',
+                content: '🚀 开始创建项目...',
+                timestamp: Date.now(),
+                isProgress: true
+              })
+              scrollToBottom()
+              
+              // 进度更新回调
+              const onProgress = (status) => {
+                if (messages.value[progressMessageIndex]) {
+                  messages.value[progressMessageIndex].content = status
+                  scrollToBottom()
+                }
+              }
+              
+              // 执行创建项目
               result = await executeCreateProjectWithTasks(
                 result.args,
                 { todoStore, projectStore },
-                deepseekClient.value
+                deepseekClient.value,
+                onProgress
               )
+              
+              // 移除进度消息
+              messages.value.splice(progressMessageIndex, 1)
             }
           }
           
