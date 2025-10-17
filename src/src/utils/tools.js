@@ -194,7 +194,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
   
   // 调用 DeepSeek API 生成项目计划
-  const prompt = `请根据以下描述，生成一个项目计划。返回 JSON 格式，包含项目信息和任务列表。
+  const prompt = `请根据以下描述，生成一个详细的项目计划。返回 JSON 格式，包含项目信息和任务列表。
 
 项目描述：${description}
 项目名称：${projectName}
@@ -203,7 +203,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
 {
   "project": {
     "name": "项目名称",
-    "color": "颜色代码（如 #8A9DFB）"
+    "color": "颜色代码（如 #8A9DFB、#FF6B6B、#4ECDC4、#95E1D3）"
   },
   "tasks": [
     {
@@ -212,7 +212,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
       "dueDate": "YYYY-MM-DD（可选，如果有明确时间要求）",
       "subtasks": [
         {
-          "text": "子任务描述",
+          "text": "子任务描述（要具体可执行）",
           "weight": 1-5
         }
       ]
@@ -220,17 +220,62 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   ]
 }
 
-要求：
-1. 任务数量要合理（通常5-15个）
-2. 每个任务可以有2-5个子任务
-3. 优先级要合理分配
-4. 如果有时间范围要求，设置合适的截止日期
-5. 只返回 JSON，不要其他解释`
+重要要求：
+1. **如果用户提到具体天数（如"30天"、"一个月"、"一周"），必须为每一天创建一个独立的任务**
+   - 任务命名：第1天、第2天、第3天...（或Day 1、Day 2...）
+   - 每天的任务要有具体的日期（从今天开始计算）
+   - 每天的子任务要具体可执行，类似每日打卡清单
+   
+2. **每日任务的子任务要非常具体**，例如：
+   - ✅ 好的：晨跑30分钟（6:30-7:00）、喝水2000ml、晚餐控制在500卡以内
+   - ❌ 不好的：运动、注意饮食、保持健康
+   
+3. **如果是阶段性计划（没有明确每天），可以按阶段/模块划分**
+   - 任务数量：5-15个
+   - 每个阶段/模块包含3-5个子任务
+   
+4. 优先级分配：
+   - 早期任务（前1/3）：建立习惯，优先级 medium
+   - 中期任务（中间1/3）：强化训练，优先级 high
+   - 后期任务（后1/3）：巩固成果，优先级 medium
+
+5. 截止日期：如果有明确的时间范围，为每个任务设置具体的截止日期
+
+6. 只返回 JSON，不要其他解释文字
+
+示例（30天减肥计划）：
+{
+  "project": {
+    "name": "30天减肥挑战",
+    "color": "#FF6B6B"
+  },
+  "tasks": [
+    {
+      "text": "第1天 - 启动计划",
+      "priority": "high",
+      "dueDate": "2025-10-18",
+      "subtasks": [
+        {"text": "晨跑30分钟（6:30-7:00）", "weight": 4},
+        {"text": "喝水2000ml（分8次）", "weight": 3},
+        {"text": "早餐：燕麦+鸡蛋（350卡）", "weight": 3},
+        {"text": "午餐：鸡胸肉+蔬菜（500卡）", "weight": 3},
+        {"text": "晚餐：水煮青菜+豆腐（400卡）", "weight": 3},
+        {"text": "睡前拉伸15分钟", "weight": 2}
+      ]
+    },
+    {
+      "text": "第2天 - 保持节奏",
+      "priority": "medium",
+      "dueDate": "2025-10-19",
+      "subtasks": [...]
+    }
+  ]
+}`
 
   const messages = [
     {
       role: 'system',
-      content: '你是一个专业的项目管理助手，擅长将用户的想法转化为结构化的项目计划。'
+      content: '你是一个专业的项目管理助手，擅长将用户的想法转化为结构化、可执行的项目计划。你特别擅长制定每日计划，能够将长期目标拆解为具体的每日任务清单，类似于打卡系统。'
     },
     {
       role: 'user',
@@ -238,7 +283,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     }
   ]
   
-  const content = await deepseekClient.chatCompletions(messages, { maxTokens: 4000 })
+  const content = await deepseekClient.chatCompletions(messages, { maxTokens: 8000 })
   
   // 更新进度：解析计划
   if (onProgress) onProgress('📋 项目计划已生成，正在解析...')
