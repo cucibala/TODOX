@@ -289,6 +289,13 @@ export const useTodoStore = defineStore('todo', () => {
     if (task && task.subtasks) {
       const subtask = task.subtasks.find(st => st.id === subtaskId)
       if (subtask) {
+        // 如果子任务需要输入，检查是否已输入
+        if (!subtask.completed && subtask.requiresInput) {
+          if (!subtask.inputValue || subtask.inputValue.trim() === '') {
+            return { success: false, message: '请先输入必填信息' }
+          }
+        }
+        
         subtask.completed = !subtask.completed
         if (subtask.completed) {
           subtask.completedAt = new Date().toISOString()
@@ -296,8 +303,10 @@ export const useTodoStore = defineStore('todo', () => {
           subtask.completedAt = null
         }
         await saveTodos()
+        return { success: true }
       }
     }
+    return { success: false }
   }
   
   // 删除子任务
@@ -310,36 +319,7 @@ export const useTodoStore = defineStore('todo', () => {
   }
   
   // 添加子任务评论
-  async function addSubtaskComment(taskId, subtaskId, commentText) {
-    const task = todos.value.find(t => t.id === taskId)
-    if (task && task.subtasks) {
-      const subtask = task.subtasks.find(st => st.id === subtaskId)
-      if (subtask) {
-        if (!subtask.comments) {
-          subtask.comments = []
-        }
-        const comment = {
-          id: Date.now(),
-          text: commentText,
-          createdAt: new Date().toISOString()
-        }
-        subtask.comments.push(comment)
-        await saveTodos()
-      }
-    }
-  }
-  
-  // 删除子任务评论
-  async function deleteSubtaskComment(taskId, subtaskId, commentId) {
-    const task = todos.value.find(t => t.id === taskId)
-    if (task && task.subtasks) {
-      const subtask = task.subtasks.find(st => st.id === subtaskId)
-      if (subtask && subtask.comments) {
-        subtask.comments = subtask.comments.filter(c => c.id !== commentId)
-        await saveTodos()
-      }
-    }
-  }
+  // 子任务评论功能已移除
   
   // 获取任务进度百分比
   function getTaskProgress(task) {
@@ -426,8 +406,6 @@ export const useTodoStore = defineStore('todo', () => {
     addSubtask,
     toggleSubtask,
     deleteSubtask,
-    addSubtaskComment,
-    deleteSubtaskComment,
     getTaskProgress,
     addProgress,
     deleteProgress

@@ -180,58 +180,23 @@
                 </span>
               </div>
               
-              <!-- 子任务评论 -->
-              <div class="subtask-comments-wrapper">
-                <!-- 评论列表 -->
-                <div v-if="subtask.comments && subtask.comments.length > 0" class="subtask-comments-list">
-                  <div 
-                    v-for="comment in subtask.comments" 
-                    :key="comment.id" 
-                    class="subtask-comment"
-                  >
-                    <div class="comment-icon">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                      </svg>
-                    </div>
-                    <div class="comment-content">
-                      <div class="comment-text">{{ comment.text }}</div>
-                      <div class="comment-time">{{ formatDate(comment.createdAt) }}</div>
-                    </div>
-                    <button 
-                      class="btn-delete-comment" 
-                      @click="handleDeleteSubtaskComment(subtask.id, comment.id)"
-                      title="删除评论"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                    </button>
-                  </div>
+              <!-- 子任务输入值（需要输入时显示） -->
+              <div v-if="subtask.requiresInput" class="subtask-input-wrapper">
+                <div class="subtask-input-label">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>{{ subtask.inputPrompt || '请输入结果' }}</span>
                 </div>
-                
-                <!-- 添加评论 -->
-                <div class="subtask-comment-input-wrapper">
-                  <input
-                    v-model="subtaskCommentInputs[subtask.id]"
-                    type="text"
-                    class="subtask-comment-input"
-                    placeholder="添加评论..."
-                    @keydown.enter="handleAddSubtaskComment(subtask.id)"
-                  />
-                  <button 
-                    class="btn-add-comment" 
-                    @click="handleAddSubtaskComment(subtask.id)"
-                    title="发送评论"
-                    :disabled="!subtaskCommentInputs[subtask.id] || !subtaskCommentInputs[subtask.id].trim()"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <line x1="22" y1="2" x2="11" y2="13"></line>
-                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                    </svg>
-                  </button>
-                </div>
+                <input
+                  v-model="subtask.inputValue"
+                  @blur="handleSubtaskInputChange(subtask.id)"
+                  type="text"
+                  :placeholder="subtask.inputPlaceholder || '输入...'"
+                  class="subtask-input"
+                  :disabled="subtask.completed"
+                />
               </div>
             </div>
             <button 
@@ -468,7 +433,7 @@ const previewImages = computed(() => {
 })
 
 // 子任务评论输入
-const subtaskCommentInputs = ref({})
+// 已移除子任务评论功能
 
 // 计算进度
 const progress = computed(() => todoStore.getTaskProgress(props.task))
@@ -653,7 +618,10 @@ async function handleAIBreakdown() {
 }
 
 async function handleToggleSubtask(subtaskId) {
-  await todoStore.toggleSubtask(props.task.id, subtaskId)
+  const result = await todoStore.toggleSubtask(props.task.id, subtaskId)
+  if (result && !result.success && result.message) {
+    appStore.toast(result.message)
+  }
 }
 
 async function handleDeleteSubtask(subtaskId) {
@@ -752,23 +720,17 @@ function handleRemoveProgressImage(index) {
 }
 
 // 子任务评论功能
-async function handleAddSubtaskComment(subtaskId) {
-  const commentText = subtaskCommentInputs.value[subtaskId]
-  if (!commentText || !commentText.trim()) {
-    return
-  }
-  
-  await todoStore.addSubtaskComment(props.task.id, subtaskId, commentText.trim())
-  subtaskCommentInputs.value[subtaskId] = ''
-  appStore.toast('评论已添加')
+// 处理子任务输入值变化
+function handleSubtaskInputChange(subtaskId) {
+  todoStore.saveTodos()
 }
 
-async function handleDeleteSubtaskComment(subtaskId, commentId) {
-  const confirmed = await appStore.confirm('确定要删除这条评论吗？')
-  if (confirmed) {
-    await todoStore.deleteSubtaskComment(props.task.id, subtaskId, commentId)
-    appStore.toast('评论已删除')
+// 检查子任务是否可以完成（需要输入的子任务必须有值）
+function canCompleteSubtask(subtask) {
+  if (subtask.requiresInput) {
+    return subtask.inputValue && subtask.inputValue.trim() !== ''
   }
+  return true
 }
 </script>
 

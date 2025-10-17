@@ -18,20 +18,29 @@ export class DeepSeekClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, tools, onContent, onToolCalls) {
+    console.log('chatCompletionsStream', messages, tools)
+    
+    // 构建请求体，只有当 tools 非空时才包含 tools 字段
+    const requestBody = {
+      model: 'deepseek-chat',
+      messages,
+      temperature: 0.7,
+      max_tokens: 2000,
+      stream: true
+    }
+    
+    // 只有当 tools 数组非空时才添加到请求中
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools
+    }
+    
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages,
-        tools,
-        temperature: 0.7,
-        max_tokens: 2000,
-        stream: true
-      })
+      body: JSON.stringify(requestBody)
     })
 
     if (!response.ok) {
@@ -152,11 +161,11 @@ export async function aiBreakdownTask(taskText, apiKey) {
   const content = await client.chatCompletions([
     {
       role: 'system',
-      content: '你是一个专业的任务管理助手，擅长将复杂任务拆解为可执行的子任务。请以 JSON 数组格式返回子任务列表，每个子任务包含 text(子任务描述) 和 weight(重要程度1-5)。返回格式：[{"text":"子任务1","weight":3},{"text":"子任务2","weight":4}]'
+      content: '你是一个专业的任务管理助手，擅长将复杂任务拆解为可执行的子任务。对于需要记录结果的子任务（如测量、检查、记录数据等），请标记为需要输入。请以 JSON 数组格式返回子任务列表。'
     },
     {
       role: 'user',
-      content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 只返回 JSON 数组，不要其他解释`
+      content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 对于需要记录结果的子任务（如测量体重、检查数据、记录进度等），设置 requiresInput: true，并提供 inputPrompt 和 inputPlaceholder\n5. 只返回 JSON 数组，不要其他解释\n\n返回格式：\n[\n  {"text":"子任务1","weight":3},\n  {"text":"检查体重","weight":5,"requiresInput":true,"inputPrompt":"请输入体重（kg）","inputPlaceholder":"如: 65.5"}\n]`
     }
   ], { maxTokens: 800 })
   
@@ -182,6 +191,10 @@ export async function aiBreakdownTask(taskText, apiKey) {
     text: st.text || '',
     weight: st.weight || 3,
     completed: false,
+    requiresInput: st.requiresInput || false,
+    inputPrompt: st.inputPrompt || '',
+    inputPlaceholder: st.inputPlaceholder || '',
+    inputValue: '',
     id: Date.now() + Math.random()
   }))
 }

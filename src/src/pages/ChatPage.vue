@@ -813,7 +813,7 @@ async function loadConversations() {
       // 迁移旧数据：为没有 roleId 和 projectIds 的对话添加默认值
       conversations.value = (result.data.conversations || []).map(conv => ({
         ...conv,
-        roleId: conv.roleId || 'general',
+        roleId: conv.roleId !== undefined ? conv.roleId : null,  // 保持 null 而不是默认为 'general'
         projectIds: conv.projectIds || []
       }))
       currentConversationId.value = result.data.currentConversationId
@@ -869,36 +869,49 @@ async function saveConversations() {
         return plainMsg
       })
       currentConv.updatedAt = Date.now()
+      
+      // 确保 roleId 和 projectIds 被保存
+      if (!currentConv.roleId) {
+        currentConv.roleId = null
+      }
+      if (!currentConv.projectIds) {
+        currentConv.projectIds = []
+      }
     }
     
-    // 将响应式对象转换为普通对象（深度转换）
-    const conversationsData = {
-      conversations: conversations.value.map(conv => ({
-        id: conv.id,
-        title: conv.title,
-        messages: (conv.messages || []).map(msg => {
-          const plainMsg = {
-            role: msg.role,
-            content: msg.content,
-            timestamp: msg.timestamp
-          }
-          // 保存函数调用相关字段
-          if (msg.tool_calls) {
-            plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
-          }
-          if (msg.tool_call_id) {
-            plainMsg.tool_call_id = msg.tool_call_id
-          }
-          if (msg.name) {
-            plainMsg.name = msg.name
-          }
-          return plainMsg
-        }),
-        createdAt: conv.createdAt,
-        updatedAt: conv.updatedAt
-      })),
+    // 将响应式对象转换为普通对象（使用 JSON 序列化彻底转换）
+    const plainConversations = conversations.value.map(conv => ({
+      id: conv.id,
+      title: conv.title,
+      messages: (conv.messages || []).map(msg => {
+        const plainMsg = {
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
+        }
+        // 保存函数调用相关字段
+        if (msg.tool_calls) {
+          plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
+        }
+        if (msg.tool_call_id) {
+          plainMsg.tool_call_id = msg.tool_call_id
+        }
+        if (msg.name) {
+          plainMsg.name = msg.name
+        }
+        return plainMsg
+      }),
+      roleId: conv.roleId,
+      projectIds: conv.projectIds || [],
+      createdAt: conv.createdAt,
+      updatedAt: conv.updatedAt
+    }))
+    
+    // 使用 JSON 序列化确保彻底转换为普通对象
+    const conversationsData = JSON.parse(JSON.stringify({
+      conversations: plainConversations,
       currentConversationId: currentConversationId.value
-    }
+    }))
     
     await electronAPI.saveConversations(conversationsData)
   } catch (error) {
