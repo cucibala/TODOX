@@ -113,6 +113,10 @@ export const useProjectStore = defineStore('project', () => {
     }
     
     await saveProjects()
+    
+    // 清理可能遗漏的孤立任务
+    await todoStore.cleanOrphanedTasks()
+    
     appStore.toast(`项目"${project.name}"已删除`)
   }
   

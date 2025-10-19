@@ -47,21 +47,18 @@ export const useTodoStore = defineStore('todo', () => {
     
     // 排序：置顶 > 完成状态 > 截止日期 > 创建时间
     filtered.sort((a, b) => {
-      // 1. 置顶优先
-      if (a.pinned !== b.pinned) {
-        if(a.pinned === undefined || b.pinned === undefined) {
-          if(a.pinned){
-            return -1;
-          }
-          if(b.pinned){
-            return 1;
-          }
-        }
+      // 1. 置顶优先（将 undefined 统一处理为 false）
+      const aPinned = a.pinned === true
+      const bPinned = b.pinned === true
+      if (aPinned !== bPinned) {
+        return aPinned ? -1 : 1
       }
 
-      // 2. 未完成的任务排在已完成前面
-      if (a.completed !== b.completed) {
-        return a.completed ? 1 : -1
+      // 2. 未完成的任务排在已完成前面（将 undefined 统一处理为 false）
+      const aCompleted = a.completed === true
+      const bCompleted = b.completed === true
+      if (aCompleted !== bCompleted) {
+        return aCompleted ? 1 : -1
       }
       
       // 3. 按截止日期排序（倒序：最近的截止日期在前）
@@ -116,9 +113,35 @@ export const useTodoStore = defineStore('todo', () => {
     try {
       todos.value = await electronAPI.loadTodos()
       console.log(todos.value)
+      // 加载后自动清理孤立任务
+      await cleanOrphanedTasks()
     } catch (error) {
       console.error('加载任务数据失败:', error)
       todos.value = []
+    }
+  }
+  
+  // 清理孤立任务（项目已被删除的任务）
+  async function cleanOrphanedTasks() {
+    const projectStore = useProjectStore()
+    const validProjectIds = projectStore.projects.map(p => p.id)
+    
+    // 查找孤立任务
+    const orphanedTasks = todos.value.filter(task => 
+      task.projectId && !validProjectIds.includes(task.projectId)
+    )
+    
+    if (orphanedTasks.length > 0) {
+      console.log(`检测到 ${orphanedTasks.length} 个孤立任务，正在清理...`)
+      
+      // 删除孤立任务及其图片
+      for (const task of orphanedTasks) {
+        await deleteTaskWithImages(task.id)
+      }
+      
+      // 保存清理结果
+      await saveTodos()
+      console.log(`已清理 ${orphanedTasks.length} 个孤立任务`)
     }
   }
   
@@ -272,7 +295,8 @@ export const useTodoStore = defineStore('todo', () => {
         task.subtasks = []
       }
       
-      task.subtasks.push({
+      // 使用 unshift 将新子任务添加到数组开头
+      task.subtasks.unshift({
         id: Date.now(),
         text: text.trim(),
         weight,
@@ -415,6 +439,7 @@ export const useTodoStore = defineStore('todo', () => {
     // 方法
     loadTodos,
     saveTodos,
+    cleanOrphanedTasks,
     addTask,
     toggleTask,
     togglePinTask,
