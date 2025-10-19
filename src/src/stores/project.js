@@ -101,6 +101,8 @@ export const useProjectStore = defineStore('project', () => {
     for (const task of projectTodos) {
       await todoStore.deleteTaskWithImages(task.id)
     }
+    // 持久化保存任务删除结果，避免仅内存删除
+    await todoStore.saveTodos()
     
     // 删除项目
     projects.value = projects.value.filter(p => p.id !== projectId)

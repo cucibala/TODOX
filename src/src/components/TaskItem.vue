@@ -139,10 +139,32 @@
       <div v-if="task.subtasks && task.subtasks.length > 0" class="task-subtasks-section">
         <div class="subtasks-list">
           <div 
-            v-for="subtask in task.subtasks" 
+            v-for="(subtask, index) in task.subtasks" 
             :key="subtask.id" 
             class="subtask-item"
+            :class="{ 
+              'dragging': draggedSubtaskId === subtask.id,
+              'drag-over': dragOverIndex === index
+            }"
+            draggable="true"
+            @dragstart="handleSubtaskDragStart(subtask.id, index, $event)"
+            @dragover.prevent="handleSubtaskDragOver(index, $event)"
+            @dragenter="handleSubtaskDragEnter(index)"
+            @dragleave="handleSubtaskDragLeave"
+            @drop="handleSubtaskDrop(index, $event)"
+            @dragend="handleSubtaskDragEnd"
           >
+            <!-- 拖拽手柄 -->
+            <div class="subtask-drag-handle" title="拖动排序">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="9" cy="5" r="1.5"></circle>
+                <circle cx="9" cy="12" r="1.5"></circle>
+                <circle cx="9" cy="19" r="1.5"></circle>
+                <circle cx="15" cy="5" r="1.5"></circle>
+                <circle cx="15" cy="12" r="1.5"></circle>
+                <circle cx="15" cy="19" r="1.5"></circle>
+              </svg>
+            </div>
             <div 
               class="subtask-checkbox" 
               :class="{ checked: subtask.completed }"
@@ -420,6 +442,11 @@ const editInputRef = ref(null)
 // AI 拆解状态
 const isAIBreakingDown = ref(false)
 
+// 子任务拖拽状态
+const draggedSubtaskId = ref(null)
+const draggedSubtaskIndex = ref(null)
+const dragOverIndex = ref(null)
+
 // 进度记录输入
 const progressInput = ref('')
 const showProgress = ref(false)
@@ -655,6 +682,65 @@ async function handleToggleSubtask(subtaskId) {
 
 async function handleDeleteSubtask(subtaskId) {
   await todoStore.deleteSubtask(props.task.id, subtaskId)
+}
+
+// 子任务拖拽处理函数
+function handleSubtaskDragStart(subtaskId, index, event) {
+  draggedSubtaskId.value = subtaskId
+  draggedSubtaskIndex.value = index
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/html', event.target.innerHTML)
+  // 添加拖拽样式
+  event.target.style.opacity = '0.5'
+}
+
+function handleSubtaskDragOver(index, event) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  
+  // 只在拖拽到不同位置时更新
+  if (dragOverIndex.value !== index && draggedSubtaskIndex.value !== index) {
+    dragOverIndex.value = index
+  }
+}
+
+function handleSubtaskDragEnter(index) {
+  if (draggedSubtaskIndex.value !== index) {
+    dragOverIndex.value = index
+  }
+}
+
+function handleSubtaskDragLeave() {
+  // dragOverIndex.value = null
+}
+
+function handleSubtaskDrop(targetIndex, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  
+  const sourceIndex = draggedSubtaskIndex.value
+  
+  // 如果拖到相同位置，不做处理
+  if (sourceIndex === targetIndex) {
+    dragOverIndex.value = null
+    return
+  }
+  
+  // 执行重新排序
+  todoStore.reorderSubtasks(props.task.id, sourceIndex, targetIndex)
+  
+  // 重置状态
+  dragOverIndex.value = null
+}
+
+function handleSubtaskDragEnd(event) {
+  // 恢复透明度
+  event.target.style.opacity = '1'
+  
+  // 重置所有拖拽状态
+  draggedSubtaskId.value = null
+  draggedSubtaskIndex.value = null
+  dragOverIndex.value = null
 }
 
 function getWeightClass(weight) {

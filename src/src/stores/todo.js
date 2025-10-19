@@ -115,6 +115,7 @@ export const useTodoStore = defineStore('todo', () => {
   async function loadTodos() {
     try {
       todos.value = await electronAPI.loadTodos()
+      console.log(todos.value)
     } catch (error) {
       console.error('加载任务数据失败:', error)
       todos.value = []
@@ -321,6 +322,23 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
   
+  // 子任务重新排序
+  async function reorderSubtasks(taskId, sourceIndex, targetIndex) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (!task || !task.subtasks || task.subtasks.length === 0) {
+      return
+    }
+    
+    // 从源位置移除子任务
+    const [movedSubtask] = task.subtasks.splice(sourceIndex, 1)
+    
+    // 插入到目标位置
+    task.subtasks.splice(targetIndex, 0, movedSubtask)
+    
+    // 保存
+    await saveTodos()
+  }
+  
   // 添加子任务评论
   // 子任务评论功能已移除
   
@@ -409,6 +427,7 @@ export const useTodoStore = defineStore('todo', () => {
     addSubtask,
     toggleSubtask,
     deleteSubtask,
+    reorderSubtasks,
     getTaskProgress,
     addProgress,
     deleteProgress

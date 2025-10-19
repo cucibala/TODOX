@@ -1095,3 +1095,58 @@
   font-weight: 500;
 }
 
+/* 子任务拖拽样式 */
+.subtask-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  cursor: grab;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.subtask-drag-handle:active {
+  cursor: grabbing;
+}
+
+.subtask-drag-handle svg {
+  width: 14px;
+  height: 14px;
+}
+
+.subtask-item:hover .subtask-drag-handle {
+  opacity: 0.6;
+}
+
+.subtask-drag-handle:hover {
+  opacity: 1 !important;
+  color: var(--text-secondary);
+}
+
+/* 拖拽中的子任务 */
+.subtask-item.dragging {
+  opacity: 0.5;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+}
+
+/* 拖拽经过的位置 */
+.subtask-item.drag-over {
+  border-top: 2px solid var(--primary-color);
+  padding-top: 6px;
+  margin-top: -2px;
+}
+
+/* 拖拽时禁止选择文本 */
+.subtask-item[draggable="true"] {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
