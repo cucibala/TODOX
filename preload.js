@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 项目管理
   loadProjects: () => ipcRenderer.invoke('load-projects'),
   saveProjects: (projects) => ipcRenderer.invoke('save-projects', projects),
+  exportProject: (fileName, encryptedData) => ipcRenderer.invoke('export-project', fileName, encryptedData),
+  importProject: () => ipcRenderer.invoke('import-project'),
   
   // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),

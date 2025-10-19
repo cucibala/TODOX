@@ -258,7 +258,15 @@
   margin-bottom: 12px;
 }
 
-.btn-add-project {
+/* 项目管理按钮容器 */
+.project-header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-add-project,
+.btn-import-project {
   width: 24px;
   height: 24px;
   border: none;
@@ -272,14 +280,24 @@
   transition: all 0.2s ease;
 }
 
-.btn-add-project:hover {
+.btn-add-project:hover,
+.btn-import-project:hover {
   background: var(--primary-dark);
   transform: scale(1.1);
 }
 
-.btn-add-project svg {
+.btn-add-project svg,
+.btn-import-project svg {
   width: 14px;
   height: 14px;
+}
+
+.btn-import-project {
+  background: #48bb78;
+}
+
+.btn-import-project:hover {
+  background: #38a169;
 }
 
 .project-list {
@@ -376,6 +394,20 @@
   opacity: 1;
 }
 
+/* 项目操作按钮容器 */
+.project-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.project-item:hover .project-actions {
+  opacity: 1;
+}
+
+.btn-export-project,
 .btn-delete-project {
   width: 20px;
   height: 20px;
@@ -387,13 +419,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
-.project-item:hover .btn-delete-project {
-  opacity: 1;
+.btn-export-project:hover {
+  background: rgba(72, 187, 120, 0.1);
+  color: #48bb78;
 }
 
 .btn-delete-project:hover {
@@ -401,6 +433,7 @@
   color: var(--danger-color);
 }
 
+.btn-export-project svg,
 .btn-delete-project svg {
   width: 12px;
   height: 12px;

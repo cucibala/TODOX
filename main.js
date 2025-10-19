@@ -1051,3 +1051,65 @@ ipcMain.handle('get-app-version', async () => {
   }
 });
 
+// IPC 通信处理 - 导出项目
+ipcMain.handle('export-project', async (event, fileName, encryptedData) => {
+  try {
+    // 显示保存文件对话框
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: '导出项目',
+      defaultPath: fileName,
+      filters: [
+        { name: 'TodoX 项目文件', extensions: ['todox'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled) {
+      return { success: false, error: '用户取消操作' };
+    }
+    
+    // 写入文件
+    fs.writeFileSync(result.filePath, encryptedData, 'utf-8');
+    
+    return { 
+      success: true, 
+      filePath: result.filePath 
+    };
+  } catch (error) {
+    console.error('导出项目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 导入项目
+ipcMain.handle('import-project', async () => {
+  try {
+    // 显示打开文件对话框
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '导入项目',
+      properties: ['openFile'],
+      filters: [
+        { name: 'TodoX 项目文件', extensions: ['todox'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: '用户取消操作' };
+    }
+    
+    // 读取文件
+    const filePath = result.filePaths[0];
+    const data = fs.readFileSync(filePath, 'utf-8');
+    
+    return { 
+      success: true, 
+      data: data,
+      filePath: filePath
+    };
+  } catch (error) {
+    console.error('导入项目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+

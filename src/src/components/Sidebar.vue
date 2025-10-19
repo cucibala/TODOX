@@ -4,16 +4,29 @@
     <div class="project-section">
       <div class="section-header">
         <h3 class="section-title">项目</h3>
-        <button 
-          class="btn-add-project" 
-          @click="appStore.showProjectDialog = true" 
-          title="创建项目"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
+        <div class="project-header-actions">
+          <button 
+            class="btn-import-project" 
+            @click="handleImportProject" 
+            title="导入项目"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </button>
+          <button 
+            class="btn-add-project" 
+            @click="appStore.showProjectDialog = true" 
+            title="创建项目"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="project-list">
         <div v-if="!hasProjects" class="project-empty-hint">
@@ -44,16 +57,29 @@
               ></div>
             </div>
           </div>
-          <button 
-            class="btn-delete-project" 
-            @click.stop="projectStore.deleteProject(project.id)" 
-            title="删除项目"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
+          <div class="project-actions">
+            <button 
+              class="btn-export-project" 
+              @click.stop="handleExportProject(project.id)" 
+              title="导出项目"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </button>
+            <button 
+              class="btn-delete-project" 
+              @click.stop="projectStore.deleteProject(project.id)" 
+              title="删除项目"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -176,6 +202,24 @@ function getProjectProgress(projectId) {
   const stats = projectStore.getProjectStats(projectId)
   if (stats.total === 0) return 0
   return Math.round((stats.completed / stats.total) * 100)
+}
+
+// 导出项目
+async function handleExportProject(projectId) {
+  try {
+    await projectStore.exportProject(projectId)
+  } catch (error) {
+    console.error('导出项目失败:', error)
+  }
+}
+
+// 导入项目
+async function handleImportProject() {
+  try {
+    await projectStore.importProject()
+  } catch (error) {
+    console.error('导入项目失败:', error)
+  }
 }
 </script>
 
