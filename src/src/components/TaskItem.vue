@@ -226,15 +226,28 @@
                 />
               </div>
             </div>
-            <button 
-              class="btn-delete-subtask" 
-              @click="handleDeleteSubtask(subtask.id)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+            <div class="subtask-actions">
+              <button 
+                class="btn-copy-subtask" 
+                @click="handleCopySubtaskText(subtask.text)"
+                title="复制子任务内容"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+              <button 
+                class="btn-delete-subtask" 
+                @click="handleDeleteSubtask(subtask.id)"
+                title="删除子任务"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -682,6 +695,18 @@ async function handleToggleSubtask(subtaskId) {
 
 async function handleDeleteSubtask(subtaskId) {
   await todoStore.deleteSubtask(props.task.id, subtaskId)
+}
+
+// 复制子任务文本
+function handleCopySubtaskText(text) {
+  if (!text) return
+  
+  navigator.clipboard.writeText(text).then(() => {
+    appStore.toast('子任务内容已复制')
+  }).catch(err => {
+    console.error('复制失败:', err)
+    appStore.toast('复制失败')
+  })
 }
 
 // 子任务拖拽处理函数

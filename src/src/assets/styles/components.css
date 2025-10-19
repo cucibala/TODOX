@@ -261,6 +261,21 @@
   border-color: var(--primary-color);
 }
 
+/* 子任务操作按钮容器 */
+.subtask-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+}
+
+.subtask-item:hover .subtask-actions {
+  opacity: 1;
+}
+
+.btn-copy-subtask,
 .btn-delete-subtask {
   background: none;
   border: none;
@@ -270,11 +285,11 @@
   transition: all 0.2s ease;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
-  opacity: 0;
 }
 
-.subtask-item:hover .btn-delete-subtask {
-  opacity: 1;
+.btn-copy-subtask:hover {
+  color: var(--primary-color);
+  background: rgba(138, 157, 251, 0.1);
 }
 
 .btn-delete-subtask:hover {
@@ -282,6 +297,7 @@
   background: rgba(245, 101, 101, 0.1);
 }
 
+.btn-copy-subtask svg,
 .btn-delete-subtask svg {
   width: 12px;
   height: 12px;
