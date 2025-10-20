@@ -283,46 +283,54 @@
               </div>
             </div>
             
-            <div class="input-row">
-              <button 
-                class="btn-upload-image" 
-                @click="triggerImageUpload"
-                title="上传图片"
-                :disabled="isLoading"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                  <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-              </button>
-              <input 
-                type="file" 
-                ref="imageInput" 
-                @change="handleImageSelect" 
-                accept="image/*"
-                multiple
-                style="display: none"
-              />
+            <!-- 输入区域 -->
+            <div class="input-main-area">
+              <div class="input-actions-left">
+                <button 
+                  class="btn-upload-image" 
+                  @click="triggerImageUpload"
+                  title="上传图片"
+                  :disabled="isLoading"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                </button>
+                <input 
+                  type="file" 
+                  ref="imageInput" 
+                  @change="handleImageSelect" 
+                  accept="image/*"
+                  multiple
+                  style="display: none"
+                />
+              </div>
               
-              <textarea
-                v-model="userInput"
-                @keydown.ctrl.enter="handleSend"
-                placeholder="输入消息... (Ctrl+Enter 发送)"
-                ref="inputTextarea"
-                rows="1"
-                @input="adjustTextareaHeight"
-              ></textarea>
-              <button 
-                class="btn-send" 
-                @click="handleSend"
-                :disabled="(!userInput.trim() && selectedImages.length === 0) || isLoading"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-              </button>
+              <div class="input-text-wrapper">
+                <textarea
+                  v-model="userInput"
+                  @keydown.ctrl.enter="handleSend"
+                  placeholder="输入消息... (Ctrl+Enter 发送)"
+                  ref="inputTextarea"
+                  rows="1"
+                  @input="adjustTextareaHeight"
+                ></textarea>
+              </div>
+              
+              <div class="input-actions-right">
+                <button 
+                  class="btn-send" 
+                  @click="handleSend"
+                  :disabled="(!userInput.trim() && selectedImages.length === 0) || isLoading"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              </div>
             </div>
             </div>
           </div>
