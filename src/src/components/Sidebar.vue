@@ -251,87 +251,99 @@
               </div>
             </div>
           </div>
-        </div>
-        
-        <!-- 到期提醒 -->
-        <div class="due-date-alerts">
-          <!-- 已逾期任务 -->
-          <div v-if="overdueTasksCount > 0" class="alert-section overdue">
-            <div class="alert-header" @click="toggleOverdueExpand">
-              <svg 
-                class="expand-icon" 
-                :class="{ expanded: showOverdueTasks }"
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                stroke-width="2"
-              >
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-              <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span class="alert-label">已逾期</span>
-              <span class="alert-count">{{ overdueTasksCount }}</span>
-            </div>
-            <div v-if="showOverdueTasks" class="task-list">
-              <div 
-                v-for="task in overdueTasks" 
-                :key="task.id" 
-                class="task-item-mini alert-task"
-                :title="task.text"
-                @click="scrollToTask(task.id)"
-              >
-                <svg class="task-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="8" x2="12" y2="12"></line>
-                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          
+          <!-- 临期提醒 - 可展开 -->
+          <div v-if="upcomingTasksCount > 0" class="daily-stat-item expandable">
+            <div class="daily-stat-header" @click="toggleUpcomingExpand">
+              <span class="daily-stat-label">
+                临期提醒
+                <svg 
+                  class="expand-icon" 
+                  :class="{ expanded: showUpcomingTasks }"
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  stroke-width="2"
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
-                <div class="task-info">
-                  <span class="task-text">{{ task.text }}</span>
-                  <span class="task-due-info overdue">{{ formatDueDate(task.dueDate) }}</span>
+              </span>
+              <span class="daily-stat-value upcoming">{{ upcomingTasksCount }}</span>
+            </div>
+            <div class="daily-progress-bar">
+              <div 
+                class="daily-progress-fill upcoming" 
+                :style="{ width: upcomingPercentage + '%' }"
+              ></div>
+            </div>
+            
+            <!-- 展开的临期任务列表 -->
+            <div v-if="showUpcomingTasks" class="completed-details">
+              <div class="task-list">
+                <div 
+                  v-for="task in upcomingTasks" 
+                  :key="task.id" 
+                  class="task-item-mini"
+                  :title="task.text"
+                  @click="scrollToTask(task.id)"
+                >
+                  <svg class="task-clock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <div class="task-info">
+                    <span class="task-text">{{ task.text }}</span>
+                    <span class="task-due-info upcoming">{{ formatDueDate(task.dueDate) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           
-          <!-- 即将到期任务 -->
-          <div v-if="upcomingTasksCount > 0" class="alert-section upcoming">
-            <div class="alert-header" @click="toggleUpcomingExpand">
-              <svg 
-                class="expand-icon" 
-                :class="{ expanded: showUpcomingTasks }"
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                stroke-width="2"
-              >
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-              <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-              <span class="alert-label">临期提醒</span>
-              <span class="alert-count">{{ upcomingTasksCount }}</span>
-            </div>
-            <div v-if="showUpcomingTasks" class="task-list">
-              <div 
-                v-for="task in upcomingTasks" 
-                :key="task.id" 
-                class="task-item-mini alert-task"
-                :title="task.text"
-                @click="scrollToTask(task.id)"
-              >
-                <svg class="task-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <polyline points="12 6 12 12 16 14"></polyline>
+          <!-- 已逾期 - 可展开 -->
+          <div v-if="overdueTasksCount > 0" class="daily-stat-item expandable">
+            <div class="daily-stat-header" @click="toggleOverdueExpand">
+              <span class="daily-stat-label">
+                已逾期
+                <svg 
+                  class="expand-icon" 
+                  :class="{ expanded: showOverdueTasks }"
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  stroke-width="2"
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
-                <div class="task-info">
-                  <span class="task-text">{{ task.text }}</span>
-                  <span class="task-due-info upcoming">{{ formatDueDate(task.dueDate) }}</span>
+              </span>
+              <span class="daily-stat-value overdue">{{ overdueTasksCount }}</span>
+            </div>
+            <div class="daily-progress-bar">
+              <div 
+                class="daily-progress-fill overdue" 
+                :style="{ width: overduePercentage + '%' }"
+              ></div>
+            </div>
+            
+            <!-- 展开的逾期任务列表 -->
+            <div v-if="showOverdueTasks" class="completed-details">
+              <div class="task-list">
+                <div 
+                  v-for="task in overdueTasks" 
+                  :key="task.id" 
+                  class="task-item-mini"
+                  :title="task.text"
+                  @click="scrollToTask(task.id)"
+                >
+                  <svg class="task-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                  <div class="task-info">
+                    <span class="task-text">{{ task.text }}</span>
+                    <span class="task-due-info overdue">{{ formatDueDate(task.dueDate) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -407,6 +419,20 @@ const todayCompletedPercentage = computed(() => {
   const base = todayAddedCount.value > 0 ? todayAddedCount.value : totalCount.value
   if (base === 0) return 0
   const percentage = (todayCompletedCount.value / base) * 100
+  return Math.min(percentage, 100)
+})
+
+// 临期任务百分比（相对于总任务数）
+const upcomingPercentage = computed(() => {
+  if (totalCount.value === 0) return 0
+  const percentage = (upcomingTasksCount.value / totalCount.value) * 100
+  return Math.min(percentage, 100)
+})
+
+// 逾期任务百分比（相对于总任务数）
+const overduePercentage = computed(() => {
+  if (totalCount.value === 0) return 0
+  const percentage = (overdueTasksCount.value / totalCount.value) * 100
   return Math.min(percentage, 100)
 })
 
