@@ -390,153 +390,34 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     : isLearningPlan ? '这是一个学习计划，需要按知识点/章节分解任务。'
     : '根据项目性质合理分解任务。'
   
-  const prompt = `请根据以下描述，生成一个项目计划。${isProgressiveMode ? `这是一个${totalDays}天的计划，现在先生成前${promptDays}天的内容，后续会逐天生成。` : ''}返回 JSON 格式，包含项目信息和任务列表。
+  const prompt = `根据描述生成项目计划。${isProgressiveMode ? `${totalDays}天计划，现生成前${promptDays}天。` : ''}
 
-【当前日期】：${todayStr}（今天）
-【项目描述】：${description}
-【项目名称】：${projectName}
-【任务类型】：${taskTypeHint}
-${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：前${promptDays}天（后续将逐天生成剩余${totalDays - promptDays}天）` : ''}
+日期：${todayStr}(今天) | 描述：${description} | 名称：${projectName} | 类型：${taskTypeHint}${isProgressiveMode ? ` | 总${totalDays}天，本批${promptDays}天` : ''}
 
-返回格式要求：
+返回格式（简写字段节省token）：
 {
-  "project": {
-    "name": "项目名称",
-    "color": "颜色代码（如 #8A9DFB、#FF6B6B、#4ECDC4、#95E1D3）"
-  },
-  "tasks": [
+  "p": {"n": "项目名", "c": "#8A9DFB"},
+  "t": [
     {
-      "text": "任务标题",
-      "priority": "high/medium/low",
-      "dueDate": "YYYY-MM-DD（可选，如果有明确时间要求）",
-      "subtasks": [
-        {
-          "text": "子任务描述（要具体可执行）",
-          "weight": 1-5,
-          "requiresInput": false
-        }
+      "tx": "任务标题",
+      "pr": "h/m/l",
+      "dd": "${todayStr}",
+      "s": [
+        {"tx": "子任务", "w": 3, "r": 0}
       ]
     }
   ]
 }
 
-重要要求：
+字段说明：p=project, n=name, c=color, t=tasks, tx=text, pr=priority(h/m/l), dd=dueDate, s=subtasks, w=weight(1-5), r=requiresInput(0/1)
 
-**1. 每日计划（如：30天减肥计划）：**
-   - 任务命名：第1天、第2天、第3天...（或Day 1、Day 2...）
-   - ${isProgressiveMode ? `本次只需生成前${promptDays}天的任务（第1天到第${promptDays}天），剩余天数会逐天自动生成` : ''}
-   - 每天的任务要有具体的日期（从 ${todayStr} 开始，依次递增）
-   - 每天的子任务要具体可执行，类似每日打卡清单
-   - **截止日期格式：YYYY-MM-DD，从今天（${todayStr}）开始计算**
-   - **第1天的dueDate是${todayStr}，第2天是次日，第3天是第三天，以此类推**
-   - 子任务示例：✅ 晨跑30分钟（6:30-7:00）、喝水2000ml
-   - 对于需要记录结果的子任务（如：测量体重、记录卡路里），设置 requiresInput: true
-
-**2. 技术项目（如：接入SDK、开发功能）：**
-   - 任务按开发阶段划分，如：环境准备 → 核心功能开发 → 测试 → 部署
-   - 任务命名要具体，如："配置开发环境"、"实现人脸检测接口"、"编写单元测试"
-   - 子任务要细化到可执行步骤，如：
-     - ✅ 好的：安装SDK依赖包、创建初始化代码、配置API密钥、测试基础调用
-     - ❌ 不好的：准备工作、写代码、测试
-   - 每个任务3-8个子任务
-   - 可以设置重要的验证点为 requiresInput: true（如：记录测试结果、填写配置参数）
-
-**3. 学习计划：**
-   - 任务按知识点/章节划分
-   - 子任务包括：学习理论、动手实践、总结笔记、练习题目等
-   
-**4. 通用要求：**
-   - 任务数量：${isDailyPlan ? (isProgressiveMode ? `本次${promptDays}个` : `${totalDays}个`) : '5-15个'}
-   - 每个任务包含3-8个子任务
-   
-4. 优先级分配：
-   - 早期任务（前1/3）：建立习惯，优先级 medium
-   - 中期任务（中间1/3）：强化训练，优先级 high
-   - 后期任务（后1/3）：巩固成果，优先级 medium
-
-5. 截止日期：如果有明确的时间范围，为每个任务设置具体的截止日期
-
-6. 只返回 JSON，不要其他解释文字
-
-示例1（每日计划 - 假设今天是 2025-10-24）：
-{
-  "project": {"name": "30天减肥挑战", "color": "#FF6B6B"},
-  "tasks": [
-    {
-      "text": "第1天 - 启动计划",
-      "priority": "high",
-      "dueDate": "2025-10-24",
-      "subtasks": [
-        {"text": "晨跑30分钟（6:30-7:00）", "weight": 4},
-        {"text": "记录早晨体重", "weight": 5, "requiresInput": true},
-        {"text": "喝水2000ml（分8次）", "weight": 3}
-      ]
-    },
-    {
-      "text": "第2天 - 保持节奏",
-      "priority": "medium",
-      "dueDate": "2025-10-25",
-      "subtasks": [...]
-    }
-  ]
-}
-
-示例2（技术项目 - 假设今天是 2025-10-24）：
-{
-  "project": {"name": "接入 LivingDetection SDK", "color": "#8A9DFB"},
-  "tasks": [
-    {
-      "text": "环境准备和SDK集成",
-      "priority": "high",
-      "dueDate": "2025-10-24",
-      "subtasks": [
-        {"text": "下载 LivingDetection SDK 并解压", "weight": 2},
-        {"text": "配置项目依赖（添加到 build.gradle）", "weight": 3},
-        {"text": "初始化SDK（申请AppKey和SecretKey）", "weight": 4},
-        {"text": "记录AppKey配置信息", "weight": 3, "requiresInput": true},
-        {"text": "验证SDK初始化成功", "weight": 4}
-      ]
-    },
-    {
-      "text": "实现人脸检测核心功能",
-      "priority": "high",
-      "dueDate": "2025-10-25",
-      "subtasks": [
-        {"text": "创建检测Activity页面", "weight": 3},
-        {"text": "实现相机预览功能", "weight": 4},
-        {"text": "调用活体检测API", "weight": 5},
-        {"text": "处理检测结果回调", "weight": 4}
-      ]
-    },
-    {
-      "text": "UI优化和异常处理",
-      "priority": "medium",
-      "dueDate": "2025-10-26",
-      "subtasks": [
-        {"text": "添加检测框和提示文字", "weight": 3},
-        {"text": "实现检测失败重试逻辑", "weight": 4},
-        {"text": "添加网络异常处理", "weight": 3}
-      ]
-    },
-    {
-      "text": "测试和文档编写",
-      "priority": "medium",
-      "dueDate": "2025-10-27",
-      "subtasks": [
-        {"text": "真机测试各种光线环境", "weight": 4},
-        {"text": "记录测试结果和问题", "weight": 4, "requiresInput": true},
-        {"text": "编写接入文档和注意事项", "weight": 3}
-      ]
-    }
-  ]
-}
-
-**关键**：
-- 第1天的 dueDate 必须是 ${todayStr}（今天）
-- 第2天的 dueDate 必须是次日
-- 第3天的 dueDate 必须是第三天
-- 每天的日期必须连续递增，不能跳过或重复
-- ${isProgressiveMode ? `本次只生成 ${promptDays} 个任务即可（第${promptDays + 1}天及以后会自动生成）` : '必须为所有天数生成任务'}`
+要求：
+1. ${isDailyPlan ? `每日计划：任务命名"第N天 - 描述"，${isProgressiveMode ? `生成${promptDays}天` : `生成${totalDays}天`}，日期从${todayStr}连续递增，子任务具体可执行` : isTechProject ? '技术项目：按阶段划分(环境→开发→测试→部署)，任务具体，子任务细化到可执行步骤' : isLearningPlan ? '学习计划：按知识点/章节划分，含理论+实践+总结' : '合理分解任务'}
+2. 任务数${isDailyPlan ? (isProgressiveMode ? promptDays : totalDays) : '5-15'}个，每个3-8个子任务
+3. 优先级：前期m，中期h，后期m
+4. 需记录结果的子任务设r=1（如：测体重、记录配置）
+5. 颜色可选：#8A9DFB/#FF6B6B/#4ECDC4/#95E1D3
+6. 只返回JSON，无其他文字`
 
   const messages = [
     {
@@ -569,18 +450,21 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
     }
   }
   
-  // 验证项目计划结构
-  if (!projectPlan.project || !projectPlan.tasks || !Array.isArray(projectPlan.tasks)) {
+  // 验证项目计划结构（兼容新旧格式）
+  const projectData = projectPlan.p || projectPlan.project
+  const tasksData = projectPlan.t || projectPlan.tasks
+  
+  if (!projectData || !tasksData || !Array.isArray(tasksData)) {
     console.error('项目计划结构不完整:', projectPlan)
     throw new Error('项目计划结构不完整，缺少必要字段')
   }
   
   // 更新进度：创建项目
-  const finalProjectName = projectPlan.project.name || projectName
+  const finalProjectName = projectData.n || projectData.name || projectName
   if (onProgress) onProgress(`📁 正在创建项目"${finalProjectName}"...`)
   
   // 创建项目
-  const projectColor = projectPlan.project.color || '#8A9DFB'
+  const projectColor = projectData.c || projectData.color || '#8A9DFB'
   
   const project = {
     id: Date.now(),
@@ -595,7 +479,7 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
   
   // 创建第一批任务
   const createdTasks = []
-  const firstBatchTasks = projectPlan.tasks
+  const firstBatchTasks = tasksData
   
   for (let i = 0; i < firstBatchTasks.length; i++) {
     const taskData = firstBatchTasks[i]
@@ -610,33 +494,52 @@ ${isProgressiveMode ? `【总天数】：${totalDays}天\n【本批天数】：�
       onProgress(`✅ 正在创建第 ${dayNumber} 天的任务... ${isProgressiveMode ? `(${overallProgress}%)` : ''}`)
     }
     
+    // 兼容新旧字段名
+    const taskText = taskData.tx || taskData.text
+    const taskPriority = taskData.pr || taskData.priority
+    const taskDueDate = taskData.dd || taskData.dueDate
+    const taskSubtasks = taskData.s || taskData.subtasks || []
+    
     // 如果 AI 没有指定截止日期，默认设置为从今天开始递增
-    let finalDueDate = taskData.dueDate
+    let finalDueDate = taskDueDate
     if (!finalDueDate) {
       const dueDate = new Date()
       dueDate.setDate(dueDate.getDate() + i) // 第 i 个任务的截止日期为今天 + i 天
       finalDueDate = dueDate.toISOString().split('T')[0]
     }
     
+    // 转换优先级（h/m/l -> high/medium/low）
+    let priority = 'medium'
+    if (taskPriority === 'h' || taskPriority === 'high') priority = 'high'
+    else if (taskPriority === 'l' || taskPriority === 'low') priority = 'low'
+    else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
+    else if (taskPriority) priority = taskPriority
+    
     const task = {
       id: Date.now() + i,
-      text: taskData.text,
+      text: taskText,
       completed: false,
-      priority: taskData.priority || 'medium',
+      priority,
       projectId: project.id,
       createdAt: new Date().toISOString(),
       completedAt: null,
       dueDate: finalDueDate,
       images: [],
       pinned: false,
-      subtasks: (taskData.subtasks || []).map((st, idx) => ({
-        id: Date.now() + i * 1000 + idx,
-        text: st.text,
-        completed: false,
-        weight: st.weight || 3,
-        requiresInput: st.requiresInput || false,
-        inputValue: ''
-      })),
+      subtasks: taskSubtasks.map((st, idx) => {
+        const subtaskText = st.tx || st.text
+        const subtaskWeight = st.w || st.weight || 3
+        const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
+        
+        return {
+          id: Date.now() + i * 1000 + idx,
+          text: subtaskText,
+          completed: false,
+          weight: subtaskWeight,
+          requiresInput: subtaskRequiresInput,
+          inputValue: ''
+        }
+      }),
       progressRecords: []
     }
     
@@ -686,29 +589,12 @@ async function createRemainingDays(project, totalDays, currentDay, description, 
     taskDate.setDate(baseDate.getDate() + currentDay)
     const taskDateStr = taskDate.toISOString().split('T')[0]
     
-    const prompt = `继续为"${project.name}"项目生成任务。这是一个${totalDays}天的计划，现在生成第${dayNumber}天的任务。
+    const prompt = `为"${project.name}"生成第${dayNumber}天任务(共${totalDays}天)。描述：${description}
 
-【项目描述】：${description}
-【当前日期】：${taskDateStr}（第${dayNumber}天）
-【总天数】：${totalDays}天
+返回格式（简写）：
+{"tx": "第${dayNumber}天 - 标题", "pr": "m", "dd": "${taskDateStr}", "s": [{"tx": "子任务", "w": 3, "r": 0}]}
 
-请为第${dayNumber}天生成一个任务。返回 JSON 对象格式：
-{
-  "text": "第${dayNumber}天 - 任务标题",
-  "priority": "medium",
-  "dueDate": "${taskDateStr}",
-  "subtasks": [
-    {"text": "具体可执行的子任务", "weight": 3, "requiresInput": false}
-  ]
-}
-
-**重要**：
-1. 只生成第${dayNumber}天这一天的任务
-2. 任务标题格式：第${dayNumber}天 - 具体描述
-3. dueDate 必须是 ${taskDateStr}
-4. 子任务要具体可执行，符合整体计划在第${dayNumber}天的进度
-5. 对需要记录结果的子任务设置 requiresInput: true
-6. 只返回 JSON 对象，不要其他内容`
+要求：标题"第${dayNumber}天 - XX"，dd=${taskDateStr}，子任务具体可执行，需记录结果的设r=1，只返回JSON`
 
     try {
       const content = await deepseekClient.chatCompletions([
@@ -731,32 +617,51 @@ async function createRemainingDays(project, totalDays, currentDay, description, 
         }
       }
       
+      // 兼容新旧字段名
+      const taskText = taskData.tx || taskData.text
+      const taskPriority = taskData.pr || taskData.priority
+      const taskDueDate = taskData.dd || taskData.dueDate
+      const taskSubtasks = taskData.s || taskData.subtasks || []
+      
       // 确保日期正确
-      let taskDueDate = taskData.dueDate
-      if (!taskDueDate || taskDueDate !== taskDateStr) {
-        taskDueDate = taskDateStr
+      let finalDueDate = taskDueDate
+      if (!finalDueDate || finalDueDate !== taskDateStr) {
+        finalDueDate = taskDateStr
       }
+      
+      // 转换优先级
+      let priority = 'medium'
+      if (taskPriority === 'h' || taskPriority === 'high') priority = 'high'
+      else if (taskPriority === 'l' || taskPriority === 'low') priority = 'low'
+      else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
+      else if (taskPriority) priority = taskPriority
       
       // 创建任务
       const task = {
         id: Date.now() + currentDay,
-        text: taskData.text,
+        text: taskText,
         completed: false,
-        priority: taskData.priority || 'medium',
+        priority,
         projectId: project.id,
         createdAt: new Date().toISOString(),
         completedAt: null,
-        dueDate: taskDueDate,
+        dueDate: finalDueDate,
         images: [],
         pinned: false,
-        subtasks: (taskData.subtasks || []).map((st, idx) => ({
-          id: Date.now() + currentDay * 1000 + idx,
-          text: st.text,
-          completed: false,
-          weight: st.weight || 3,
-          requiresInput: st.requiresInput || false,
-          inputValue: ''
-        })),
+        subtasks: taskSubtasks.map((st, idx) => {
+          const subtaskText = st.tx || st.text
+          const subtaskWeight = st.w || st.weight || 3
+          const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
+          
+          return {
+            id: Date.now() + currentDay * 1000 + idx,
+            text: subtaskText,
+            completed: false,
+            weight: subtaskWeight,
+            requiresInput: subtaskRequiresInput,
+            inputValue: ''
+          }
+        }),
         progressRecords: []
       }
       
