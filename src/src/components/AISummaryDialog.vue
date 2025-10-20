@@ -39,72 +39,113 @@ function handleClose() {
 </script>
 
 <style scoped>
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+  backdrop-filter: blur(4px);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog-box {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .ai-summary-dialog {
-  max-width: 600px;
-  width: 90%;
+  width: 600px;
+  max-width: 90%;
 }
 
 .dialog-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
+  gap: 10px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+  color: white;
 }
 
 .dialog-header svg:first-child {
-  width: 24px;
-  height: 24px;
-  color: var(--primary-color);
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
 }
 
 .dialog-header h3 {
   flex: 1;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-primary);
   margin: 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .btn-close {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.1);
   cursor: pointer;
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
+  color: white;
   transition: all 0.2s;
 }
 
 .btn-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .btn-close svg {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
 }
 
 .summary-content {
   max-height: 400px;
   overflow-y: auto;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
+  padding: 20px;
+  background: var(--bg-primary);
   font-size: 14px;
   line-height: 1.8;
   color: var(--text-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
-  margin-bottom: 20px;
+  margin: 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
 }
 
 .summary-content::-webkit-scrollbar {
@@ -122,6 +163,30 @@ function handleClose() {
 
 .summary-content::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 0 20px 20px;
+}
+
+.btn-confirm {
+  padding: 9px 24px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--primary-color);
+  color: white;
+  min-width: 80px;
+}
+
+.btn-confirm:hover {
+  background: var(--primary-hover);
 }
 </style>
 
