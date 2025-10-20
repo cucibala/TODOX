@@ -160,6 +160,280 @@
   background: linear-gradient(90deg, var(--success-color), #48bb78);
 }
 
+/* 可展开的统计项 */
+.daily-stat-item.expandable .daily-stat-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 6px;
+}
+
+.daily-stat-item.expandable .daily-stat-header:hover {
+  background-color: var(--bg-hover);
+}
+
+.daily-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 展开图标 */
+.expand-icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.expand-icon.small {
+  width: 12px;
+  height: 12px;
+}
+
+/* 完成任务详情 */
+.completed-details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.detail-header:hover {
+  background-color: var(--bg-hover);
+}
+
+.detail-label {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.detail-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary-color);
+  min-width: 20px;
+  text-align: right;
+}
+
+/* 任务列表 */
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border-color);
+}
+
+.task-item-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.task-item-mini:hover {
+  background-color: var(--bg-hover);
+  transform: translateX(2px);
+}
+
+.task-item-mini.completed .task-text {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.task-check-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--success-color);
+}
+
+.task-circle-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.task-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.empty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px;
+  text-align: center;
+  font-style: italic;
+}
+
+/* 到期提醒 */
+.due-date-alerts {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-section {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.alert-section.overdue {
+  background: rgba(245, 101, 101, 0.05);
+  border: 1px solid rgba(245, 101, 101, 0.2);
+}
+
+.alert-section.upcoming {
+  background: rgba(237, 137, 54, 0.05);
+  border: 1px solid rgba(237, 137, 54, 0.2);
+}
+
+.alert-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.alert-header:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.alert-section.overdue .alert-header {
+  color: var(--danger-color);
+}
+
+.alert-section.upcoming .alert-header {
+  color: var(--warning-color);
+}
+
+.alert-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.alert-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.alert-count {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  min-width: 24px;
+  text-align: center;
+}
+
+.alert-section.overdue .alert-count {
+  background: rgba(245, 101, 101, 0.15);
+  color: var(--danger-color);
+}
+
+.alert-section.upcoming .alert-count {
+  background: rgba(237, 137, 54, 0.15);
+  color: var(--warning-color);
+}
+
+.alert-task {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color);
+  margin-bottom: 6px;
+}
+
+.alert-task:last-child {
+  margin-bottom: 0;
+}
+
+.task-alert-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.alert-section.overdue .task-alert-icon {
+  color: var(--danger-color);
+}
+
+.alert-section.upcoming .task-alert-icon {
+  color: var(--warning-color);
+}
+
+.task-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.task-due-info {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
+.task-due-info.overdue {
+  background: rgba(245, 101, 101, 0.1);
+  color: var(--danger-color);
+}
+
+.task-due-info.upcoming {
+  background: rgba(237, 137, 54, 0.1);
+  color: var(--warning-color);
+}
+
 .section-title {
   font-size: 12px;
   text-transform: uppercase;

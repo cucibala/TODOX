@@ -360,39 +360,39 @@ async function handleGenerateSummary() {
     let modelUsed = ''
 
     // 1. 尝试使用 DeepSeek
-    const hasDeepSeekResult = await electronAPI.hasDeepSeekKey()
-    if (hasDeepSeekResult.hasKey) {
-      const deepSeekKeyResult = await electronAPI.getDeepSeekKey()
-      if (deepSeekKeyResult.success && deepSeekKeyResult.key) {
-        try {
+    try {
+      const hasDeepSeekResult = await electronAPI.hasDeepSeekKey()
+      if (hasDeepSeekResult && hasDeepSeekResult.hasKey) {
+        const deepSeekKeyResult = await electronAPI.getDeepSeekKey()
+        if (deepSeekKeyResult && deepSeekKeyResult.success && deepSeekKeyResult.key) {
           isGeneratingSummary.value = true
           appStore.toast('正在使用 DeepSeek 生成总结...')
           summary = await generateDailySummary(plainTasks, deepSeekKeyResult.key)
           modelUsed = 'DeepSeek'
-        } catch (error) {
-          console.error('DeepSeek 生成失败，尝试豆包:', error)
         }
       }
+    } catch (error) {
+      console.error('DeepSeek 检查或生成失败，尝试豆包:', error)
     }
 
     // 2. 如果 DeepSeek 失败或未配置，尝试使用豆包
     if (!summary) {
-      const doubaoConfigResult = await electronAPI.getDoubaoConfig()
-      if (doubaoConfigResult && doubaoConfigResult.apiKey) {
-        try {
+      try {
+        const doubaoConfigResult = await electronAPI.getDoubaoConfig()
+        if (doubaoConfigResult && doubaoConfigResult.success && doubaoConfigResult.key) {
           isGeneratingSummary.value = true
           appStore.toast('正在使用豆包生成总结...')
           const doubaoClient = new DoubaoClient(
-            doubaoConfigResult.apiKey,
+            doubaoConfigResult.key,
             doubaoConfigResult.endpoint,
             doubaoConfigResult.model
           )
           summary = await doubaoClient.generateDailySummary(plainTasks)
           modelUsed = '豆包'
-        } catch (error) {
-          console.error('豆包生成失败:', error)
-          throw new Error('豆包 API 调用失败：' + error.message)
         }
+      } catch (error) {
+        console.error('豆包生成失败:', error)
+        throw new Error('豆包 API 调用失败：' + error.message)
       }
     }
 

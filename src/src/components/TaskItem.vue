@@ -2,6 +2,7 @@
   <div 
     class="task-item" 
     :class="{ completed: task.completed, pinned: task.pinned }"
+    :data-task-id="task.id"
   >
     <!-- 复选框 -->
     <div class="task-checkbox" @click="handleToggle">
@@ -94,10 +95,13 @@
       <!-- 元信息 -->
       <div class="task-meta">
         <div class="task-time">{{ formatDate(task.createdAt) }}</div>
-        <div 
-          v-if="task.dueDate" 
+        
+        <!-- 到期时间显示/编辑 -->
+        <div v-if="!isEditingDueDate && task.dueDate" 
           class="task-due-date" 
           :class="getDueDateStatus(task.dueDate)"
+          @click="handleStartEditDueDate"
+          title="点击修改到期时间"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -107,6 +111,49 @@
           </svg>
           {{ formatDueDate(task.dueDate) }}
         </div>
+        
+        <!-- 编辑到期时间 -->
+        <div v-if="isEditingDueDate" class="task-due-date-edit">
+          <input 
+            type="date" 
+            v-model="editDueDate" 
+            class="due-date-input"
+            ref="dueDateInputRef"
+          />
+          <button class="btn-save-due-date" @click="handleSaveDueDate" title="保存">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+          <button class="btn-cancel-due-date" @click="handleCancelEditDueDate" title="取消">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          <button v-if="task.dueDate" class="btn-remove-due-date" @click="handleRemoveDueDate" title="移除到期时间">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- 如果没有到期时间，显示添加按钮 -->
+        <div v-if="!task.dueDate && !isEditingDueDate" 
+          class="task-add-due-date" 
+          @click="handleStartEditDueDate"
+          title="设置到期时间"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          设置到期时间
+        </div>
+        
         <div v-if="task.completed && task.completedAt" class="task-completed-time">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="20 6 9 17 4 12"></polyline>
@@ -488,6 +535,11 @@ const subtaskImageCache = ref({})
 const isEditing = ref(false)
 const editText = ref('')
 const editInputRef = ref(null)
+
+// 到期时间编辑状态
+const isEditingDueDate = ref(false)
+const editDueDate = ref('')
+const dueDateInputRef = ref(null)
 
 // AI 拆解状态
 const isAIBreakingDown = ref(false)
@@ -989,6 +1041,53 @@ function canCompleteSubtask(subtask) {
     return subtask.inputValue && subtask.inputValue.trim() !== ''
   }
   return true
+}
+
+// 开始编辑到期时间
+function handleStartEditDueDate() {
+  isEditingDueDate.value = true
+  // 如果已有到期时间，转换为 YYYY-MM-DD 格式
+  if (props.task.dueDate) {
+    const date = new Date(props.task.dueDate)
+    editDueDate.value = date.toISOString().split('T')[0]
+  } else {
+    // 默认设置为今天
+    const today = new Date()
+    editDueDate.value = today.toISOString().split('T')[0]
+  }
+  // 聚焦到日期输入框
+  setTimeout(() => {
+    if (dueDateInputRef.value) {
+      dueDateInputRef.value.focus()
+    }
+  }, 0)
+}
+
+// 保存到期时间
+async function handleSaveDueDate() {
+  if (!editDueDate.value) {
+    appStore.toast('请选择到期时间')
+    return
+  }
+  
+  await todoStore.updateTask(props.task.id, { dueDate: editDueDate.value })
+  isEditingDueDate.value = false
+  editDueDate.value = ''
+  appStore.toast('到期时间已更新')
+}
+
+// 取消编辑到期时间
+function handleCancelEditDueDate() {
+  isEditingDueDate.value = false
+  editDueDate.value = ''
+}
+
+// 移除到期时间
+async function handleRemoveDueDate() {
+  await todoStore.updateTask(props.task.id, { dueDate: null })
+  isEditingDueDate.value = false
+  editDueDate.value = ''
+  appStore.toast('到期时间已移除')
 }
 </script>
 

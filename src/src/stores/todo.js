@@ -87,15 +87,18 @@ export const useTodoStore = defineStore('todo', () => {
   const completedCount = computed(() => todos.value.filter(t => t.completed).length)
   
   // 今日统计
-  const todayAddedCount = computed(() => {
+  // 今日新增任务列表
+  const todayAddedTasks = computed(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     return todos.value.filter(t => {
       const createdDate = new Date(t.createdAt)
       createdDate.setHours(0, 0, 0, 0)
       return createdDate.getTime() === today.getTime()
-    }).length
+    })
   })
+  
+  const todayAddedCount = computed(() => todayAddedTasks.value.length)
   
   const todayCompletedCount = computed(() => {
     const today = new Date()
@@ -107,6 +110,82 @@ export const useTodoStore = defineStore('todo', () => {
       return completedDate.getTime() === today.getTime()
     }).length
   })
+  
+  // 今日完成的任务列表（所有今日完成的）
+  const todayCompletedTasks = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return todos.value.filter(t => {
+      if (!t.completed || !t.completedAt) return false
+      const completedDate = new Date(t.completedAt)
+      completedDate.setHours(0, 0, 0, 0)
+      return completedDate.getTime() === today.getTime()
+    })
+  })
+  
+  // 今日创建并今日完成的任务
+  const todayTasksCompleted = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return todayCompletedTasks.value.filter(t => {
+      const createdDate = new Date(t.createdAt)
+      createdDate.setHours(0, 0, 0, 0)
+      return createdDate.getTime() === today.getTime()
+    })
+  })
+  
+  // 遗留任务完成（之前创建今日完成）
+  const legacyTasksCompleted = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return todayCompletedTasks.value.filter(t => {
+      const createdDate = new Date(t.createdAt)
+      createdDate.setHours(0, 0, 0, 0)
+      return createdDate.getTime() !== today.getTime()
+    })
+  })
+  
+  // 今日任务完成数量
+  const todayTasksCompletedCount = computed(() => todayTasksCompleted.value.length)
+  
+  // 遗留任务完成数量
+  const legacyTasksCompletedCount = computed(() => legacyTasksCompleted.value.length)
+  
+  // 即将到期任务（未完成且3天内到期）
+  const upcomingTasks = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const threeDaysLater = new Date(today)
+    threeDaysLater.setDate(today.getDate() + 3)
+    
+    return todos.value.filter(t => {
+      if (t.completed || !t.dueDate) return false
+      const dueDate = new Date(t.dueDate)
+      dueDate.setHours(0, 0, 0, 0)
+      // 在今天到3天后之间（包含今天）
+      return dueDate.getTime() >= today.getTime() && dueDate.getTime() <= threeDaysLater.getTime()
+    })
+  })
+  
+  // 即将到期任务数量
+  const upcomingTasksCount = computed(() => upcomingTasks.value.length)
+  
+  // 已逾期任务（未完成且到期日期已过）
+  const overdueTasks = computed(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    return todos.value.filter(t => {
+      if (t.completed || !t.dueDate) return false
+      const dueDate = new Date(t.dueDate)
+      dueDate.setHours(0, 0, 0, 0)
+      // 在今天之前
+      return dueDate.getTime() < today.getTime()
+    })
+  })
+  
+  // 已逾期任务数量
+  const overdueTasksCount = computed(() => overdueTasks.value.length)
   
   // 加载任务
   async function loadTodos() {
@@ -444,8 +523,18 @@ export const useTodoStore = defineStore('todo', () => {
     filteredTodos,
     totalCount,
     completedCount,
+    todayAddedTasks,
     todayAddedCount,
     todayCompletedCount,
+    todayCompletedTasks,
+    todayTasksCompleted,
+    legacyTasksCompleted,
+    todayTasksCompletedCount,
+    legacyTasksCompletedCount,
+    upcomingTasks,
+    upcomingTasksCount,
+    overdueTasks,
+    overdueTasksCount,
     
     // 方法
     loadTodos,

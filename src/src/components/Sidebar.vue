@@ -119,9 +119,22 @@
         
         <!-- 今日统计 - 进度条 -->
         <div class="daily-stats">
-          <div class="daily-stat-item">
-            <div class="daily-stat-header">
-              <span class="daily-stat-label">今日新增</span>
+          <!-- 今日新增 - 可展开 -->
+          <div class="daily-stat-item expandable">
+            <div class="daily-stat-header" @click="toggleAddedExpand">
+              <span class="daily-stat-label">
+                今日新增
+                <svg 
+                  class="expand-icon" 
+                  :class="{ expanded: showAddedDetails }"
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  stroke-width="2"
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </span>
               <span class="daily-stat-value">{{ todayAddedCount }}</span>
             </div>
             <div class="daily-progress-bar">
@@ -130,11 +143,47 @@
                 :style="{ width: todayAddedPercentage + '%' }"
               ></div>
             </div>
+            
+            <!-- 展开的今日新增任务列表 -->
+            <div v-if="showAddedDetails" class="completed-details">
+              <div class="task-list">
+                <div 
+                  v-for="task in todayAddedTasks" 
+                  :key="task.id" 
+                  class="task-item-mini"
+                  :class="{ completed: task.completed }"
+                  :title="task.text"
+                  @click="scrollToTask(task.id)"
+                >
+                  <svg v-if="task.completed" class="task-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <svg v-else class="task-circle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                  </svg>
+                  <span class="task-text">{{ task.text }}</span>
+                </div>
+                <div v-if="todayAddedCount === 0" class="empty-hint">今日暂无新增任务</div>
+              </div>
+            </div>
           </div>
           
-          <div class="daily-stat-item">
-            <div class="daily-stat-header">
-              <span class="daily-stat-label">今日完成</span>
+          <!-- 今日完成总览 - 可展开 -->
+          <div class="daily-stat-item expandable">
+            <div class="daily-stat-header" @click="toggleCompletedExpand">
+              <span class="daily-stat-label">
+                今日完成
+                <svg 
+                  class="expand-icon" 
+                  :class="{ expanded: showCompletedDetails }"
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  stroke-width="2"
+                >
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </span>
               <span class="daily-stat-value">{{ todayCompletedCount }}</span>
             </div>
             <div class="daily-progress-bar">
@@ -142,6 +191,160 @@
                 class="daily-progress-fill completed" 
                 :style="{ width: todayCompletedPercentage + '%' }"
               ></div>
+            </div>
+            
+            <!-- 展开的详细统计 -->
+            <div v-if="showCompletedDetails" class="completed-details">
+              <!-- 今日任务完成 -->
+              <div class="detail-section">
+                <div class="detail-header" @click="toggleTodayTasksExpand">
+                  <svg 
+                    class="expand-icon small" 
+                    :class="{ expanded: showTodayTasks }"
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    stroke-width="2"
+                  >
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                  <span class="detail-label">完成今日任务</span>
+                  <span class="detail-count">{{ todayTasksCompletedCount }}</span>
+                </div>
+                <div v-if="showTodayTasks" class="task-list">
+                  <div 
+                    v-for="task in todayTasksCompleted" 
+                    :key="task.id" 
+                    class="task-item-mini"
+                    :title="task.text"
+                    @click="scrollToTask(task.id)"
+                  >
+                    <svg class="task-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span class="task-text">{{ task.text }}</span>
+                  </div>
+                  <div v-if="todayTasksCompletedCount === 0" class="empty-hint">暂无完成任务</div>
+                </div>
+              </div>
+              
+              <!-- 遗留任务完成 -->
+              <div class="detail-section">
+                <div class="detail-header" @click="toggleLegacyTasksExpand">
+                  <svg 
+                    class="expand-icon small" 
+                    :class="{ expanded: showLegacyTasks }"
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    stroke-width="2"
+                  >
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                  <span class="detail-label">完成遗留任务</span>
+                  <span class="detail-count">{{ legacyTasksCompletedCount }}</span>
+                </div>
+                <div v-if="showLegacyTasks" class="task-list">
+                  <div 
+                    v-for="task in legacyTasksCompleted" 
+                    :key="task.id" 
+                    class="task-item-mini"
+                    :title="task.text"
+                    @click="scrollToTask(task.id)"
+                  >
+                    <svg class="task-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span class="task-text">{{ task.text }}</span>
+                  </div>
+                  <div v-if="legacyTasksCompletedCount === 0" class="empty-hint">暂无完成任务</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 到期提醒 -->
+        <div class="due-date-alerts">
+          <!-- 已逾期任务 -->
+          <div v-if="overdueTasksCount > 0" class="alert-section overdue">
+            <div class="alert-header" @click="toggleOverdueExpand">
+              <svg 
+                class="expand-icon" 
+                :class="{ expanded: showOverdueTasks }"
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                stroke-width="2"
+              >
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+              <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span class="alert-label">已逾期</span>
+              <span class="alert-count">{{ overdueTasksCount }}</span>
+            </div>
+            <div v-if="showOverdueTasks" class="task-list">
+              <div 
+                v-for="task in overdueTasks" 
+                :key="task.id" 
+                class="task-item-mini alert-task"
+                :title="task.text"
+                @click="scrollToTask(task.id)"
+              >
+                <svg class="task-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <div class="task-info">
+                  <span class="task-text">{{ task.text }}</span>
+                  <span class="task-due-info overdue">{{ formatDueDate(task.dueDate) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 即将到期任务 -->
+          <div v-if="upcomingTasksCount > 0" class="alert-section upcoming">
+            <div class="alert-header" @click="toggleUpcomingExpand">
+              <svg 
+                class="expand-icon" 
+                :class="{ expanded: showUpcomingTasks }"
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                stroke-width="2"
+              >
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+              <svg class="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span class="alert-label">临期提醒</span>
+              <span class="alert-count">{{ upcomingTasksCount }}</span>
+            </div>
+            <div v-if="showUpcomingTasks" class="task-list">
+              <div 
+                v-for="task in upcomingTasks" 
+                :key="task.id" 
+                class="task-item-mini alert-task"
+                :title="task.text"
+                @click="scrollToTask(task.id)"
+              >
+                <svg class="task-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <div class="task-info">
+                  <span class="task-text">{{ task.text }}</span>
+                  <span class="task-due-info upcoming">{{ formatDueDate(task.dueDate) }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -152,18 +355,42 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useProjectStore } from '../stores/project'
 import { useTodoStore } from '../stores/todo'
+import { formatDueDate } from '../utils/date'
 
 const appStore = useAppStore()
 const projectStore = useProjectStore()
 const todoStore = useTodoStore()
 
 const { projects, currentProjectId, hasProjects } = storeToRefs(projectStore)
-const { totalCount, completedCount, todayAddedCount, todayCompletedCount } = storeToRefs(todoStore)
+const { 
+  todos,
+  totalCount, 
+  completedCount, 
+  todayAddedTasks,
+  todayAddedCount, 
+  todayCompletedCount,
+  todayTasksCompleted,
+  legacyTasksCompleted,
+  todayTasksCompletedCount,
+  legacyTasksCompletedCount,
+  upcomingTasks,
+  upcomingTasksCount,
+  overdueTasks,
+  overdueTasksCount
+} = storeToRefs(todoStore)
+
+// 展开/收起状态
+const showAddedDetails = ref(false)
+const showCompletedDetails = ref(false)
+const showTodayTasks = ref(false)
+const showLegacyTasks = ref(false)
+const showUpcomingTasks = ref(false)
+const showOverdueTasks = ref(false)
 
 // 计算完成百分比
 const completionPercentage = computed(() => {
@@ -219,6 +446,66 @@ async function handleImportProject() {
     await projectStore.importProject()
   } catch (error) {
     console.error('导入项目失败:', error)
+  }
+}
+
+// 切换今日新增展开/收起
+function toggleAddedExpand() {
+  showAddedDetails.value = !showAddedDetails.value
+}
+
+// 切换完成任务详情展开/收起
+function toggleCompletedExpand() {
+  showCompletedDetails.value = !showCompletedDetails.value
+}
+
+// 切换今日任务列表展开/收起
+function toggleTodayTasksExpand() {
+  showTodayTasks.value = !showTodayTasks.value
+}
+
+// 切换遗留任务列表展开/收起
+function toggleLegacyTasksExpand() {
+  showLegacyTasks.value = !showLegacyTasks.value
+}
+
+// 切换即将到期任务展开/收起
+function toggleUpcomingExpand() {
+  showUpcomingTasks.value = !showUpcomingTasks.value
+}
+
+// 切换已逾期任务展开/收起
+function toggleOverdueExpand() {
+  showOverdueTasks.value = !showOverdueTasks.value
+}
+
+// 滚动到指定任务
+async function scrollToTask(taskId) {
+  // 先找到任务对象
+  const task = todos.value.find(t => t.id === taskId)
+  if (!task) return
+  
+  // 如果任务不在当前项目中，需要切换项目
+  if (task.projectId !== currentProjectId.value) {
+    projectStore.selectProject(task.projectId)
+    // 等待 DOM 更新完成
+    await nextTick()
+    // 再等待一小段时间确保渲染完成
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  
+  // 查找对应的任务元素
+  const taskElement = document.querySelector(`[data-task-id="${taskId}"]`)
+  if (taskElement) {
+    taskElement.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center' 
+    })
+    // 添加高亮效果
+    taskElement.classList.add('task-highlight')
+    setTimeout(() => {
+      taskElement.classList.remove('task-highlight')
+    }, 2000)
   }
 }
 </script>
