@@ -281,6 +281,8 @@ export const useChatStore = defineStore('chat', () => {
         apiMessages,
         {
           tools,
+          // 传递角色信息，用于决定是否启用推理模式
+          enableTools: currentRole.enableTools,
           onReasoning: (delta) => {
             // 处理思考内容（推理模型）
             if (streamingMessageIndex.value >= 0) {

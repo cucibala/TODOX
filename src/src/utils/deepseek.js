@@ -16,7 +16,7 @@ export class DeepSeekClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { tools = [], onContent, onToolCalls, onReasoning } = options
+    const { tools = [], onContent, onToolCalls, onReasoning, enableTools = false } = options
     console.log('chatCompletionsStream', messages, tools)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段

@@ -18,7 +18,7 @@ export class DoubaoClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning } = options
+    const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning, enableTools = false } = options
     // if(!onReasoning) {
     //   onReasoning = (text) => {
     //     console.log('豆包 chatCompletionsStream', text)
@@ -29,10 +29,14 @@ export class DoubaoClient {
     const requestBody = {
       model,
       messages,
-      stream: true,
-      // 设置推理模式为最小，避免在工具调用场景下的格式限制
-      // 这样可以允许最后一条消息是空的 assistant（工具调用后的占位）
-      reasoning_effort: 'minimal'
+      stream: true
+    }
+    
+    // 如果角色启用了工具（项目助手），设置推理模式为最小
+    // 这样可以避免格式限制（允许空 assistant 占位消息）
+    // 如果是通用助手（enableTools=false），保持默认推理模式，可以看到完整思考过程
+    if (enableTools) {
+      requestBody.reasoning_effort = 'minimal'
     }
     
     // 只有当 tools 数组非空时才添加到请求中
