@@ -461,7 +461,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, nextTick } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
@@ -869,9 +869,18 @@ async function handleDeleteProgress(progressId) {
 }
 
 // 开始编辑进度
-function handleStartEditProgress(progressItem) {
+async function handleStartEditProgress(progressItem) {
   editingProgressId.value = progressItem.id
   editingProgressText.value = progressItem.text
+  // 等待 DOM 更新后聚焦输入框并自动调整高度
+  await nextTick()
+  const textarea = document.querySelector('.progress-edit-input')
+  if (textarea) {
+    textarea.focus()
+    // 自动调整高度
+    textarea.style.height = 'auto'
+    textarea.style.height = textarea.scrollHeight + 'px'
+  }
 }
 
 // 保存进度编辑
