@@ -19,7 +19,11 @@ export class DoubaoClient {
    */
   async chatCompletionsStream(messages, options = {}) {
     const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning } = options
-    console.log('豆包 chatCompletionsStream', messages, model, tools)
+    // if(!onReasoning) {
+    //   onReasoning = (text) => {
+    //     console.log('豆包 chatCompletionsStream', text)
+    //   }
+    // } 
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
     const requestBody = {

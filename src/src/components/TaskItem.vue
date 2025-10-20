@@ -282,22 +282,59 @@
                 </svg>
               </div>
               <div class="progress-content">
-                <div class="progress-text">{{ progressItem.text }}</div>
-                <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
-                <!-- 进度图片 -->
-                <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
-                  <img
-                    v-for="(image, index) in progressItem.images"
-                    :key="index"
-                    v-show="progressImageCache[image]"
-                    :src="progressImageCache[image]"
-                    class="progress-image"
-                    @click="appStore.viewImage(progressImageCache[image])"
-                    alt="进度图片"
-                  />
+                <!-- 编辑模式 -->
+                <div v-if="editingProgressId === progressItem.id" class="progress-edit-mode">
+                  <textarea 
+                    v-model="editingProgressText" 
+                    class="progress-edit-input"
+                    @keydown.ctrl.enter="handleSaveProgressEdit(progressItem.id)"
+                    @keydown.esc="handleCancelProgressEdit"
+                  ></textarea>
+                  <div class="progress-edit-actions">
+                    <button class="btn-save-progress-edit" @click="handleSaveProgressEdit(progressItem.id)" title="保存 (Ctrl+Enter)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      保存
+                    </button>
+                    <button class="btn-cancel-progress-edit" @click="handleCancelProgressEdit" title="取消 (Esc)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      取消
+                    </button>
+                  </div>
                 </div>
+                <!-- 显示模式 -->
+                <template v-else>
+                  <div class="progress-text">{{ progressItem.text }}</div>
+                  <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
+                  <!-- 进度图片 -->
+                  <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
+                    <img
+                      v-for="(image, index) in progressItem.images"
+                      :key="index"
+                      v-show="progressImageCache[image]"
+                      :src="progressImageCache[image]"
+                      class="progress-image"
+                      @click="appStore.viewImage(progressImageCache[image])"
+                      alt="进度图片"
+                    />
+                  </div>
+                </template>
               </div>
               <div class="progress-actions">
+                <button 
+                  class="btn-edit-progress" 
+                  @click="handleStartEditProgress(progressItem)"
+                  title="编辑进度"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
                 <button 
                   class="btn-copy-progress" 
                   @click="handleCopyProgressText(progressItem.text)"
@@ -464,6 +501,10 @@ const dragOverIndex = ref(null)
 const progressInput = ref('')
 const showProgress = ref(false)
 const progressTextareaRef = ref(null)
+
+// 进度编辑状态
+const editingProgressId = ref(null)
+const editingProgressText = ref('')
 // 用于预览的图片数据（base64）
 const progressImagePreviews = ref({})
 // 当前任务的进度图片文件名列表
@@ -825,6 +866,32 @@ async function handleDeleteProgress(progressId) {
     await todoStore.deleteProgress(props.task.id, progressId)
     appStore.toast('进度已删除')
   }
+}
+
+// 开始编辑进度
+function handleStartEditProgress(progressItem) {
+  editingProgressId.value = progressItem.id
+  editingProgressText.value = progressItem.text
+}
+
+// 保存进度编辑
+async function handleSaveProgressEdit(progressId) {
+  const newText = editingProgressText.value.trim()
+  if (!newText) {
+    appStore.toast('进度描述不能为空')
+    return
+  }
+  
+  await todoStore.updateProgress(props.task.id, progressId, newText)
+  editingProgressId.value = null
+  editingProgressText.value = ''
+  appStore.toast('进度已更新')
+}
+
+// 取消编辑进度
+function handleCancelProgressEdit() {
+  editingProgressId.value = null
+  editingProgressText.value = ''
 }
 
 async function handleSelectProgressImage() {

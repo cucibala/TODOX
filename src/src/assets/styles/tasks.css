@@ -714,6 +714,112 @@
   height: 14px;
 }
 
+/* 进度编辑样式 */
+.progress-edit-mode {
+  margin-bottom: 8px;
+}
+
+.progress-edit-input {
+  width: 100%;
+  min-height: 60px;
+  max-height: 200px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--primary-color);
+  border-radius: 6px;
+  resize: vertical;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 8px;
+}
+
+.progress-edit-input:focus {
+  outline: none;
+  border-color: var(--primary-hover);
+  box-shadow: 0 0 0 2px rgba(138, 157, 251, 0.1);
+}
+
+.progress-edit-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-save-progress-edit,
+.btn-cancel-progress-edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-save-progress-edit {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-save-progress-edit:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.btn-save-progress-edit svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-cancel-progress-edit {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-cancel-progress-edit:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+
+.btn-cancel-progress-edit svg {
+  width: 14px;
+  height: 14px;
+}
+
+.btn-edit-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit-progress:hover {
+  background: var(--bg-hover);
+  color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.btn-edit-progress svg {
+  width: 16px;
+  height: 16px;
+}
+
 .task-meta {
   display: flex;
   gap: 12px;

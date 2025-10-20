@@ -419,6 +419,17 @@ export const useTodoStore = defineStore('todo', () => {
       await saveTodos()
     }
   }
+
+  async function updateProgress(taskId, progressId, newText) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && task.progress) {
+      const progress = task.progress.find(p => p.id === progressId)
+      if (progress) {
+        progress.text = newText
+        await saveTodos()
+      }
+    }
+  }
   
   return {
     // 状态
@@ -455,7 +466,8 @@ export const useTodoStore = defineStore('todo', () => {
     reorderSubtasks,
     getTaskProgress,
     addProgress,
-    deleteProgress
+    deleteProgress,
+    updateProgress
   }
 })
 
