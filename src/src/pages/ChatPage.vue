@@ -63,6 +63,29 @@
           <h2>{{ currentConversationTitle }}</h2>
         </div>
         
+        <div class="header-actions">
+          <!-- 模型选择器 -->
+          <div class="model-selector">
+            <button 
+              class="btn-model-toggle" 
+              @click="handleToggleModel"
+              :title="`当前模型: ${appStore.currentAIModel === 'deepseek' ? 'DeepSeek' : '豆包'}`"
+            >
+              <svg v-if="appStore.currentAIModel === 'deepseek'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <polyline points="2 17 12 22 22 17"/>
+                <polyline points="2 12 12 17 22 12"/>
+              </svg>
+              <span>{{ appStore.currentAIModel === 'deepseek' ? 'DeepSeek' : '豆包' }}</span>
+            </button>
+          </div>
+        </div>
+        
         <!-- 项目详情下拉（仅项目助手角色显示且已有消息） -->
         <div v-if="currentRole.enableProjects && selectedProjectIds.length > 0 && messages.length > 0" class="project-viewer">
           <button 
@@ -141,7 +164,27 @@
               </svg>
             </div>
             <div class="message-content">
-              <div class="message-text" v-if="message.content">{{ message.content }}</div>
+              <!-- 文本内容 -->
+              <div class="message-text" v-if="typeof message.content === 'string'">{{ message.content }}</div>
+              
+              <!-- 多模态内容（文本+图片） -->
+              <template v-else-if="Array.isArray(message.content)">
+                <div 
+                  v-for="(part, idx) in message.content" 
+                  :key="idx"
+                  class="message-part"
+                >
+                  <div v-if="part.type === 'text'" class="message-text">{{ part.text }}</div>
+                  <img 
+                    v-else-if="part.type === 'image_url'" 
+                    :src="part.image_url.url"
+                    class="message-image"
+                    @click="appStore.viewerImageSrc = part.image_url.url; appStore.showImageViewer = true"
+                    alt="用户图片"
+                  />
+                </div>
+              </template>
+              
               <div class="message-time">{{ formatTime(message.timestamp) }}</div>
             </div>
           </div>
@@ -227,24 +270,60 @@
               </div>
             </div>
             
-            <textarea
-              v-model="userInput"
-              @keydown.ctrl.enter="handleSend"
-              placeholder="输入消息... (Ctrl+Enter 发送)"
-              ref="inputTextarea"
-              rows="1"
-              @input="adjustTextareaHeight"
-            ></textarea>
+            <!-- 图片预览区域 -->
+            <div v-if="selectedImages.length > 0" class="image-preview-container">
+              <div v-for="(img, index) in selectedImages" :key="index" class="image-preview-item">
+                <img :src="img.preview" :alt="`预览${index + 1}`" />
+                <button class="btn-remove-image" @click="removeImage(index)" title="删除图片">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div class="input-row">
+              <button 
+                class="btn-upload-image" 
+                @click="triggerImageUpload"
+                title="上传图片"
+                :disabled="isLoading"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </button>
+              <input 
+                type="file" 
+                ref="imageInput" 
+                @change="handleImageSelect" 
+                accept="image/*"
+                multiple
+                style="display: none"
+              />
+              
+              <textarea
+                v-model="userInput"
+                @keydown.ctrl.enter="handleSend"
+                placeholder="输入消息... (Ctrl+Enter 发送)"
+                ref="inputTextarea"
+                rows="1"
+                @input="adjustTextareaHeight"
+              ></textarea>
               <button 
                 class="btn-send" 
                 @click="handleSend"
-                :disabled="!userInput.trim() || isLoading"
+                :disabled="(!userInput.trim() && selectedImages.length === 0) || isLoading"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
               </button>
+            </div>
             </div>
           </div>
         </div>
@@ -271,6 +350,7 @@ const { conversations, currentConversationId, messages, isLoading, userInput } =
 // 本地UI状态
 const messagesContainer = ref(null)
 const inputTextarea = ref(null)
+const imageInput = ref(null)
 const sidebarCollapsed = ref(false)
 
 // 输入框角色选择器
@@ -278,6 +358,9 @@ const showInputRoleSelector = ref(false)
 
 // 项目选择器
 const showProjectSelector = ref(false)
+
+// 图片上传状态
+const selectedImages = ref([])
 
 // 使用 chatStore 的计算属性
 const currentRoleId = computed(() => chatStore.currentRoleId)
@@ -417,17 +500,72 @@ async function handleDeleteConversation(convId) {
   await chatStore.deleteConversation(convId)
 }
 
+// 切换模型
+function handleToggleModel() {
+  const newModel = appStore.currentAIModel === 'deepseek' ? 'doubao' : 'deepseek'
+  appStore.currentAIModel = newModel
+  appStore.toast(`已切换到 ${newModel === 'deepseek' ? 'DeepSeek' : '豆包'} 模型`)
+}
+
+// 触发图片上传
+function triggerImageUpload() {
+  imageInput.value?.click()
+}
+
+// 处理图片选择
+async function handleImageSelect(event) {
+  const files = Array.from(event.target.files)
+  if (files.length === 0) return
+  
+  for (const file of files) {
+    // 限制图片大小（最大10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      appStore.toast(`图片 ${file.name} 超过 10MB，已跳过`)
+      continue
+    }
+    
+    // 读取图片并转换为 base64
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      selectedImages.value.push({
+        file,
+        preview: e.target.result,
+        base64: e.target.result.split(',')[1], // 只保留 base64 部分
+        mimeType: file.type
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+  
+  // 清空input，允许重复选择同一文件
+  event.target.value = ''
+}
+
+// 移除图片
+function removeImage(index) {
+  selectedImages.value.splice(index, 1)
+}
+
 // 发送消息
 async function handleSend() {
   const message = userInput.value.trim()
-  if (!message) return
+  const hasImages = selectedImages.value.length > 0
+  
+  if (!message && !hasImages) return
+  
+  // 准备图片数据
+  const images = selectedImages.value.map(img => ({
+    base64: img.base64,
+    mimeType: img.mimeType
+  }))
   
   // 调用 chatStore 发送消息（后台运行）
-  const sent = await chatStore.sendMessage(message)
+  const sent = await chatStore.sendMessage(message || '查看图片', images)
   
   if (sent) {
-    // 清空输入框
+    // 清空输入框和图片
     userInput.value = ''
+    selectedImages.value = []
     resetTextareaHeight()
     scrollToBottom()
   }

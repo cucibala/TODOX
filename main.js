@@ -804,6 +804,74 @@ ipcMain.handle('delete-deepseek-key', async () => {
   }
 });
 
+// ==================== 豆包 API 配置处理 ====================
+
+// IPC 通信处理 - 设置豆包 API 配置
+ipcMain.handle('set-doubao-config', async (event, config) => {
+  try {
+    if (!config.apiKey) {
+      return { success: false, error: 'API 密钥不能为空' };
+    }
+    const encrypted = encryptPassword(config.apiKey);
+    const settingsPath = getSettingsPath();
+    let settings = {};
+    if (fs.existsSync(settingsPath)) {
+      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
+    }
+    settings.doubaoApiKey = encrypted;
+    settings.doubaoEndpoint = config.endpoint || 'https://ark.cn-beijing.volces.com/api/v3';
+    settings.doubaoModel = config.model || 'ep-20241211105939-jpn2s';
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('设置豆包 API 配置失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 获取豆包 API 配置
+ipcMain.handle('get-doubao-config', async () => {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: false, key: '', endpoint: '', model: '' };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    if (!settings.doubaoApiKey) {
+      return { success: false, key: '', endpoint: '', model: '' };
+    }
+    const decrypted = decryptPassword(settings.doubaoApiKey);
+    return { 
+      success: true, 
+      key: decrypted,
+      endpoint: settings.doubaoEndpoint || 'https://ark.cn-beijing.volces.com/api/v3',
+      model: settings.doubaoModel || 'ep-20241211105939-jpn2s'
+    };
+  } catch (error) {
+    console.error('获取豆包 API 配置失败:', error);
+    return { success: false, key: '', endpoint: '', model: '', error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除豆包 API 配置
+ipcMain.handle('delete-doubao-config', async () => {
+  try {
+    const settingsPath = getSettingsPath();
+    if (!fs.existsSync(settingsPath)) {
+      return { success: true };
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    delete settings.doubaoApiKey;
+    delete settings.doubaoEndpoint;
+    delete settings.doubaoModel;
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    return { success: true };
+  } catch (error) {
+    console.error('删除豆包 API 配置失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 获取当前数据路径
 ipcMain.handle('get-data-path', async () => {
   try {

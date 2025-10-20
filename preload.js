@@ -31,6 +31,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hasDeepSeekKey: () => ipcRenderer.invoke('has-deepseek-key'),
   deleteDeepSeekKey: () => ipcRenderer.invoke('delete-deepseek-key'),
   
+  // 豆包 API 配置
+  setDoubaoConfig: (config) => ipcRenderer.invoke('set-doubao-config', config),
+  getDoubaoConfig: () => ipcRenderer.invoke('get-doubao-config'),
+  getDoubaoKey: () => ipcRenderer.invoke('get-doubao-config'), // 别名，为了兼容 chatStore
+  deleteDoubaoConfig: () => ipcRenderer.invoke('delete-doubao-config'),
+  
   // 会话管理
   loadConversations: () => ipcRenderer.invoke('load-conversations'),
   saveConversations: (conversationsData) => ipcRenderer.invoke('save-conversations', conversationsData),

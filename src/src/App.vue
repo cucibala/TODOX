@@ -45,19 +45,14 @@
     <!-- API 密钥对话框 -->
     <ApiKeyDialog />
 
+    <!-- 豆包配置对话框 -->
+    <DoubaoConfigDialog />
+
     <!-- 子任务建议对话框 -->
     <SubtaskSuggestionDialog />
 
     <!-- AI 加载动画对话框 -->
     <AILoadingDialog />
-    
-    <!-- 全局聊天状态指示器 -->
-    <div v-if="showChatStatusIndicator" class="chat-status-indicator">
-      <div class="chat-status-content">
-        <div class="chat-status-spinner"></div>
-        <span>{{ chatStatusText }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -75,6 +70,7 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import ProjectDialog from './components/ProjectDialog.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import ApiKeyDialog from './components/ApiKeyDialog.vue'
+import DoubaoConfigDialog from './components/DoubaoConfigDialog.vue'
 import SubtaskSuggestionDialog from './components/SubtaskSuggestionDialog.vue'
 import AILoadingDialog from './components/AILoadingDialog.vue'
 import SettingsPage from './pages/SettingsPage.vue'
@@ -89,7 +85,7 @@ const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
 
-const { isCompactMode, isDesktopMode, showLockScreen, currentPage, showChatStatusIndicator, chatStatusText } = storeToRefs(appStore)
+const { isCompactMode, isDesktopMode, showLockScreen, currentPage } = storeToRefs(appStore)
 
 onMounted(async () => {
   // 初始化应用
@@ -97,7 +93,22 @@ onMounted(async () => {
   await projectStore.loadProjects()
   await todoStore.loadTodos()
   await chatStore.loadConversations()
-  await chatStore.initDeepSeekClient()
+  await chatStore.initAIClients()
+  
+  // 智能选择默认 AI 模型（优先豆包）
+  const doubaoResult = await window.electronAPI.getDoubaoConfig()
+  const deepseekResult = await window.electronAPI.getDeepSeekKey()
+  
+  if (doubaoResult.success && doubaoResult.key) {
+    appStore.currentAIModel = 'doubao'
+    console.log('✅ 默认使用豆包模型')
+  } else if (deepseekResult.success && deepseekResult.key) {
+    appStore.currentAIModel = 'deepseek'
+    console.log('✅ 默认使用 DeepSeek 模型')
+  } else {
+    appStore.currentAIModel = 'deepseek'
+    console.log('⚠️ 未配置任何模型，默认 DeepSeek')
+  }
   
   // 检查密码保护
   await appStore.checkPasswordOnStartup()
@@ -117,60 +128,6 @@ body {
 #app {
   width: 100vw;
   height: 100vh;
-}
-
-/* 全局聊天状态指示器 */
-.chat-status-indicator {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 10000;
-  pointer-events: none;
-}
-
-.chat-status-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  background: rgba(138, 157, 251, 0.95);
-  color: white;
-  border-radius: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  font-size: 14px;
-  font-weight: 500;
-  backdrop-filter: blur(10px);
-  animation: slideInUp 0.3s ease-out;
-}
-
-.chat-status-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 桌面模式下的调整 */
-.desktop-mode .chat-status-indicator {
-  bottom: 40px;
-  right: 40px;
 }
 </style>
 

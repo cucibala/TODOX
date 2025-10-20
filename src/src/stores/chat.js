@@ -4,6 +4,7 @@ import { useAppStore } from './app'
 import { useTodoStore } from './todo'
 import { useProjectStore } from './project'
 import { DeepSeekClient } from '../utils/deepseek'
+import { DoubaoClient } from '../utils/doubao'
 import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask } from '../utils/tools'
 
 export const useChatStore = defineStore('chat', () => {
@@ -38,8 +39,14 @@ export const useChatStore = defineStore('chat', () => {
   const streamingMessageIndex = ref(-1)
   const userInput = ref('')
   
-  // DeepSeek 客户端
+  // AI 客户端（支持多模型）
   const deepseekClient = ref(null)
+  const doubaoClient = ref(null)
+  
+  // 当前使用的客户端
+  const currentClient = computed(() => {
+    return appStore.currentAIModel === 'doubao' ? doubaoClient.value : deepseekClient.value
+  })
   
   // 最近创建的项目ID（用于AI上下文）
   const recentProjectId = ref(null)
@@ -64,52 +71,96 @@ export const useChatStore = defineStore('chat', () => {
     return currentConversation.value?.projectIds || []
   })
   
-  // 初始化 DeepSeek 客户端
-  async function initDeepSeekClient() {
-    const result = await electronAPI.getDeepSeekKey()
-    if (result.success && result.key) {
-      deepseekClient.value = new DeepSeekClient(result.key)
+  // 初始化 AI 客户端
+  async function initAIClients() {
+    // 初始化 DeepSeek
+    const deepseekResult = await electronAPI.getDeepSeekKey()
+    if (deepseekResult.success && deepseekResult.key) {
+      deepseekClient.value = new DeepSeekClient(deepseekResult.key)
+    }
+    
+    // 初始化豆包
+    const doubaoResult = await electronAPI.getDoubaoKey()
+    if (doubaoResult.success && doubaoResult.key) {
+      const endpoint = doubaoResult.endpoint || 'https://ark.cn-beijing.volces.com/api/v3'
+      const model = doubaoResult.model || 'ep-20241211105939-jpn2s'
+      doubaoClient.value = new DoubaoClient(doubaoResult.key, endpoint, model)
     }
   }
   
   // 检查 API Key
   async function checkApiKey() {
-    const result = await electronAPI.getDeepSeekKey()
-    if (!result.success || !result.key) {
-      appStore.showApiKeyDialog = true
-      return false
-    }
-    
-    if (!deepseekClient.value) {
-      deepseekClient.value = new DeepSeekClient(result.key)
+    if (appStore.currentAIModel === 'doubao') {
+      // 检查豆包
+      if (!doubaoClient.value) {
+        const result = await electronAPI.getDoubaoKey()
+        if (!result.success || !result.key) {
+          appStore.showApiKeyDialog = true
+          appStore.toast('请先配置豆包 API 密钥')
+          return false
+        }
+        const endpoint = result.endpoint || 'https://ark.cn-beijing.volces.com/api/v3'
+        const model = result.model || 'ep-20241211105939-jpn2s'
+        doubaoClient.value = new DoubaoClient(result.key, endpoint, model)
+      }
+    } else {
+      // 检查 DeepSeek
+      if (!deepseekClient.value) {
+        const result = await electronAPI.getDeepSeekKey()
+        if (!result.success || !result.key) {
+          appStore.showApiKeyDialog = true
+          appStore.toast('请先配置 DeepSeek API 密钥')
+          return false
+        }
+        deepseekClient.value = new DeepSeekClient(result.key)
+      }
     }
     
     return true
   }
   
   // 发送消息
-  async function sendMessage(content) {
-    if (!content.trim() || isLoading.value) return false
-    
+  async function sendMessage(content, images = []) {
+    if ((!content.trim() && images.length === 0) || isLoading.value) return false
+
     // 检查是否已选择角色
     if (!currentRoleId.value) {
       appStore.toast('请先选择 AI 角色')
       return false
     }
-    
+
     const hasKey = await checkApiKey()
     if (!hasKey) return false
-    
+
     // 如果没有当前对话，创建一个
     if (!currentConversationId.value) {
       createNewConversation()
     }
-    
+
+    // 准备消息内容（支持多模态）
+    let messageContent = content
+    if (images.length > 0) {
+      // 构建多模态消息（文本+图片）
+      messageContent = [
+        {
+          type: 'text',
+          text: content || '查看图片'
+        },
+        ...images.map(img => ({
+          type: 'image_url',
+          image_url: {
+            url: `data:${img.mimeType};base64,${img.base64}`
+          }
+        }))
+      ]
+    }
+
     // 添加用户消息
     messages.value.push({
       role: 'user',
-      content: content,
-      timestamp: Date.now()
+      content: messageContent,
+      timestamp: Date.now(),
+      images: images.length > 0 ? images : undefined
     })
     
     // 如果是新对话的第一条消息，更新标题
@@ -126,8 +177,18 @@ export const useChatStore = defineStore('chat', () => {
     })
     streamingMessageIndex.value = messages.value.length - 1
     
-    // 调用 API（流式，后台运行）
-    await sendToAI()
+    try {
+      // 开启动画
+      appStore.showChatStatusIndicator = true
+      appStore.chatStatusText = 'AI 正在生成...'
+      
+      // 调用 API（流式，后台运行）
+      await sendToAI()
+    } finally {
+      // 确保动画关闭
+      appStore.showChatStatusIndicator = false
+      appStore.chatStatusText = ''
+    }
     
     return true
   }
@@ -135,8 +196,6 @@ export const useChatStore = defineStore('chat', () => {
   // 发送消息到 AI（支持函数调用循环）
   async function sendToAI(isContinuation = false) {
     isLoading.value = true
-    appStore.showChatStatusIndicator = true
-    appStore.chatStatusText = 'AI 正在生成...'
     
     try {
       const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
@@ -153,24 +212,77 @@ export const useChatStore = defineStore('chat', () => {
       }
       
       // 准备消息历史（排除进度消息）
+      let filteredMessages = messages.value
+        .filter(m => !m.isProgress)
+        .map(m => {
+          const msg = {
+            role: m.role,
+            // 保持 content 的原始类型（可能是字符串或数组）
+            content: m.content !== undefined ? m.content : ''
+          }
+          // 只在这些字段存在时才添加
+          if (m.tool_calls) msg.tool_calls = m.tool_calls
+          if (m.tool_call_id) msg.tool_call_id = m.tool_call_id
+          if (m.name) msg.name = m.name
+          return msg
+        })
+      
+      // 移除最后一个空的 assistant 消息（正在流式输出的占位消息）
+      if (filteredMessages.length > 0) {
+        const lastMsg = filteredMessages[filteredMessages.length - 1]
+        const isEmpty = !lastMsg.content || 
+                       (typeof lastMsg.content === 'string' && !lastMsg.content.trim()) ||
+                       (Array.isArray(lastMsg.content) && lastMsg.content.length === 0)
+        
+        if (lastMsg.role === 'assistant' && isEmpty && !lastMsg.tool_calls) {
+          filteredMessages = filteredMessages.slice(0, -1)
+        }
+      }
+      
+      // 豆包 API 特殊处理：确保最后一条消息不是 tool 角色
+      if (appStore.currentAIModel === 'doubao' && filteredMessages.length > 0) {
+        const lastMsg = filteredMessages[filteredMessages.length - 1]
+        if (lastMsg.role === 'tool') {
+          // 如果最后一条是 tool 消息，添加一个空的 assistant 消息占位
+          filteredMessages.push({
+            role: 'assistant',
+            content: ''
+          })
+        }
+      }
+      
       const apiMessages = [
         { role: 'system', content: systemPrompt },
-        ...messages.value
-          .filter(m => !m.isProgress)
-          .map(m => ({
-            role: m.role,
-            content: m.content,
-            tool_calls: m.tool_calls,
-            tool_call_id: m.tool_call_id,
-            name: m.name
-          }))
+        ...filteredMessages
       ]
+      
+      // 调试日志：显示发送给 API 的消息序列
+      if (appStore.currentAIModel === 'doubao') {
+        console.log('📤 发送给豆包 API 的消息序列:')
+        apiMessages.forEach((msg, idx) => {
+          let preview = '<empty>'
+          if (msg.content) {
+            if (typeof msg.content === 'string') {
+              preview = msg.content.substring(0, 50)
+            } else if (Array.isArray(msg.content)) {
+              // 多模态消息，提取文本部分
+              const textPart = msg.content.find(p => p.type === 'text')
+              const imageParts = msg.content.filter(p => p.type === 'image_url')
+              preview = textPart ? textPart.text.substring(0, 30) : ''
+              if (imageParts.length > 0) {
+                preview += ` [${imageParts.length}张图片]`
+              }
+            }
+          }
+          console.log(`  ${idx}. ${msg.role}: ${preview}${msg.tool_calls ? ' [有tool_calls]' : ''}${msg.tool_call_id ? ' [tool结果]' : ''}`)
+        })
+      }
       
       // 如果是首次调用且角色支持工具，添加工具列表
       const tools = currentRole.enableTools && !isContinuation ? availableTools : []
       
       // 调用流式 API
-      const result = await deepseekClient.value.chatCompletionsStream(
+      const result = await currentClient.value.chatCompletionsStream(
         apiMessages,
         {
           tools,
@@ -216,7 +328,7 @@ export const useChatStore = defineStore('chat', () => {
                   toolCall.function.name,
                   args,
                   { todoStore: useTodoStore(), projectStore: useProjectStore() },
-                  deepseekClient.value,
+                  currentClient.value,
                   projectIds
                 )
                 
@@ -266,7 +378,7 @@ export const useChatStore = defineStore('chat', () => {
                         result = await executeCreateProjectWithTasks(
                           result.args,
                           { todoStore, projectStore },
-                          deepseekClient.value,
+                          currentClient.value,
                           onProgress,
                           projectIds
                         )
@@ -280,7 +392,7 @@ export const useChatStore = defineStore('chat', () => {
                         result = await executeUpdateProjectTasks(
                           result.args,
                           { todoStore, projectStore },
-                          deepseekClient.value,
+                          currentClient.value,
                           onProgress
                         )
                       } else if (result.functionName === 'addProjectTasks') {
@@ -290,14 +402,14 @@ export const useChatStore = defineStore('chat', () => {
                         result = await executeAddProjectTasks(
                           result.args,
                           { todoStore, projectStore },
-                          deepseekClient.value,
+                          currentClient.value,
                           onProgress
                         )
                       } else if (result.functionName === 'updateTaskSubtasks') {
                         result = await executeUpdateTaskSubtasks(
                           result.args,
                           { todoStore, projectStore },
-                          deepseekClient.value,
+                          currentClient.value,
                           onProgress
                         )
                       } else if (result.functionName === 'addTask') {
@@ -307,7 +419,7 @@ export const useChatStore = defineStore('chat', () => {
                         result = await executeAddTask(
                           result.args,
                           { todoStore, projectStore },
-                          deepseekClient.value,
+                          currentClient.value,
                           onProgress
                         )
                       }
@@ -326,6 +438,9 @@ export const useChatStore = defineStore('chat', () => {
                 appStore.toast('工具执行失败: ' + error.message)
               }
             }
+            
+            // 工具执行完成后保存对话
+            await saveConversations()
             
             // 添加新的 AI 消息
             messages.value.push({
@@ -355,8 +470,6 @@ export const useChatStore = defineStore('chat', () => {
     } finally {
       isLoading.value = false
       streamingMessageIndex.value = -1
-      appStore.showChatStatusIndicator = false
-      appStore.chatStatusText = ''
     }
   }
   
@@ -379,7 +492,7 @@ export const useChatStore = defineStore('chat', () => {
       updatedAt: Date.now()
     }
     
-    conversations.value.push(newConv)
+    conversations.value.unshift(newConv)  // 使用 unshift 添加到数组开头
     currentConversationId.value = newConv.id
     messages.value = []
     recentProjectId.value = null
@@ -552,7 +665,7 @@ export const useChatStore = defineStore('chat', () => {
     selectedProjectIds,
     
     // 方法
-    initDeepSeekClient,
+    initAIClients,
     checkApiKey,
     sendMessage,
     sendToAI,

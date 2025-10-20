@@ -19,6 +19,7 @@ export const useAppStore = defineStore('app', () => {
   const showProjectDialog = ref(false)
   const showPasswordDialog = ref(false)
   const showApiKeyDialog = ref(false)
+  const showDoubaoConfigDialog = ref(false)
   const showSubtaskSuggestionDialog = ref(false)
   const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
@@ -26,6 +27,9 @@ export const useAppStore = defineStore('app', () => {
   // 全局聊天状态指示器
   const showChatStatusIndicator = ref(false)
   const chatStatusText = ref('')
+  
+  // AI 模型选择（默认值会在初始化时自动设置）
+  const currentAIModel = ref('deepseek') // 'deepseek' | 'doubao'
   
   // 确认对话框配置
   const confirmMessage = ref('')
@@ -169,11 +173,13 @@ export const useAppStore = defineStore('app', () => {
     showProjectDialog,
     showPasswordDialog,
     showApiKeyDialog,
+    showDoubaoConfigDialog,
     showSubtaskSuggestionDialog,
     showAILoadingDialog,
     showImageViewer,
     showChatStatusIndicator,
     chatStatusText,
+    currentAIModel,
     confirmMessage,
     viewerImageSrc,
     

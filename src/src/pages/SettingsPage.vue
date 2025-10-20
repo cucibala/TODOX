@@ -132,6 +132,57 @@
           </div>
         </div>
 
+        <!-- 豆包 API 配置 -->
+        <div class="setting-section">
+          <div class="setting-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <polyline points="2 17 12 22 22 17"/>
+              <polyline points="2 12 12 17 22 12"/>
+            </svg>
+            <h4>豆包 API 配置</h4>
+          </div>
+          <p class="setting-description">配置火山引擎豆包 API 以使用豆包模型</p>
+          <div class="setting-body">
+            <div class="api-key-container">
+              <div class="api-key-status">
+                <div class="api-key-icon" :class="{ 'has-key': hasDoubaoKey }">
+                  <svg v-if="hasDoubaoKey" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                </div>
+                <div class="api-key-info">
+                  <div class="api-key-label">API 配置状态</div>
+                  <div class="api-key-value" :class="{ 'has-key': hasDoubaoKey }">
+                    {{ hasDoubaoKey ? '已配置' : '未配置' }}
+                  </div>
+                </div>
+              </div>
+              <button class="btn-api-key" @click="handleDoubaoConfigSetting">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                {{ hasDoubaoKey ? '修改配置' : '设置配置' }}
+              </button>
+            </div>
+            <div class="api-key-hint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              <span>在 <a href="https://console.volcengine.com/ark" target="_blank">火山引擎控制台</a> 创建推理接入点并获取 API 密钥</span>
+            </div>
+          </div>
+        </div>
+
         <!-- 开机自启 -->
         <div class="setting-section">
           <div class="setting-header">
@@ -199,6 +250,7 @@ const autoLaunch = ref(false)
 const appVersion = ref('')
 const hasPassword = ref(false)
 const hasApiKey = ref(false)
+const hasDoubaoKey = ref(false)
 
 // 加载当前设置
 async function loadSettings() {
@@ -231,6 +283,12 @@ async function loadSettings() {
     const apiKeyResult = await electronAPI.hasDeepSeekKey()
     if (apiKeyResult) {
       hasApiKey.value = apiKeyResult.hasKey
+    }
+
+    // 获取豆包配置状态
+    const doubaoResult = await electronAPI.getDoubaoConfig()
+    if (doubaoResult) {
+      hasDoubaoKey.value = doubaoResult.success && !!doubaoResult.key
     }
   } catch (error) {
     console.error('加载设置失败:', error)
@@ -281,6 +339,21 @@ function handleApiKeySetting() {
       const apiKeyResult = await electronAPI.hasDeepSeekKey()
       if (apiKeyResult) {
         hasApiKey.value = apiKeyResult.hasKey
+      }
+    }
+  }, 300)
+}
+
+// 处理豆包配置设置
+function handleDoubaoConfigSetting() {
+  appStore.showDoubaoConfigDialog = true
+  // 监听对话框关闭后重新加载配置状态
+  const checkInterval = setInterval(async () => {
+    if (!appStore.showDoubaoConfigDialog) {
+      clearInterval(checkInterval)
+      const doubaoResult = await electronAPI.getDoubaoConfig()
+      if (doubaoResult) {
+        hasDoubaoKey.value = doubaoResult.success && !!doubaoResult.key
       }
     }
   }, 300)
