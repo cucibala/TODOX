@@ -23,6 +23,7 @@ export const useAppStore = defineStore('app', () => {
   const showSubtaskSuggestionDialog = ref(false)
   const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
+  const showAISummaryDialog = ref(false)
   
   // 全局聊天状态指示器
   const showChatStatusIndicator = ref(false)
@@ -37,6 +38,9 @@ export const useAppStore = defineStore('app', () => {
   
   // 图片查看器
   const viewerImageSrc = ref('')
+  
+  // AI 总结内容
+  const aiSummaryContent = ref('')
   
   // 获取 electronAPI
   const electronAPI = window.electronAPI
@@ -177,11 +181,13 @@ export const useAppStore = defineStore('app', () => {
     showSubtaskSuggestionDialog,
     showAILoadingDialog,
     showImageViewer,
+    showAISummaryDialog,
     showChatStatusIndicator,
     chatStatusText,
     currentAIModel,
     confirmMessage,
     viewerImageSrc,
+    aiSummaryContent,
     
     // 方法
     init,

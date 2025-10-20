@@ -138,27 +138,6 @@
         </div>
       </div>
       
-      <!-- AI 总结显示 -->
-      <div v-if="dailySummary" class="daily-summary-container">
-        <div class="summary-header">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-            <line x1="12" y1="22.08" x2="12" y2="12"></line>
-          </svg>
-          <h3>今日任务总结</h3>
-          <button class="btn-close-summary" @click="dailySummary = ''" title="关闭">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="summary-content">
-          {{ dailySummary }}
-        </div>
-      </div>
-      
       <!-- 统计数据 -->
       <div class="stats-data">
         <!-- 今日统计 - 进度条 -->
@@ -453,7 +432,6 @@ const showUpcomingTasks = ref(false)
 const showOverdueTasks = ref(false)
 
 // AI 总结状态
-const dailySummary = ref('')
 const isGeneratingSummary = ref(false)
 
 // 计算完成百分比
@@ -705,7 +683,9 @@ async function handleGenerateSummary() {
       return
     }
 
-    dailySummary.value = summary
+    // 显示弹窗
+    appStore.aiSummaryContent = summary
+    appStore.showAISummaryDialog = true
     appStore.toast(`总结生成成功（使用 ${modelUsed}）`)
   } catch (error) {
     console.error('生成总结失败:', error)

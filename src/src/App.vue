@@ -53,6 +53,9 @@
 
     <!-- AI 加载动画对话框 -->
     <AILoadingDialog />
+
+    <!-- AI 总结对话框 -->
+    <AISummaryDialog />
   </div>
 </template>
 
@@ -73,6 +76,7 @@ import ApiKeyDialog from './components/ApiKeyDialog.vue'
 import DoubaoConfigDialog from './components/DoubaoConfigDialog.vue'
 import SubtaskSuggestionDialog from './components/SubtaskSuggestionDialog.vue'
 import AILoadingDialog from './components/AILoadingDialog.vue'
+import AISummaryDialog from './components/AISummaryDialog.vue'
 import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
 import { useAppStore } from './stores/app'
