@@ -86,21 +86,76 @@
 
     <!-- 统计区域 -->
     <div class="stats-section">
-      <!-- 环形进度条 - 总任务完成情况 -->
-      <div class="circular-progress-container">
-        <svg class="circular-progress" viewBox="0 0 120 120">
-          <circle class="stats-progress-bg" cx="60" cy="60" r="50" />
-          <circle 
-            class="stats-progress-bar" 
-            cx="60" 
-            cy="60" 
-            r="50" 
-            :style="{ strokeDashoffset: circleOffset }"
-          />
-        </svg>
-        <div class="stats-progress-text">
-          <div class="stats-progress-value">{{ completionPercentage }}%</div>
-          <div class="stats-progress-label">{{ completedCount }}/{{ totalCount }}</div>
+      <!-- 双环形进度条 -->
+      <div class="dual-progress-container">
+        <!-- 总任务完成情况 -->
+        <div class="circular-progress-container total">
+          <svg class="circular-progress" viewBox="0 0 120 120">
+            <circle class="stats-progress-bg" cx="60" cy="60" r="50" />
+            <circle 
+              class="stats-progress-bar" 
+              cx="60" 
+              cy="60" 
+              r="50" 
+              :style="{ strokeDashoffset: circleOffset }"
+            />
+          </svg>
+          <div class="stats-progress-text">
+            <div class="stats-progress-value">{{ completionPercentage }}%</div>
+            <div class="stats-progress-label">{{ completedCount }}/{{ totalCount }}</div>
+          </div>
+        </div>
+        
+        <!-- 今日新增完成进度 -->
+        <div 
+          class="circular-progress-container today clickable"
+          @click="handleGenerateSummary"
+          :class="{ generating: isGeneratingSummary }"
+          title="点击生成AI总结"
+        >
+          <svg class="circular-progress" viewBox="0 0 120 120">
+            <circle class="stats-progress-bg" cx="60" cy="60" r="50" />
+            <circle 
+              class="stats-progress-bar today" 
+              cx="60" 
+              cy="60" 
+              r="50" 
+              :style="{ strokeDashoffset: todayCircleOffset }"
+            />
+          </svg>
+          <div class="stats-progress-text">
+            <div v-if="!isGeneratingSummary">
+              <div class="stats-progress-value">{{ todayTasksCompletionPercentage }}%</div>
+              <div class="stats-progress-label today">{{ todayStatusText }}</div>
+            </div>
+            <div v-else class="generating-indicator">
+              <svg class="loading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              </svg>
+              <span class="generating-text">生成中</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- AI 总结显示 -->
+      <div v-if="dailySummary" class="daily-summary-container">
+        <div class="summary-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+          <h3>今日任务总结</h3>
+          <button class="btn-close-summary" @click="dailySummary = ''" title="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="summary-content">
+          {{ dailySummary }}
         </div>
       </div>
       
@@ -362,6 +417,10 @@ import { useAppStore } from '../stores/app'
 import { useProjectStore } from '../stores/project'
 import { useTodoStore } from '../stores/todo'
 import { formatDueDate } from '../utils/date'
+import { generateDailySummary } from '../utils/deepseek'
+import { DoubaoClient } from '../utils/doubao'
+
+const electronAPI = window.electronAPI
 
 const appStore = useAppStore()
 const projectStore = useProjectStore()
@@ -393,6 +452,10 @@ const showLegacyTasks = ref(false)
 const showUpcomingTasks = ref(false)
 const showOverdueTasks = ref(false)
 
+// AI 总结状态
+const dailySummary = ref('')
+const isGeneratingSummary = ref(false)
+
 // 计算完成百分比
 const completionPercentage = computed(() => {
   if (totalCount.value === 0) return 0
@@ -404,6 +467,45 @@ const circleOffset = computed(() => {
   const circumference = 2 * Math.PI * 50 // r=50
   const progress = completionPercentage.value / 100
   return circumference * (1 - progress)
+})
+
+// 今日新增任务完成百分比
+const todayTasksCompletionPercentage = computed(() => {
+  if (todayAddedCount.value === 0) return 0
+  const completedToday = todayAddedTasks.value.filter(t => t.completed).length
+  return Math.round((completedToday / todayAddedCount.value) * 100)
+})
+
+// 今日任务完成进度条偏移量
+const todayCircleOffset = computed(() => {
+  const circumference = 2 * Math.PI * 50 // r=50
+  const progress = todayTasksCompletionPercentage.value / 100
+  return circumference * (1 - progress)
+})
+
+// 今日任务完成状态文字
+const todayStatusText = computed(() => {
+  const percentage = todayTasksCompletionPercentage.value
+  
+  if (todayAddedCount.value === 0) {
+    return '暂无任务'
+  }
+  
+  if (percentage === 100) {
+    return '圆满完成'
+  } else if (percentage >= 90) {
+    return '即将完成'
+  } else if (percentage >= 70) {
+    return '进展良好'
+  } else if (percentage >= 50) {
+    return '稳步推进'
+  } else if (percentage >= 30) {
+    return '继续加油'
+  } else if (percentage > 0) {
+    return '刚刚开始'
+  } else {
+    return '尚未开始'
+  }
 })
 
 // 今日新增任务百分比（相对于总任务数，最大100%）
@@ -521,6 +623,95 @@ async function scrollToTask(taskId) {
     setTimeout(() => {
       taskElement.classList.remove('task-highlight')
     }, 2000)
+  }
+}
+
+// 生成每日任务总结
+async function handleGenerateSummary() {
+  try {
+    // 获取今日任务
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayTimestamp = today.getTime()
+    
+    const todayTasks = todoStore.todos.filter(task => {
+      if (!task.createdAt) return false
+      const taskDate = new Date(task.createdAt)
+      taskDate.setHours(0, 0, 0, 0)
+      return taskDate.getTime() === todayTimestamp
+    })
+
+    if (todayTasks.length === 0) {
+      appStore.toast('今日暂无任务，无法生成总结')
+      return
+    }
+
+    // 转换为纯 JavaScript 对象
+    const plainTasks = todayTasks.map(task => ({
+      id: task.id,
+      text: task.text,
+      completed: task.completed,
+      priority: task.priority,
+      createdAt: task.createdAt,
+      completedAt: task.completedAt || null,
+      dueDate: task.dueDate || null,
+      subtasks: task.subtasks || []
+    }))
+
+    // 自动选择已配置的模型（优先 DeepSeek，然后豆包）
+    let summary = null
+    let modelUsed = ''
+
+    // 1. 尝试使用 DeepSeek
+    try {
+      const hasDeepSeekResult = await electronAPI.hasDeepSeekKey()
+      if (hasDeepSeekResult && hasDeepSeekResult.hasKey) {
+        const deepSeekKeyResult = await electronAPI.getDeepSeekKey()
+        if (deepSeekKeyResult && deepSeekKeyResult.success && deepSeekKeyResult.key) {
+          isGeneratingSummary.value = true
+          appStore.toast('正在使用 DeepSeek 生成总结...')
+          summary = await generateDailySummary(plainTasks, deepSeekKeyResult.key)
+          modelUsed = 'DeepSeek'
+        }
+      }
+    } catch (error) {
+      console.error('DeepSeek 检查或生成失败，尝试豆包:', error)
+    }
+
+    // 2. 如果 DeepSeek 失败或未配置，尝试使用豆包
+    if (!summary) {
+      try {
+        const doubaoConfigResult = await electronAPI.getDoubaoConfig()
+        if (doubaoConfigResult && doubaoConfigResult.success && doubaoConfigResult.key) {
+          isGeneratingSummary.value = true
+          appStore.toast('正在使用豆包生成总结...')
+          const doubaoClient = new DoubaoClient(
+            doubaoConfigResult.key,
+            doubaoConfigResult.endpoint,
+            doubaoConfigResult.model
+          )
+          summary = await doubaoClient.generateDailySummary(plainTasks)
+          modelUsed = '豆包'
+        }
+      } catch (error) {
+        console.error('豆包生成失败:', error)
+        throw new Error('豆包 API 调用失败：' + error.message)
+      }
+    }
+
+    // 3. 如果都没有配置，提示用户
+    if (!summary) {
+      appStore.toast('请先在设置中配置 DeepSeek 或豆包 API')
+      return
+    }
+
+    dailySummary.value = summary
+    appStore.toast(`总结生成成功（使用 ${modelUsed}）`)
+  } catch (error) {
+    console.error('生成总结失败:', error)
+    appStore.toast('生成总结失败：' + error.message)
+  } finally {
+    isGeneratingSummary.value = false
   }
 }
 </script>
