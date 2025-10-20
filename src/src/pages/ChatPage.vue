@@ -133,7 +133,7 @@
 
       <div class="chat-container">
         <div class="chat-messages" ref="messagesContainer">
-          <div v-if="messages.length === 0" class="chat-welcome">
+          <div v-if="validMessages.length === 0" class="chat-welcome">
             <div class="welcome-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -146,11 +146,10 @@
           </div>
 
           <div 
-            v-for="(message, index) in messages" 
+            v-for="(message, index) in validMessages" 
             :key="index" 
             class="message-item"
             :class="message.role"
-            v-show="message.role !== 'tool'"
           >
             <div class="message-avatar">
               <svg v-if="message.role === 'assistant'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -166,7 +165,7 @@
             <div class="message-content">
               <!-- 思考内容（推理模型） -->
               <div v-if="message.reasoning_content" class="reasoning-section">
-                <div class="reasoning-header" @click="toggleReasoning(index)">
+                <div class="reasoning-header" @click="toggleReasoning(message)">
                   <svg class="reasoning-icon" :class="{ expanded: message.showReasoning }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9 18 15 12 9 6"></polyline>
                   </svg>
@@ -368,6 +367,58 @@ const electronAPI = window.electronAPI
 
 // 使用 chatStore 的响应式状态
 const { conversations, currentConversationId, messages, isLoading, userInput } = storeToRefs(chatStore)
+
+// 过滤有效的消息（排除 undefined/null/空消息/tool消息）
+const validMessages = computed(() => {
+  const filtered = messages.value.filter(msg => {
+    if (!msg) {
+      console.log('过滤：消息为空')
+      return false
+    }
+    if (msg.role === 'tool') {
+      console.log('过滤：tool 消息')
+      return false
+    }
+    if (msg.isProgress) {
+      console.log('过滤：进度消息')
+      return false
+    }
+    
+    // 如果有思考内容，显示
+    if (msg.reasoning_content && msg.reasoning_content.trim()) {
+      console.log('显示：有思考内容', msg)
+      return true
+    }
+    
+    // 检查文本内容
+    if (typeof msg.content === 'string') {
+      const show = msg.content.trim().length > 0
+      console.log('文本消息:', msg.role, '内容:', msg.content.substring(0, 50), '显示:', show)
+      return show
+    }
+    
+    // 检查多模态内容
+    if (Array.isArray(msg.content)) {
+      const show = msg.content.some(part => {
+        if (part.type === 'text' && part.text && part.text.trim()) {
+          return true
+        }
+        if (part.type === 'image_url') {
+          return true
+        }
+        return false
+      })
+      console.log('多模态消息:', msg.role, '显示:', show)
+      return show
+    }
+    
+    console.log('过滤：默认不显示', msg)
+    return false
+  })
+  
+  console.log('总消息数:', messages.value.length, '有效消息数:', filtered.length)
+  return filtered
+})
 
 // 本地UI状态
 const messagesContainer = ref(null)
@@ -1087,6 +1138,7 @@ function resetTextareaHeight() {
   }
 }
 
+
 // 格式化时间
 function formatTime(timestamp) {
   const date = new Date(timestamp)
@@ -1096,8 +1148,7 @@ function formatTime(timestamp) {
 }
 
 // 切换思考内容展开/收起
-function toggleReasoning(messageIndex) {
-  const message = messages.value[messageIndex]
+function toggleReasoning(message) {
   if (message) {
     if (message.showReasoning === undefined) {
       message.showReasoning = true
