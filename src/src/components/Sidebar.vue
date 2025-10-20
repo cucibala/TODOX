@@ -100,23 +100,12 @@
         </svg>
         <div class="stats-progress-text">
           <div class="stats-progress-value">{{ completionPercentage }}%</div>
-          <div class="stats-progress-label">完成率</div>
+          <div class="stats-progress-label">{{ completedCount }}/{{ totalCount }}</div>
         </div>
       </div>
       
       <!-- 统计数据 -->
       <div class="stats-data">
-        <div class="stat-row">
-          <div class="stat-item">
-            <div class="stat-label">总任务</div>
-            <div class="stat-value">{{ totalCount }}</div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-label">已完成</div>
-            <div class="stat-value success">{{ completedCount }}</div>
-          </div>
-        </div>
-        
         <!-- 今日统计 - 进度条 -->
         <div class="daily-stats">
           <!-- 今日新增 - 可展开 -->
