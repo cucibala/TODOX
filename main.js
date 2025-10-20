@@ -129,7 +129,19 @@ function loadSettings() {
 // 保存设置
 function saveSettings() {
   try {
+    // 先读取现有设置，避免覆盖其他配置（如 API 密钥）
+    let existingSettings = {};
+    if (fs.existsSync(globalSettingsPath)) {
+      try {
+        existingSettings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf-8'));
+      } catch (error) {
+        console.error('读取现有设置失败，将创建新设置:', error);
+      }
+    }
+    
+    // 只更新窗口相关的设置，保留其他字段
     const settings = {
+      ...existingSettings, // 保留现有的所有设置
       compactMode: isCompactMode,
       alwaysOnTop: isAlwaysOnTop,
       desktopMode: isDesktopMode,
