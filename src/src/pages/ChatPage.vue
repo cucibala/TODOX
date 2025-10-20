@@ -370,36 +370,24 @@ const { conversations, currentConversationId, messages, isLoading, userInput } =
 
 // 过滤有效的消息（排除 undefined/null/空消息/tool消息）
 const validMessages = computed(() => {
-  const filtered = messages.value.filter(msg => {
-    if (!msg) {
-      console.log('过滤：消息为空')
-      return false
-    }
-    if (msg.role === 'tool') {
-      console.log('过滤：tool 消息')
-      return false
-    }
-    if (msg.isProgress) {
-      console.log('过滤：进度消息')
-      return false
-    }
+  return messages.value.filter(msg => {
+    if (!msg) return false
+    if (msg.role === 'tool') return false
+    if (msg.isProgress) return false
     
     // 如果有思考内容，显示
     if (msg.reasoning_content && msg.reasoning_content.trim()) {
-      console.log('显示：有思考内容', msg)
       return true
     }
     
     // 检查文本内容
     if (typeof msg.content === 'string') {
-      const show = msg.content.trim().length > 0
-      console.log('文本消息:', msg.role, '内容:', msg.content.substring(0, 50), '显示:', show)
-      return show
+      return msg.content.trim().length > 0
     }
     
     // 检查多模态内容
     if (Array.isArray(msg.content)) {
-      const show = msg.content.some(part => {
+      return msg.content.some(part => {
         if (part.type === 'text' && part.text && part.text.trim()) {
           return true
         }
@@ -408,16 +396,10 @@ const validMessages = computed(() => {
         }
         return false
       })
-      console.log('多模态消息:', msg.role, '显示:', show)
-      return show
     }
     
-    console.log('过滤：默认不显示', msg)
     return false
   })
-  
-  console.log('总消息数:', messages.value.length, '有效消息数:', filtered.length)
-  return filtered
 })
 
 // 本地UI状态
