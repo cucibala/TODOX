@@ -110,22 +110,8 @@
 }
 
 /* AI 加载状态动画 */
-.titlebar-nav-btn.ai-loading {
-  background: rgba(255, 255, 255, 0.2);
-  animation: aiPulse 2s ease-in-out infinite;
-}
-
 .titlebar-nav-btn svg.spinning {
   animation: spin 2s linear infinite;
-}
-
-@keyframes aiPulse {
-  0%, 100% {
-    background: rgba(255, 255, 255, 0.2);
-  }
-  50% {
-    background: rgba(255, 255, 255, 0.35);
-  }
 }
 
 @keyframes spin {

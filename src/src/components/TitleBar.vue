@@ -24,7 +24,7 @@
         </button>
         <button 
           class="titlebar-nav-btn" 
-          :class="{ active: currentPage === 'chat', 'ai-loading': showChatStatusIndicator }"
+          :class="{ active: currentPage === 'chat' }"
           @click="goToChat" 
           :title="showChatStatusIndicator ? chatStatusText : 'AI 助手'"
         >
