@@ -240,6 +240,7 @@ import { useProjectStore } from '../stores/project'
 import TaskItem from './TaskItem.vue'
 import ImagePreview from './ImagePreview.vue'
 import { generateDailySummary } from '../utils/deepseek'
+import { DoubaoClient } from '../utils/doubao'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
@@ -325,13 +326,6 @@ async function handlePaste(event) {
 // 生成每日任务总结
 async function handleGenerateSummary() {
   try {
-    // 检查是否有 API 密钥
-    const hasKeyResult = await electronAPI.hasDeepSeekKey()
-    if (!hasKeyResult.hasKey) {
-      appStore.toast('请先在设置中配置 DeepSeek API 密钥')
-      return
-    }
-
     // 获取今日任务
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -349,16 +343,6 @@ async function handleGenerateSummary() {
       return
     }
 
-    // 获取 API 密钥
-    const keyResult = await window.electronAPI.getDeepSeekKey()
-    if (!keyResult.success || !keyResult.key) {
-      appStore.toast('请先在设置中配置 DeepSeek API 密钥')
-      return
-    }
-
-    isGeneratingSummary.value = true
-    appStore.toast('正在生成总结，请稍候...')
-    
     // 转换为纯 JavaScript 对象
     const plainTasks = todayTasks.map(task => ({
       id: task.id,
@@ -370,11 +354,56 @@ async function handleGenerateSummary() {
       dueDate: task.dueDate || null,
       subtasks: task.subtasks || []
     }))
-    
-    // 使用工具类生成总结
-    const summary = await generateDailySummary(plainTasks, keyResult.key)
+
+    // 自动选择已配置的模型（优先 DeepSeek，然后豆包）
+    let summary = null
+    let modelUsed = ''
+
+    // 1. 尝试使用 DeepSeek
+    const hasDeepSeekResult = await electronAPI.hasDeepSeekKey()
+    if (hasDeepSeekResult.hasKey) {
+      const deepSeekKeyResult = await electronAPI.getDeepSeekKey()
+      if (deepSeekKeyResult.success && deepSeekKeyResult.key) {
+        try {
+          isGeneratingSummary.value = true
+          appStore.toast('正在使用 DeepSeek 生成总结...')
+          summary = await generateDailySummary(plainTasks, deepSeekKeyResult.key)
+          modelUsed = 'DeepSeek'
+        } catch (error) {
+          console.error('DeepSeek 生成失败，尝试豆包:', error)
+        }
+      }
+    }
+
+    // 2. 如果 DeepSeek 失败或未配置，尝试使用豆包
+    if (!summary) {
+      const doubaoConfigResult = await electronAPI.getDoubaoConfig()
+      if (doubaoConfigResult && doubaoConfigResult.apiKey) {
+        try {
+          isGeneratingSummary.value = true
+          appStore.toast('正在使用豆包生成总结...')
+          const doubaoClient = new DoubaoClient(
+            doubaoConfigResult.apiKey,
+            doubaoConfigResult.endpoint,
+            doubaoConfigResult.model
+          )
+          summary = await doubaoClient.generateDailySummary(plainTasks)
+          modelUsed = '豆包'
+        } catch (error) {
+          console.error('豆包生成失败:', error)
+          throw new Error('豆包 API 调用失败：' + error.message)
+        }
+      }
+    }
+
+    // 3. 如果都没有配置，提示用户
+    if (!summary) {
+      appStore.toast('请先在设置中配置 DeepSeek 或豆包 API')
+      return
+    }
+
     dailySummary.value = summary
-    appStore.toast('总结生成成功')
+    appStore.toast(`总结生成成功（使用 ${modelUsed}）`)
   } catch (error) {
     console.error('生成总结失败:', error)
     appStore.toast('生成总结失败：' + error.message)

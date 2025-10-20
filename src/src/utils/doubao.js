@@ -221,5 +221,39 @@ export class DoubaoClient {
       throw error
     }
   }
+
+  /**
+   * 生成每日任务总结
+   * @param {Array} tasks - 任务列表
+   * @param {string} model - 模型ID（可选）
+   * @returns {Promise<string>} 总结内容
+   */
+  async generateDailySummary(tasks, model = null) {
+    model = model || this.defaultModel
+    
+    const taskSummary = {
+      total: tasks.length,
+      completed: tasks.filter(t => t.completed).length,
+      pending: tasks.filter(t => !t.completed).length,
+      tasks: tasks.map(t => ({
+        text: t.text,
+        completed: t.completed,
+        priority: t.priority || 'medium',
+        subtasks: t.subtasks?.length || 0,
+        subtasksCompleted: t.subtasks?.filter(st => st.completed).length || 0
+      }))
+    }
+    
+    return await this.chatCompletions([
+      {
+        role: 'system',
+        content: '你是一个专业的任务管理助手，擅长分析用户的任务完成情况，并提供简洁、有洞察力的总结。请用中文回复。'
+      },
+      {
+        role: 'user',
+        content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
+      }
+    ], { model, maxTokens: 500 })
+  }
 }
 
