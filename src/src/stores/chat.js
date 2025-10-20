@@ -293,6 +293,7 @@ export const useChatStore = defineStore('chat', () => {
               if (currentMsg) {
                 if (!currentMsg.reasoning_content) {
                   currentMsg.reasoning_content = ''
+                  currentMsg.showReasoning = true // 开始思考时自动展开
                 }
                 currentMsg.reasoning_content += delta
               }
@@ -480,6 +481,14 @@ export const useChatStore = defineStore('chat', () => {
         messages.value.splice(streamingMessageIndex.value, 1)
       }
     } finally {
+      // 思考完成后自动折叠
+      if (streamingMessageIndex.value >= 0 && streamingMessageIndex.value < messages.value.length) {
+        const currentMsg = messages.value[streamingMessageIndex.value]
+        if (currentMsg && currentMsg.reasoning_content) {
+          currentMsg.showReasoning = false
+        }
+      }
+      
       isLoading.value = false
       streamingMessageIndex.value = -1
     }
