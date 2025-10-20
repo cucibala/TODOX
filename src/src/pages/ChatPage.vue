@@ -235,68 +235,54 @@
               rows="1"
               @input="adjustTextareaHeight"
             ></textarea>
-            <button 
-              class="btn-send" 
-              @click="handleSend"
-              :disabled="!userInput.trim() || isLoading"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-            </button>
+              <button 
+                class="btn-send" 
+                @click="handleSend"
+                :disabled="!userInput.trim() || isLoading"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
     
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
-import { useTodoStore } from '../stores/todo'
+import { useChatStore } from '../stores/chat'
 import { useProjectStore } from '../stores/project'
-import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask } from '../utils/tools'
-import { DeepSeekClient } from '../utils/deepseek'
 
 const appStore = useAppStore()
-const todoStore = useTodoStore()
+const chatStore = useChatStore()
 const projectStore = useProjectStore()
 const electronAPI = window.electronAPI
 
-const conversations = ref([])
-const currentConversationId = ref(null)
-const messages = ref([])
-const userInput = ref('')
-const isLoading = ref(false)
+// 使用 chatStore 的响应式状态
+const { conversations, currentConversationId, messages, isLoading, userInput } = storeToRefs(chatStore)
+
+// 本地UI状态
 const messagesContainer = ref(null)
 const inputTextarea = ref(null)
-const streamingMessageIndex = ref(-1)
-const isDataLoaded = ref(false)
 const sidebarCollapsed = ref(false)
-const deepseekClient = ref(null)
-
-// 新建对话对话框
-const showNewConversationDialog = ref(false)
-const newConversationRole = ref('general')
-const newConversationProjects = ref([])
 
 // 输入框角色选择器
 const showInputRoleSelector = ref(false)
 
-// 角色系统（从当前对话读取）
-const showRoleSelector = ref(false)
+// 项目选择器
+const showProjectSelector = ref(false)
 
-// 最近创建/操作的项目ID（用于AI上下文）
-const recentProjectId = ref(null)
-
-const currentRoleId = computed(() => {
-  const conv = conversations.value.find(c => c.id === currentConversationId.value)
-  // 如果没有设置角色，返回 null，显示默认
-  return conv?.roleId || null
-})
+// 使用 chatStore 的计算属性
+const currentRoleId = computed(() => chatStore.currentRoleId)
+const currentConversationTitle = computed(() => chatStore.currentConversationTitle)
+const selectedProjectIds = computed(() => chatStore.selectedProjectIds)
 
 // 定义可用角色
 const availableRoles = [
@@ -351,20 +337,7 @@ const currentRole = computed(() => {
   return availableRoles.find(r => r.id === currentRoleId.value) || availableRoles[0]
 })
 
-// 项目选择器（从当前对话读取）
-const showProjectSelector = ref(false)
-
-const selectedProjectIds = computed(() => {
-  const conv = conversations.value.find(c => c.id === currentConversationId.value)
-  return conv?.projectIds || []
-})
-
-// 当前对话标题
-const currentConversationTitle = computed(() => {
-  if (!currentConversationId.value) return 'DeepSeek AI 助手'
-  const conv = conversations.value.find(c => c.id === currentConversationId.value)
-  return conv ? conv.title : '新对话'
-})
+// 注意：showProjectSelector 和 selectedProjectIds 已在上面声明
 
 // 检查并获取 API 密钥
 async function checkApiKey() {
@@ -392,45 +365,28 @@ function generateConversationTitle(firstMessage) {
 
 // 创建新对话（简化版，不需要选择角色）
 function handleNewConversation() {
-  const newConv = {
-    id: Date.now().toString(),
-    title: '新对话',
-    messages: [],
-    roleId: null,  // 首次发送时设置
-    projectIds: [],
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  }
-  conversations.value.unshift(newConv)
-  currentConversationId.value = newConv.id
-  messages.value = []
-  saveConversations()
-  appStore.toast('已创建新对话')
+  chatStore.createNewConversation()
+  nextTick(() => scrollToBottom())
 }
 
 // 选择角色（从输入框选择器）
 function handleSelectRole(roleId) {
-  const conv = conversations.value.find(c => c.id === currentConversationId.value)
-  if (conv) {
-    // 如果已经有消息了，不允许修改
-    if (messages.value.length > 0) {
-      appStore.toast('对话已开始，无法更改角色')
-      showInputRoleSelector.value = false
-      return
-    }
-    
-    // 设置或更新角色
-    conv.roleId = roleId
-    
-    // 如果不是项目助手，清空项目并关闭选择器
-    const role = availableRoles.find(r => r.id === roleId)
-    if (!role?.enableProjects) {
-      conv.projectIds = []
-      showInputRoleSelector.value = false
-      saveConversations()
-    }
-    // 如果是项目助手，保持选择器打开，让用户选择项目
+  // 如果已经有消息了，不允许修改
+  if (messages.value.length > 0) {
+    appStore.toast('对话已开始，无法更改角色')
+    showInputRoleSelector.value = false
+    return
   }
+  
+  // 设置角色
+  const role = availableRoles.find(r => r.id === roleId)
+  chatStore.setConversationRole(roleId, role?.enableProjects ? [] : [])
+  
+  // 如果不是项目助手，关闭选择器
+  if (!role?.enableProjects) {
+    showInputRoleSelector.value = false
+  }
+  // 如果是项目助手，保持选择器打开，让用户选择项目
 }
 
 // 确认项目选择（仅用于首次设置项目助手）
@@ -438,7 +394,7 @@ function confirmNewConversation() {
   const conv = conversations.value.find(c => c.id === currentConversationId.value)
   if (conv) {
     conv.projectIds = [...newConversationProjects.value]
-    saveConversations()
+  saveConversations()
   }
   showNewConversationDialog.value = false
   appStore.toast('项目关联已设置')
@@ -452,85 +408,29 @@ function cancelNewConversation() {
 // 选择对话
 function handleSelectConversation(convId) {
   if (currentConversationId.value === convId) return
-  
-  currentConversationId.value = convId
-  const conv = conversations.value.find(c => c.id === convId)
-  if (conv) {
-    console.log(`📂 切换到会话: ${conv.title} (${conv.messages?.length || 0} 条消息)`)
-    // 清理不完整的消息序列
-    messages.value = cleanMessageSequence(conv.messages || [])
-    nextTick(() => {
-      scrollToBottom()
-    })
-  }
+  chatStore.selectConversation(convId)
+  nextTick(() => scrollToBottom())
 }
 
 // 删除对话
 async function handleDeleteConversation(convId) {
-  const confirmed = await appStore.confirm('确定要删除这个对话吗？')
-  if (!confirmed) return
-  
-  conversations.value = conversations.value.filter(c => c.id !== convId)
-  
-  if (currentConversationId.value === convId) {
-    if (conversations.value.length > 0) {
-      handleSelectConversation(conversations.value[0].id)
-    } else {
-      handleNewConversation()
-    }
-  }
-  
-  saveConversations()
-  appStore.toast('对话已删除')
+  await chatStore.deleteConversation(convId)
 }
 
 // 发送消息
 async function handleSend() {
   const message = userInput.value.trim()
-  if (!message || isLoading.value) return
+  if (!message) return
   
-  // 检查是否已选择角色
-  if (!currentRoleId.value) {
-    appStore.toast('请先选择 AI 角色')
-    showInputRoleSelector.value = true
-    return
+  // 调用 chatStore 发送消息（后台运行）
+  const sent = await chatStore.sendMessage(message)
+  
+  if (sent) {
+    // 清空输入框
+    userInput.value = ''
+    resetTextareaHeight()
+    scrollToBottom()
   }
-
-  const hasKey = await checkApiKey()
-  if (!hasKey) return
-
-  // 如果没有当前对话，创建一个
-  if (!currentConversationId.value) {
-    handleNewConversation()
-  }
-
-  // 添加用户消息
-  messages.value.push({
-    role: 'user',
-    content: message,
-    timestamp: Date.now()
-  })
-
-  // 如果是新对话的第一条消息，更新标题
-  const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
-  if (currentConv && currentConv.title === '新对话') {
-    currentConv.title = generateConversationTitle(message)
-  }
-
-  userInput.value = ''
-  resetTextareaHeight()
-  scrollToBottom()
-
-  // 添加一个空的 AI 消息，准备接收流式内容
-  messages.value.push({
-    role: 'assistant',
-    content: '',
-    timestamp: Date.now()
-  })
-  streamingMessageIndex.value = messages.value.length - 1
-
-  // 调用 API（流式）
-  await sendToAI()
 }
 
 // 发送消息到 AI（支持函数调用循环）
@@ -638,8 +538,8 @@ async function sendToAI(isContinuation = false) {
                 timestamp: Date.now(),
                 isProgress: true
               })
-              scrollToBottom()
-              
+  scrollToBottom()
+
               // 计时器：记录等待秒数
               let elapsedSeconds = 0
               let currentStatus = `🚀 开始${actionText}...`
@@ -746,13 +646,13 @@ async function sendToAI(isContinuation = false) {
       }
       
       // 【关键】添加新的 assistant 消息槽位，用于接收模型基于工具结果的最终回复
-      messages.value.push({
-        role: 'assistant',
-        content: '',
-        timestamp: Date.now()
-      })
-      streamingMessageIndex.value = messages.value.length - 1
-      
+  messages.value.push({
+    role: 'assistant',
+    content: '',
+    timestamp: Date.now()
+  })
+  streamingMessageIndex.value = messages.value.length - 1
+
       // 继续调用 API，让模型根据工具结果生成最终回复
       await sendToAI(true)
     }
@@ -762,9 +662,11 @@ async function sendToAI(isContinuation = false) {
     const tools = currentRole.value.enableTools ? availableTools : []
     await deepseekClient.value.chatCompletionsStream(
       plainMessages,
-      tools,
-      onContent,
-      onToolCalls
+      {
+        tools,
+        onContent,
+        onToolCalls
+      }
     )
     
     // 如果没有工具调用，完成
@@ -779,7 +681,7 @@ async function sendToAI(isContinuation = false) {
     appStore.toast('AI 回复失败：' + error.message)
     messages.value.pop()
     if (messages.value.length > 0 && messages.value[messages.value.length - 1].role === 'user') {
-      messages.value.pop()
+    messages.value.pop()
     }
     streamingMessageIndex.value = -1
     isLoading.value = false
@@ -932,9 +834,9 @@ async function saveConversations() {
     if (currentConv) {
       currentConv.messages = messages.value.map(msg => {
         const plainMsg = {
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp
         }
         // 保存函数调用相关字段
         if (msg.tool_calls) {
@@ -961,8 +863,8 @@ async function saveConversations() {
     
     // 将响应式对象转换为普通对象（使用 JSON 序列化彻底转换）
     const plainConversations = conversations.value.map(conv => ({
-      id: conv.id,
-      title: conv.title,
+        id: conv.id,
+        title: conv.title,
       messages: (conv.messages || []).map(msg => {
         const plainMsg = {
           role: msg.role,
@@ -983,8 +885,8 @@ async function saveConversations() {
       }),
       roleId: conv.roleId,
       projectIds: conv.projectIds || [],
-      createdAt: conv.createdAt,
-      updatedAt: conv.updatedAt
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt
     }))
     
     // 使用 JSON 序列化确保彻底转换为普通对象
@@ -1052,18 +954,7 @@ function formatConversationTime(timestamp) {
 }
 
 
-// 监听消息变化，自动保存（防抖）
-let saveTimer = null
-watch([messages, conversations], () => {
-  if (!isDataLoaded.value) return
-  
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-  }
-  saveTimer = setTimeout(() => {
-    saveConversations()
-  }, 1000)
-}, { deep: true })
+// 注意：消息和对话的保存现在由 chatStore 自动处理
 
 // 项目选择器相关方法
 // 新建对话时的项目切换
@@ -1231,13 +1122,9 @@ const currentConversationRoleInfo = computed(() => {
 
 // 点击外部关闭下拉菜单
 function handleClickOutside(event) {
-  const roleSelector = event.target.closest('.role-selector')
   const projectSelector = event.target.closest('.project-selector')
   const inputRoleSelector = event.target.closest('.input-role-selector')
   
-  if (!roleSelector) {
-    showRoleSelector.value = false
-  }
   if (!projectSelector) {
     showProjectSelector.value = false
   }
@@ -1247,21 +1134,19 @@ function handleClickOutside(event) {
 }
 
 onMounted(async () => {
-  await checkApiKey()
-  await loadConversations()
   document.addEventListener('click', handleClickOutside)
+  // 初始滚动到底部
+  nextTick(() => scrollToBottom())
 })
 
-onBeforeUnmount(() => {
-  saveConversations()
-  document.removeEventListener('click', handleClickOutside)
-})
+// 监听消息变化，自动滚动到底部
+watch(messages, () => {
+  nextTick(() => scrollToBottom())
+}, { deep: true })
 
-onUnmounted(() => {
-  if (saveTimer) {
-    clearTimeout(saveTimer)
-  }
-  saveConversations()
+// 监听当前对话ID变化，滚动到底部
+watch(currentConversationId, () => {
+  nextTick(() => scrollToBottom())
 })
 </script>
 

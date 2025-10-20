@@ -23,6 +23,10 @@ export const useAppStore = defineStore('app', () => {
   const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
   
+  // 全局聊天状态指示器
+  const showChatStatusIndicator = ref(false)
+  const chatStatusText = ref('')
+  
   // 确认对话框配置
   const confirmMessage = ref('')
   const confirmResolve = ref(null)
@@ -168,6 +172,8 @@ export const useAppStore = defineStore('app', () => {
     showSubtaskSuggestionDialog,
     showAILoadingDialog,
     showImageViewer,
+    showChatStatusIndicator,
+    chatStatusText,
     confirmMessage,
     viewerImageSrc,
     

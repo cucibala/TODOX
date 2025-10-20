@@ -12,12 +12,11 @@ export class DeepSeekClient {
   /**
    * 调用 Chat Completions API（流式）
    * @param {Array} messages - 消息列表
-   * @param {Array} tools - 工具列表
-   * @param {Function} onContent - 内容回调
-   * @param {Function} onToolCalls - 工具调用回调
+   * @param {Object} options - 选项对象 { tools, onContent, onToolCalls }
    * @returns {Promise<void>}
    */
-  async chatCompletionsStream(messages, tools, onContent, onToolCalls) {
+  async chatCompletionsStream(messages, options = {}) {
+    const { tools = [], onContent, onToolCalls } = options
     console.log('chatCompletionsStream', messages, tools)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
