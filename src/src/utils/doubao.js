@@ -29,7 +29,10 @@ export class DoubaoClient {
     const requestBody = {
       model,
       messages,
-      stream: true
+      stream: true,
+      // 设置推理模式为最小，避免在工具调用场景下的格式限制
+      // 这样可以允许最后一条消息是空的 assistant（工具调用后的占位）
+      reasoning_effort: 'minimal'
     }
     
     // 只有当 tools 数组非空时才添加到请求中

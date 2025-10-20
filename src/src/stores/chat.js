@@ -197,6 +197,7 @@ export const useChatStore = defineStore('chat', () => {
   async function sendToAI(isContinuation = false) {
     isLoading.value = true
     
+    
     try {
       const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
       const roleId = currentConv?.roleId || 'general'
@@ -227,19 +228,7 @@ export const useChatStore = defineStore('chat', () => {
           return msg
         })
       
-      // 移除最后一个空的 assistant 消息（正在流式输出的占位消息）
-      if (filteredMessages.length > 0) {
-        const lastMsg = filteredMessages[filteredMessages.length - 1]
-        const isEmpty = !lastMsg.content || 
-                       (typeof lastMsg.content === 'string' && !lastMsg.content.trim()) ||
-                       (Array.isArray(lastMsg.content) && lastMsg.content.length === 0)
-        
-        if (lastMsg.role === 'assistant' && isEmpty && !lastMsg.tool_calls) {
-          filteredMessages = filteredMessages.slice(0, -1)
-        }
-      }
-      
-      // 豆包 API 特殊处理：确保最后一条消息不是 tool 角色
+      // 豆包 API 特殊处理：确保最后一条消息不是 tool 角色（在移除空消息之前处理）
       if (appStore.currentAIModel === 'doubao' && filteredMessages.length > 0) {
         const lastMsg = filteredMessages[filteredMessages.length - 1]
         if (lastMsg.role === 'tool') {
@@ -251,31 +240,37 @@ export const useChatStore = defineStore('chat', () => {
         }
       }
       
+      // 移除最后一个空的 assistant 消息（正在流式输出的占位消息）
+      // 但如果是豆包 API 且前一条是 tool 消息，则保留这个空 assistant
+      if (filteredMessages.length > 0) {
+        const lastMsg = filteredMessages[filteredMessages.length - 1]
+        const isEmpty = !lastMsg.content || 
+                      (typeof lastMsg.content === 'string' && !lastMsg.content.trim()) ||
+                      (Array.isArray(lastMsg.content) && lastMsg.content.length === 0)
+        
+        // 检查倒数第二条消息是否是 tool
+        const secondLastIsTool = filteredMessages.length > 1 && 
+                                 filteredMessages[filteredMessages.length - 2].role === 'tool'
+        
+        // 如果是豆包 API 且倒数第二条是 tool，保留空 assistant
+        const shouldKeepEmpty = appStore.currentAIModel === 'doubao' && secondLastIsTool
+        
+        if (lastMsg.role === 'assistant' && isEmpty && !lastMsg.tool_calls && !shouldKeepEmpty) {
+          filteredMessages = filteredMessages.slice(0, -1)
+        }
+      }
+      
       const apiMessages = [
         { role: 'system', content: systemPrompt },
         ...filteredMessages
       ]
       
-      // 调试日志：显示发送给 API 的消息序列
+      // 验证豆包 API 的消息序列
       if (appStore.currentAIModel === 'doubao') {
-        console.log('📤 发送给豆包 API 的消息序列:')
-        apiMessages.forEach((msg, idx) => {
-          let preview = '<empty>'
-          if (msg.content) {
-            if (typeof msg.content === 'string') {
-              preview = msg.content.substring(0, 50)
-            } else if (Array.isArray(msg.content)) {
-              // 多模态消息，提取文本部分
-              const textPart = msg.content.find(p => p.type === 'text')
-              const imageParts = msg.content.filter(p => p.type === 'image_url')
-              preview = textPart ? textPart.text.substring(0, 30) : ''
-              if (imageParts.length > 0) {
-                preview += ` [${imageParts.length}张图片]`
-              }
-            }
-          }
-          console.log(`  ${idx}. ${msg.role}: ${preview}${msg.tool_calls ? ' [有tool_calls]' : ''}${msg.tool_call_id ? ' [tool结果]' : ''}`)
-        })
+        const lastApiMsg = apiMessages[apiMessages.length - 1]
+        if (lastApiMsg.role === 'tool') {
+          console.warn('⚠️ 警告：最后一条消息是 tool 角色，可能导致 API 错误！')
+        }
       }
       
       // 如果是首次调用且角色支持工具，添加工具列表
@@ -647,6 +642,8 @@ export const useChatStore = defineStore('chat', () => {
           }
           if (msg.reasoning_content) {
             plainMsg.reasoning_content = msg.reasoning_content
+            // 不保存 showReasoning 状态，默认让它折叠
+            // plainMsg.showReasoning = msg.showReasoning
           }
           if (msg.images) { // 保存图片数据
             plainMsg.images = JSON.parse(JSON.stringify(msg.images))
