@@ -164,6 +164,20 @@
               </svg>
             </div>
             <div class="message-content">
+              <!-- 思考内容（推理模型） -->
+              <div v-if="message.reasoning_content" class="reasoning-section">
+                <div class="reasoning-header" @click="toggleReasoning(index)">
+                  <svg class="reasoning-icon" :class="{ expanded: message.showReasoning }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                  <span class="reasoning-label">💭 思考过程</span>
+                  <span class="reasoning-badge">{{ message.reasoning_content.length }} 字</span>
+                </div>
+                <div v-if="message.showReasoning" class="reasoning-content">
+                  {{ message.reasoning_content }}
+                </div>
+              </div>
+              
               <!-- 文本内容 -->
               <div class="message-text" v-if="typeof message.content === 'string'">{{ message.content }}</div>
               
@@ -309,32 +323,32 @@
               </div>
               
               <div class="input-text-wrapper">
-                <textarea
-                  v-model="userInput"
-                  @keydown.ctrl.enter="handleSend"
-                  placeholder="输入消息... (Ctrl+Enter 发送)"
-                  ref="inputTextarea"
-                  rows="1"
-                  @input="adjustTextareaHeight"
-                ></textarea>
+            <textarea
+              v-model="userInput"
+              @keydown.ctrl.enter="handleSend"
+              placeholder="输入消息... (Ctrl+Enter 发送)"
+              ref="inputTextarea"
+              rows="1"
+              @input="adjustTextareaHeight"
+            ></textarea>
               </div>
               
               <div class="input-actions-right">
-                <button 
-                  class="btn-send" 
-                  @click="handleSend"
+              <button 
+                class="btn-send" 
+                @click="handleSend"
                   :disabled="(!userInput.trim() && selectedImages.length === 0) || isLoading"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                  </svg>
-                </button>
-              </div>
-            </div>
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
+      </div>
+    </div>
       </div>
     
   </div>
@@ -567,14 +581,15 @@ async function handleSend() {
     mimeType: img.mimeType
   }))
   
+  // 立即清空输入框和图片（发送前）
+  userInput.value = ''
+  selectedImages.value = []
+  resetTextareaHeight()
+  
   // 调用 chatStore 发送消息（后台运行）
   const sent = await chatStore.sendMessage(message || '查看图片', images)
   
   if (sent) {
-    // 清空输入框和图片
-    userInput.value = ''
-    selectedImages.value = []
-    resetTextareaHeight()
     scrollToBottom()
   }
 }
@@ -678,7 +693,7 @@ async function sendToAI(isContinuation = false) {
                 : result.functionName === 'updateTaskSubtasks' ? '修改子任务'
                 : result.functionName === 'addTask' ? '添加任务'
                 : '创建项目'
-              messages.value.push({
+  messages.value.push({
                 role: 'assistant',
                 content: `🚀 开始${actionText}...`,
                 timestamp: Date.now(),
@@ -704,7 +719,7 @@ async function sendToAI(isContinuation = false) {
                 currentStatus = status
                 if (messages.value[progressMessageIndex]) {
                   messages.value[progressMessageIndex].content = `${status}\n⏱️ 已等待 ${elapsedSeconds} 秒`
-                  scrollToBottom()
+  scrollToBottom()
                 }
               }
               
@@ -1078,6 +1093,18 @@ function formatTime(timestamp) {
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
   return `${hours}:${minutes}`
+}
+
+// 切换思考内容展开/收起
+function toggleReasoning(messageIndex) {
+  const message = messages.value[messageIndex]
+  if (message) {
+    if (message.showReasoning === undefined) {
+      message.showReasoning = true
+    } else {
+      message.showReasoning = !message.showReasoning
+    }
+  }
 }
 
 // 格式化对话时间

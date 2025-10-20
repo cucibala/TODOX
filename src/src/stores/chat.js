@@ -83,7 +83,7 @@ export const useChatStore = defineStore('chat', () => {
     const doubaoResult = await electronAPI.getDoubaoKey()
     if (doubaoResult.success && doubaoResult.key) {
       const endpoint = doubaoResult.endpoint || 'https://ark.cn-beijing.volces.com/api/v3'
-      const model = doubaoResult.model || 'ep-20241211105939-jpn2s'
+      const model = doubaoResult.model || 'doubao-seed-1-6-251015'
       doubaoClient.value = new DoubaoClient(doubaoResult.key, endpoint, model)
     }
   }
@@ -100,7 +100,7 @@ export const useChatStore = defineStore('chat', () => {
           return false
         }
         const endpoint = result.endpoint || 'https://ark.cn-beijing.volces.com/api/v3'
-        const model = result.model || 'ep-20241211105939-jpn2s'
+        const model = result.model || 'doubao-seed-1-6-251015'
         doubaoClient.value = new DoubaoClient(result.key, endpoint, model)
       }
     } else {
@@ -286,6 +286,18 @@ export const useChatStore = defineStore('chat', () => {
         apiMessages,
         {
           tools,
+          onReasoning: (delta) => {
+            // 处理思考内容（推理模型）
+            if (streamingMessageIndex.value >= 0) {
+              const currentMsg = messages.value[streamingMessageIndex.value]
+              if (currentMsg) {
+                if (!currentMsg.reasoning_content) {
+                  currentMsg.reasoning_content = ''
+                }
+                currentMsg.reasoning_content += delta
+              }
+            }
+          },
           onContent: (delta) => {
             if (streamingMessageIndex.value >= 0) {
               const currentMsg = messages.value[streamingMessageIndex.value]
@@ -623,6 +635,12 @@ export const useChatStore = defineStore('chat', () => {
           }
           if (msg.name) {
             plainMsg.name = msg.name
+          }
+          if (msg.reasoning_content) {
+            plainMsg.reasoning_content = msg.reasoning_content
+          }
+          if (msg.images) { // 保存图片数据
+            plainMsg.images = JSON.parse(JSON.stringify(msg.images))
           }
           return plainMsg
         })

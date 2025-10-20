@@ -72,7 +72,7 @@ const electronAPI = window.electronAPI
 
 const apiKey = ref('')
 const endpoint = ref('https://ark.cn-beijing.volces.com/api/v3')
-const model = ref('ep-20241211105939-jpn2s')
+const model = ref('doubao-seed-1-6-251015')
 const inputRef = ref(null)
 const hasConfig = ref(false)
 
@@ -89,6 +89,9 @@ async function loadConfigStatus() {
     }
   } else {
     hasConfig.value = false
+    // 重置为默认值
+    endpoint.value = 'https://ark.cn-beijing.volces.com/api/v3'
+    model.value = 'doubao-seed-1-6-251015'
   }
 }
 
@@ -112,7 +115,7 @@ async function handleConfirm() {
       const config = {
         apiKey: trimmedKey,
         endpoint: endpoint.value.trim() || 'https://ark.cn-beijing.volces.com/api/v3',
-        model: model.value.trim() || 'ep-20241211105939-jpn2s'
+        model: model.value.trim() || 'doubao-seed-1-6-251015'
       }
       const saveResult = await electronAPI.setDoubaoConfig(config)
       if (saveResult.success) {
@@ -132,7 +135,7 @@ async function handleConfirm() {
         const config = {
           apiKey: currentConfig.key,
           endpoint: endpoint.value.trim() || 'https://ark.cn-beijing.volces.com/api/v3',
-          model: model.value.trim() || 'ep-20241211105939-jpn2s'
+          model: model.value.trim() || 'doubao-seed-1-6-251015'
         }
         const saveResult = await electronAPI.setDoubaoConfig(config)
         if (saveResult.success) {
@@ -174,7 +177,7 @@ async function handleDelete() {
         apiKey.value = ''
         // 重置为默认值
         endpoint.value = 'https://ark.cn-beijing.volces.com/api/v3'
-        model.value = 'ep-20241211105939-jpn2s'
+        model.value = 'doubao-seed-1-6-251015'
       } else {
         appStore.toast('删除配置失败')
       }

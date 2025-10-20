@@ -5,7 +5,7 @@
  * 豆包 API 客户端
  */
 export class DoubaoClient {
-  constructor(apiKey, endpoint = 'https://ark.cn-beijing.volces.com/api/v3', model = 'ep-20241211105939-jpn2s') {
+  constructor(apiKey, endpoint = 'https://ark.cn-beijing.volces.com/api/v3', model = 'doubao-seed-1-6-251015') {
     this.apiKey = apiKey
     this.baseURL = endpoint
     this.defaultModel = model
@@ -18,7 +18,7 @@ export class DoubaoClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { model = this.defaultModel, tools = [], onContent, onToolCalls } = options
+    const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning } = options
     console.log('豆包 chatCompletionsStream', messages, model, tools)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
@@ -72,6 +72,11 @@ export class DoubaoClient {
             const jsonStr = trimmedLine.slice(6)
             const data = JSON.parse(jsonStr)
             const delta = data.choices[0]?.delta
+            
+            // 处理思考内容（推理模型）
+            if (delta?.reasoning_content && onReasoning) {
+              onReasoning(delta.reasoning_content)
+            }
             
             // 处理普通内容
             if (delta?.content) {

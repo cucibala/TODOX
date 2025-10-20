@@ -16,7 +16,7 @@ export class DeepSeekClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { tools = [], onContent, onToolCalls } = options
+    const { tools = [], onContent, onToolCalls, onReasoning } = options
     console.log('chatCompletionsStream', messages, tools)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
@@ -73,6 +73,11 @@ export class DeepSeekClient {
             const jsonStr = trimmedLine.slice(6)
             const data = JSON.parse(jsonStr)
             const delta = data.choices[0]?.delta
+            
+            // 处理思考内容（推理模型）
+            if (delta?.reasoning_content && onReasoning) {
+              onReasoning(delta.reasoning_content)
+            }
             
             // 处理普通内容
             if (delta?.content) {

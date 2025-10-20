@@ -1567,6 +1567,82 @@
   height: 20px;
 }
 
+/* ==================== 思考内容样式 ==================== */
+
+.reasoning-section {
+  margin-bottom: 12px;
+  border: 1px solid rgba(138, 157, 251, 0.2);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: rgba(138, 157, 251, 0.05);
+}
+
+.reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+  background: rgba(138, 157, 251, 0.08);
+}
+
+.reasoning-header:hover {
+  background: rgba(138, 157, 251, 0.15);
+}
+
+.reasoning-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-color);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.reasoning-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.reasoning-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.reasoning-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(138, 157, 251, 0.15);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.reasoning-content {
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: rgba(138, 157, 251, 0.03);
+  border-top: 1px solid rgba(138, 157, 251, 0.1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 消息中的图片样式 */
 .message-part {
   margin-bottom: 8px;
