@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const TodoXDatabase = require('./database');
@@ -494,6 +494,12 @@ function updateTrayMenu() {
 
 // 应用准备就绪
 app.whenReady().then(() => {
+  // 注册自定义协议，用于加载本地视频文件
+  protocol.registerFileProtocol('todox-file', (request, callback) => {
+    const filePath = request.url.replace('todox-file://', '')
+    callback({ path: filePath })
+  })
+  
   // 先加载设置（包括自定义数据路径）
   loadSettings();
   
@@ -783,7 +789,9 @@ ipcMain.handle('select-image', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       properties: ['openFile'],
       filters: [
-        { name: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] }
+        { name: '图片', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] },
+        { name: '视频', extensions: ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'] },
+        { name: '所有文件', extensions: ['*'] }
       ]
     });
 
@@ -792,44 +800,64 @@ ipcMain.handle('select-image', async () => {
     }
 
     const sourcePath = result.filePaths[0];
-    const ext = path.extname(sourcePath);
+    const ext = path.extname(sourcePath).toLowerCase();
     const fileName = `${Date.now()}${ext}`;
     const imagesPath = getImagesPath();
     const destPath = path.join(imagesPath, fileName);
 
-    // 复制图片到应用数据目录
+    // 复制文件到应用数据目录
     fs.copyFileSync(sourcePath, destPath);
+    
+    // 判断文件类型
+    const videoExts = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv'];
+    const isVideo = videoExts.includes(ext);
 
     return { 
       success: true, 
       imagePath: destPath,
-      fileName: fileName
+      fileName: fileName,
+      isVideo: isVideo
     };
   } catch (error) {
-    console.error('选择图片失败:', error);
+    console.error('选择文件失败:', error);
     return { success: false, error: error.message };
   }
 });
 
-// IPC 通信处理 - 读取图片文件
+// IPC 通信处理 - 读取图片/视频文件
 ipcMain.handle('read-image', async (event, fileName) => {
   try {
     const imagesPath = getImagesPath();
-    const imagePath = path.join(imagesPath, fileName);
-    if (!fs.existsSync(imagePath)) {
-      return { success: false, error: '图片不存在' };
+    const filePath = path.join(imagesPath, fileName);
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: '文件不存在' };
     }
 
-    const imageData = fs.readFileSync(imagePath);
-    const base64 = imageData.toString('base64');
-    const ext = path.extname(fileName).slice(1);
+    const ext = path.extname(fileName).toLowerCase().slice(1);
+    const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'];
+    const isVideo = videoExts.includes(ext);
     
-    return { 
-      success: true, 
-      data: `data:image/${ext};base64,${base64}`
-    };
+    if (isVideo) {
+      // 视频文件返回本地文件路径
+      return { 
+        success: true, 
+        isVideo: true,
+        path: filePath,
+        fileName: fileName
+      };
+    } else {
+      // 图片文件返回 base64
+      const imageData = fs.readFileSync(filePath);
+      const base64 = imageData.toString('base64');
+      
+      return { 
+        success: true, 
+        isVideo: false,
+        data: `data:image/${ext};base64,${base64}`
+      };
+    }
   } catch (error) {
-    console.error('读取图片失败:', error);
+    console.error('读取文件失败:', error);
     return { success: false, error: error.message };
   }
 });
@@ -851,17 +879,26 @@ ipcMain.handle('delete-image', async (event, fileName) => {
   }
 });
 
-// IPC 通信处理 - 保存粘贴的图片（base64）
+// IPC 通信处理 - 保存粘贴的图片/视频（base64）
 ipcMain.handle('save-image-from-clipboard', async (event, base64Data) => {
   try {
-    // 解析 base64 数据
-    const matches = base64Data.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
-    if (!matches) {
-      return { success: false, error: '无效的图片数据格式' };
+    // 解析 base64 数据（支持图片和视频）
+    const imageMatches = base64Data.match(/^data:image\/([a-zA-Z]+);base64,(.+)$/);
+    const videoMatches = base64Data.match(/^data:video\/([a-zA-Z0-9]+);base64,(.+)$/);
+    
+    let ext, base64Content, isVideo = false;
+    
+    if (imageMatches) {
+      ext = imageMatches[1];
+      base64Content = imageMatches[2];
+    } else if (videoMatches) {
+      ext = videoMatches[1];
+      base64Content = videoMatches[2];
+      isVideo = true;
+    } else {
+      return { success: false, error: '无效的文件数据格式' };
     }
 
-    const ext = matches[1];
-    const base64Content = matches[2];
     const fileName = `${Date.now()}.${ext}`;
     const imagesPath = getImagesPath();
     const destPath = path.join(imagesPath, fileName);
@@ -873,10 +910,11 @@ ipcMain.handle('save-image-from-clipboard', async (event, base64Data) => {
     return { 
       success: true, 
       imagePath: destPath,
-      fileName: fileName
+      fileName: fileName,
+      isVideo: isVideo
     };
   } catch (error) {
-    console.error('保存粘贴图片失败:', error);
+    console.error('保存粘贴文件失败:', error);
     return { success: false, error: error.message };
   }
 });

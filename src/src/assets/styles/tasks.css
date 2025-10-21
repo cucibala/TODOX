@@ -430,6 +430,15 @@
   border-radius: var(--radius-md);
 }
 
+.video-preview {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  display: block;
+  border-radius: var(--radius-md);
+  background: #000;
+}
+
 .btn-remove-image {
   position: absolute;
   top: 8px;

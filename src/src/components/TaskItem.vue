@@ -169,17 +169,26 @@
         </div>
       </div>
 
-      <!-- 任务图片 -->
+      <!-- 任务图片/视频 -->
       <div v-if="task.images && task.images.length > 0" class="task-images-container">
-        <img
-          v-for="(image, index) in task.images"
-          :key="index"
-          v-show="imageCache[image]"
-          :src="imageCache[image]"
-          class="task-image"
-          @click="appStore.viewImage(imageCache[image])"
-          alt="任务图片"
-        />
+        <template v-for="(image, index) in task.images" :key="index">
+          <!-- 视频 -->
+          <video
+            v-if="isVideo(image) && imageCache[image]"
+            :src="imageCache[image]"
+            class="task-video"
+            controls
+            preload="metadata"
+          ></video>
+          <!-- 图片 -->
+          <img
+            v-else-if="!isVideo(image) && imageCache[image]"
+            :src="imageCache[image]"
+            class="task-image"
+            @click="appStore.viewImage(imageCache[image])"
+            alt="任务图片"
+          />
+        </template>
       </div>
 
       <!-- 子任务 -->
@@ -260,17 +269,26 @@
                   耗时 {{ calculateTaskDuration(subtask.createdAt, subtask.completedAt) }}
                 </span>
               </div>
-              <!-- 子任务图片 -->
+              <!-- 子任务图片/视频 -->
               <div v-if="subtask.images && subtask.images.length > 0" class="subtask-images-container">
-                <img
-                  v-for="(image, imgIndex) in subtask.images"
-                  :key="imgIndex"
-                  v-show="subtaskImageCache[image]"
-                  :src="subtaskImageCache[image]"
-                  class="subtask-image"
-                  @click="appStore.viewImage(subtaskImageCache[image])"
-                  alt="子任务图片"
-                />
+                <template v-for="(image, imgIndex) in subtask.images" :key="imgIndex">
+                  <!-- 视频 -->
+                  <video
+                    v-if="isVideo(image) && subtaskImageCache[image]"
+                    :src="subtaskImageCache[image]"
+                    class="subtask-video"
+                    controls
+                    preload="metadata"
+                  ></video>
+                  <!-- 图片 -->
+                  <img
+                    v-else-if="!isVideo(image) && subtaskImageCache[image]"
+                    :src="subtaskImageCache[image]"
+                    class="subtask-image"
+                    @click="appStore.viewImage(subtaskImageCache[image])"
+                    alt="子任务图片"
+                  />
+                </template>
               </div>
             </div>
             <div class="subtask-actions">
@@ -357,17 +375,26 @@
                 <template v-else>
                   <div class="progress-text">{{ progressItem.text }}</div>
                   <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
-                  <!-- 进度图片 -->
+                  <!-- 进度图片/视频 -->
                   <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
-                    <img
-                      v-for="(image, index) in progressItem.images"
-                      :key="index"
-                      v-show="progressImageCache[image]"
-                      :src="progressImageCache[image]"
-                      class="progress-image"
-                      @click="appStore.viewImage(progressImageCache[image])"
-                      alt="进度图片"
-                    />
+                    <template v-for="(image, index) in progressItem.images" :key="index">
+                      <!-- 视频 -->
+                      <video
+                        v-if="isVideo(image) && progressImageCache[image]"
+                        :src="progressImageCache[image]"
+                        class="progress-video"
+                        controls
+                        preload="metadata"
+                      ></video>
+                      <!-- 图片 -->
+                      <img
+                        v-else-if="!isVideo(image) && progressImageCache[image]"
+                        :src="progressImageCache[image]"
+                        class="progress-image"
+                        @click="appStore.viewImage(progressImageCache[image])"
+                        alt="进度图片"
+                      />
+                    </template>
                   </div>
                 </template>
               </div>
@@ -413,7 +440,7 @@
         <div class="add-progress-input-wrapper">
           <textarea
             v-model="progressInput"
-            placeholder="添加进度描述（支持粘贴图片）..."
+            placeholder="添加进度描述（支持粘贴图片/视频）..."
             class="add-progress-input add-progress-textarea"
             rows="1"
             @input="adjustProgressTextareaHeight"
@@ -443,18 +470,31 @@
             </svg>
           </button>
         </div>
-        <!-- 进度图片预览 -->
+        <!-- 进度图片/视频预览 -->
         <div v-if="previewImages.length > 0" class="progress-images-preview">
           <div 
             v-for="(image, index) in previewImages" 
             :key="index" 
             class="preview-image-item"
           >
-            <img :src="image.base64" alt="预览" />
+            <!-- 视频预览 -->
+            <video 
+              v-if="isVideo(image.fileName)"
+              :src="image.base64" 
+              class="preview-video"
+              controls
+              preload="metadata"
+            ></video>
+            <!-- 图片预览 -->
+            <img 
+              v-else
+              :src="image.base64" 
+              alt="预览" 
+            />
             <button 
               class="btn-remove-preview-image" 
               @click="handleRemoveProgressImage(index)"
-              title="删除图片"
+              :title="isVideo(image.fileName) ? '删除视频' : '删除图片'"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -587,7 +627,15 @@ const duration = computed(() => {
   return null
 })
 
-// 加载图片数据
+// 判断文件是否为视频
+function isVideo(fileName) {
+  if (!fileName) return false
+  const ext = fileName.toLowerCase().split('.').pop()
+  const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv']
+  return videoExts.includes(ext)
+}
+
+// 加载图片/视频数据
 async function loadImage(fileName) {
   if (imageCache.value[fileName]) {
     return // 已加载，跳过
@@ -595,12 +643,16 @@ async function loadImage(fileName) {
   
   const result = await electronAPI.readImage(fileName)
   if (result.success) {
-    // 使用响应式赋值，确保 Vue 能检测到变化
-    imageCache.value[fileName] = result.data
+    // 视频文件使用文件路径，图片使用 base64
+    if (result.isVideo && result.path) {
+      imageCache.value[fileName] = `todox-file://${result.path}`
+    } else if (result.data) {
+      imageCache.value[fileName] = result.data
+    }
   }
 }
 
-// 加载进度图片
+// 加载进度图片/视频
 async function loadProgressImage(fileName) {
   if (progressImageCache.value[fileName]) {
     return // 已加载，跳过
@@ -608,11 +660,15 @@ async function loadProgressImage(fileName) {
   
   const result = await electronAPI.readImage(fileName)
   if (result.success) {
-    progressImageCache.value[fileName] = result.data
+    if (result.isVideo && result.path) {
+      progressImageCache.value[fileName] = `todox-file://${result.path}`
+    } else if (result.data) {
+      progressImageCache.value[fileName] = result.data
+    }
   }
 }
 
-// 加载子任务图片
+// 加载子任务图片/视频
 async function loadSubtaskImage(fileName) {
   if (subtaskImageCache.value[fileName]) {
     return // 已加载，跳过
@@ -620,7 +676,11 @@ async function loadSubtaskImage(fileName) {
   
   const result = await electronAPI.readImage(fileName)
   if (result.success) {
-    subtaskImageCache.value[fileName] = result.data
+    if (result.isVideo && result.path) {
+      subtaskImageCache.value[fileName] = `todox-file://${result.path}`
+    } else if (result.data) {
+      subtaskImageCache.value[fileName] = result.data
+    }
   }
 }
 
@@ -975,45 +1035,81 @@ async function handleSelectProgressImage() {
   }
 }
 
-// 处理进度输入框的粘贴事件
+// 处理进度输入框的粘贴事件（支持多文件）
 async function handleProgressPaste(event) {
   const items = event.clipboardData?.items
   if (!items) return
 
-  for (const item of items) {
-    if (item.type.indexOf('image') !== -1) {
-      event.preventDefault()
-      
-      const file = item.getAsFile()
-      if (!file) continue
+  let hasMediaFile = false
+  const filesToProcess = []
 
-      // 读取图片为 base64
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const base64Data = e.target.result
-        
-        // 保存图片到应用数据目录
-        const result = await electronAPI.saveImageFromClipboard(base64Data)
-        if (result.success) {
-          // 确保响应式对象存在
-          if (!todoStore.currentProgressImages[props.task.id]) {
-            todoStore.currentProgressImages[props.task.id] = []
-          }
-          
-          // 添加到当前进度图片列表
-          todoStore.currentProgressImages[props.task.id].push(result.fileName)
-          
-          // 添加预览数据
-          progressImagePreviews.value[result.fileName] = base64Data
-          
-          appStore.toast('图片已粘贴')
-        } else {
-          appStore.toast('粘贴图片失败：' + result.error)
-        }
+  // 收集所有图片和视频文件
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1 || item.type.indexOf('video') !== -1) {
+      hasMediaFile = true
+      const file = item.getAsFile()
+      if (file) {
+        filesToProcess.push({
+          file,
+          isVideo: item.type.indexOf('video') !== -1
+        })
       }
-      reader.readAsDataURL(file)
-      break // 只处理第一张图片
     }
+  }
+
+  if (hasMediaFile) {
+    event.preventDefault()
+  }
+
+  // 确保响应式对象存在
+  if (!todoStore.currentProgressImages[props.task.id]) {
+    todoStore.currentProgressImages[props.task.id] = []
+  }
+
+  // 处理所有文件
+  let successCount = 0
+  for (const { file, isVideo } of filesToProcess) {
+    try {
+      // 读取文件为 base64
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      
+      // 保存文件到应用数据目录
+      const result = await electronAPI.saveImageFromClipboard(base64Data)
+      if (result.success) {
+        // 添加到当前进度图片列表
+        todoStore.currentProgressImages[props.task.id].push(result.fileName)
+        
+        // 添加预览数据
+        if (result.isVideo) {
+          // 视频使用本地文件路径预览
+          const localPath = result.imagePath || result.fileName
+          progressImagePreviews.value[result.fileName] = `todox-file://${localPath}`
+        } else {
+          // 图片使用 base64 预览
+          progressImagePreviews.value[result.fileName] = base64Data
+        }
+        
+        successCount++
+      }
+    } catch (error) {
+      console.error('处理文件失败:', error)
+    }
+  }
+
+  if (successCount > 0) {
+    if (successCount === 1) {
+      const isVideo = filesToProcess[0].isVideo
+      appStore.toast(isVideo ? '视频已粘贴' : '图片已粘贴')
+    } else {
+      appStore.toast(`已粘贴 ${successCount} 个文件`)
+    }
+  } else if (filesToProcess.length > 0) {
+    appStore.toast('粘贴文件失败')
   }
 }
 

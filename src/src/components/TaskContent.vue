@@ -138,7 +138,7 @@
           <textarea 
             v-model="newTaskText" 
             class="task-input task-textarea" 
-            placeholder="添加新任务（支持粘贴图片）..." 
+            placeholder="添加新任务（支持粘贴图片/视频）..." 
             autocomplete="off"
             required
             rows="1"
@@ -275,36 +275,65 @@ async function handleSelectImage() {
   await todoStore.selectImage()
 }
 
-// 处理粘贴事件
+// 处理粘贴事件（支持多文件和视频）
 async function handlePaste(event) {
   const items = event.clipboardData?.items
   if (!items) return
 
-  for (const item of items) {
-    if (item.type.indexOf('image') !== -1) {
-      event.preventDefault()
-      
-      const file = item.getAsFile()
-      if (!file) continue
+  let hasMediaFile = false
+  const filesToProcess = []
 
-      // 读取图片为 base64
-      const reader = new FileReader()
-      reader.onload = async (e) => {
-        const base64Data = e.target.result
-        
-        // 保存图片到应用数据目录
-        const result = await electronAPI.saveImageFromClipboard(base64Data)
-        if (result.success) {
-          // 添加到当前图片列表
-          todoStore.currentImages.push(result.fileName)
-          appStore.toast('图片已粘贴')
-        } else {
-          appStore.toast('粘贴图片失败：' + result.error)
-        }
+  // 收集所有图片和视频文件
+  for (const item of items) {
+    if (item.type.indexOf('image') !== -1 || item.type.indexOf('video') !== -1) {
+      hasMediaFile = true
+      const file = item.getAsFile()
+      if (file) {
+        filesToProcess.push({
+          file,
+          isVideo: item.type.indexOf('video') !== -1
+        })
       }
-      reader.readAsDataURL(file)
-      break // 只处理第一张图片
     }
+  }
+
+  if (hasMediaFile) {
+    event.preventDefault()
+  }
+
+  // 处理所有文件
+  let successCount = 0
+  for (const { file, isVideo } of filesToProcess) {
+    try {
+      // 读取文件为 base64
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      
+      // 保存文件到应用数据目录
+      const result = await electronAPI.saveImageFromClipboard(base64Data)
+      if (result.success) {
+        // 添加到当前图片列表
+        todoStore.currentImages.push(result.fileName)
+        successCount++
+      }
+    } catch (error) {
+      console.error('处理文件失败:', error)
+    }
+  }
+
+  if (successCount > 0) {
+    if (successCount === 1) {
+      const isVideo = filesToProcess[0].isVideo
+      appStore.toast(isVideo ? '视频已粘贴' : '图片已粘贴')
+    } else {
+      appStore.toast(`已粘贴 ${successCount} 个文件`)
+    }
+  } else if (filesToProcess.length > 0) {
+    appStore.toast('粘贴文件失败')
   }
 }
 
