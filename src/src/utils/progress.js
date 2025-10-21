@@ -44,7 +44,7 @@ export function createTaskProgressMessage(dayNumber, totalDays, action = '创建
  * @returns {object} 包含圆环数据的对象
  */
 export function createProgressCircleData(progress) {
-  const radius = 45
+  const radius = 18  // 修正：SVG viewBox 是 44x44，圆心在 (22, 22)，半径设为 18 留出 stroke-width 空间
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (progress / 100) * circumference
   

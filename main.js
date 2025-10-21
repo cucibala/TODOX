@@ -50,10 +50,6 @@ function getImagesPath() {
   return path.join(currentDataPath, 'images');
 }
 
-function getSettingsPath() {
-  return globalSettingsPath; // 全局设置始终在 userData
-}
-
 function getDatabasePath() {
   return path.join(currentDataPath, 'todox.db');
 }
@@ -238,9 +234,10 @@ function decryptPassword(encrypted) {
   }
 }
 
-// 加载设置
+// 加载设置（settings.json 用于路径配置，数据库用于敏感配置）
 function loadSettings() {
   try {
+    // 先从 settings.json 加载路径相关配置（必须在数据库初始化前）
     if (fs.existsSync(globalSettingsPath)) {
       const data = fs.readFileSync(globalSettingsPath, 'utf-8');
       const settings = JSON.parse(data);
@@ -250,40 +247,102 @@ function loadSettings() {
       if (settings.customDataPath) {
         currentDataPath = settings.customDataPath;
       }
-      
-      // 初始化数据目录
-      initDataDirectory(currentDataPath);
-    } else {
-      initDataDirectory(currentDataPath);
     }
+    
+    // 初始化数据目录
+    initDataDirectory(currentDataPath);
+    
+    // 迁移敏感配置到数据库（仅首次）
+    migrateSecretSettingsToDatabase();
   } catch (error) {
     console.error('加载设置失败:', error);
     initDataDirectory(currentDataPath);
   }
 }
 
-// 保存设置
-function saveSettings() {
+// 迁移敏感配置（密码、API密钥）到数据库（一次性操作）
+function migrateSecretSettingsToDatabase() {
   try {
-    // 先读取现有设置，避免覆盖其他配置（如 API 密钥）
-    let existingSettings = {};
-    if (fs.existsSync(globalSettingsPath)) {
-      try {
-        existingSettings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf-8'));
-      } catch (error) {
-        console.error('读取现有设置失败，将创建新设置:', error);
-      }
+    if (!fs.existsSync(globalSettingsPath)) {
+      return; // 没有旧配置，无需迁移
     }
     
-    // 只更新窗口相关的设置，保留其他字段
-    const settings = {
-      ...existingSettings, // 保留现有的所有设置
-      alwaysOnTop: isAlwaysOnTop,
-      customDataPath: currentDataPath !== app.getPath('userData') ? currentDataPath : undefined
-    };
+    if (!db) {
+      return; // 数据库未初始化
+    }
+    
+    // 检查是否已迁移
+    const migrated = db.getSetting('secrets_migrated');
+    if (migrated === 'true') {
+      return; // 已迁移过，跳过
+    }
+    
+    console.log('正在迁移敏感配置到数据库...');
+    const data = fs.readFileSync(globalSettingsPath, 'utf-8');
+    const settings = JSON.parse(data);
+    
+    // 只迁移敏感配置（密码、API密钥）
+    if (settings.password) {
+      db.setSetting('password', settings.password);
+      delete settings.password; // 从 settings.json 中删除
+    }
+    if (settings.deepseekApiKey) {
+      db.setSetting('deepseek_api_key', settings.deepseekApiKey);
+      delete settings.deepseekApiKey;
+    }
+    if (settings.doubaoApiKey) {
+      db.setSetting('doubao_api_key', settings.doubaoApiKey);
+      delete settings.doubaoApiKey;
+    }
+    if (settings.doubaoEndpoint) {
+      db.setSetting('doubao_endpoint', settings.doubaoEndpoint);
+      delete settings.doubaoEndpoint;
+    }
+    if (settings.doubaoModel) {
+      db.setSetting('doubao_model', settings.doubaoModel);
+      delete settings.doubaoModel;
+    }
+    
+    // 标记已迁移
+    db.setSetting('secrets_migrated', 'true');
+    
+    // 保存清理后的 settings.json（保留 alwaysOnTop 和 customDataPath）
+    fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    console.log('✓ 敏感配置已迁移到数据库，settings.json 已清理');
+  } catch (error) {
+    console.error('迁移敏感配置失败（将继续使用数据库）:', error);
+  }
+}
+
+// 保存窗口置顶设置
+function saveAlwaysOnTop() {
+  try {
+    let settings = {};
+    if (fs.existsSync(globalSettingsPath)) {
+      settings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf-8') || '{}');
+    }
+    settings.alwaysOnTop = isAlwaysOnTop;
     fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
   } catch (error) {
-    console.error('保存设置失败:', error);
+    console.error('保存窗口置顶设置失败:', error);
+  }
+}
+
+// 保存自定义数据路径
+function saveCustomDataPath() {
+  try {
+    let settings = {};
+    if (fs.existsSync(globalSettingsPath)) {
+      settings = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf-8') || '{}');
+    }
+    if (currentDataPath !== app.getPath('userData')) {
+      settings.customDataPath = currentDataPath;
+    } else {
+      delete settings.customDataPath; // 默认路径不保存
+    }
+    fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (error) {
+    console.error('保存自定义数据路径失败:', error);
   }
 }
 
@@ -416,7 +475,7 @@ function updateTrayMenu() {
         isAlwaysOnTop = !isAlwaysOnTop;
         mainWindow.setAlwaysOnTop(isAlwaysOnTop);
         mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
-        saveSettings();
+        saveAlwaysOnTop();
         updateTrayMenu(); // 只更新菜单，不重新创建托盘
       }
     },
@@ -487,7 +546,7 @@ ipcMain.on('toggle-always-on-top', () => {
   isAlwaysOnTop = !isAlwaysOnTop;
   mainWindow.setAlwaysOnTop(isAlwaysOnTop);
   mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
-  saveSettings();
+  saveAlwaysOnTop();
   updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
 });
 
@@ -828,11 +887,11 @@ ipcMain.handle('set-password', async (event, password) => {
     if (!password) {
       return { success: false, error: '密码不能为空' };
     }
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
     const encrypted = encryptPassword(password);
-    const settingsPath = getSettingsPath();
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
-    settings.password = encrypted;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    db.setSetting('password', encrypted);
     return { success: true };
   } catch (error) {
     console.error('设置密码失败:', error);
@@ -843,15 +902,14 @@ ipcMain.handle('set-password', async (event, password) => {
 // IPC 通信处理 - 验证密码
 ipcMain.handle('verify-password', async (event, password) => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const encryptedPassword = db.getSetting('password');
+    if (!encryptedPassword) {
       return { success: false, hasPassword: false };
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    if (!settings.password) {
-      return { success: false, hasPassword: false };
-    }
-    const decrypted = decryptPassword(settings.password);
+    const decrypted = decryptPassword(encryptedPassword);
     const isValid = decrypted === password;
     return { success: isValid, hasPassword: true };
   } catch (error) {
@@ -863,12 +921,11 @@ ipcMain.handle('verify-password', async (event, password) => {
 // IPC 通信处理 - 检查是否设置了密码
 ipcMain.handle('has-password', async () => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
-      return { hasPassword: false };
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    return { hasPassword: !!settings.password };
+    const password = db.getSetting('password');
+    return { hasPassword: !!password };
   } catch (error) {
     console.error('检查密码失败:', error);
     return { hasPassword: false };
@@ -878,17 +935,21 @@ ipcMain.handle('has-password', async () => {
 // IPC 通信处理 - 修改密码
 ipcMain.handle('change-password', async (event, oldPassword, newPassword) => {
   try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
     // 先验证旧密码
-    const verifyResult = await ipcMain.invoke('verify-password', oldPassword);
-    if (!verifyResult.success) {
+    const encryptedPassword = db.getSetting('password');
+    if (!encryptedPassword) {
+      return { success: false, error: '未设置密码' };
+    }
+    const decrypted = decryptPassword(encryptedPassword);
+    if (decrypted !== oldPassword) {
       return { success: false, error: '旧密码不正确' };
     }
     // 设置新密码
     const encrypted = encryptPassword(newPassword);
-    const settingsPath = getSettingsPath();
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    settings.password = encrypted;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    db.setSetting('password', encrypted);
     return { success: true };
   } catch (error) {
     console.error('修改密码失败:', error);
@@ -899,22 +960,20 @@ ipcMain.handle('change-password', async (event, oldPassword, newPassword) => {
 // IPC 通信处理 - 清除密码
 ipcMain.handle('clear-password', async (event, password) => {
   try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
     // 先验证密码
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
+    const encryptedPassword = db.getSetting('password');
+    if (!encryptedPassword) {
       return { success: false, error: '未设置密码' };
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    if (!settings.password) {
-      return { success: false, error: '未设置密码' };
-    }
-    const decrypted = decryptPassword(settings.password);
+    const decrypted = decryptPassword(encryptedPassword);
     if (decrypted !== password) {
       return { success: false, error: '密码不正确' };
     }
     // 清除密码
-    delete settings.password;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    db.deleteSetting('password');
     return { success: true };
   } catch (error) {
     console.error('清除密码失败:', error);
@@ -928,14 +987,11 @@ ipcMain.handle('set-deepseek-key', async (event, apiKey) => {
     if (!apiKey) {
       return { success: false, error: 'API 密钥不能为空' };
     }
-    const encrypted = encryptPassword(apiKey); // 复用加密函数
-    const settingsPath = getSettingsPath();
-    let settings = {};
-    if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    settings.deepseekApiKey = encrypted;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    const encrypted = encryptPassword(apiKey); // 复用加密函数
+    db.setSetting('deepseek_api_key', encrypted);
     return { success: true };
   } catch (error) {
     console.error('设置 DeepSeek API 密钥失败:', error);
@@ -946,15 +1002,14 @@ ipcMain.handle('set-deepseek-key', async (event, apiKey) => {
 // IPC 通信处理 - 获取 DeepSeek API 密钥
 ipcMain.handle('get-deepseek-key', async () => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const encrypted = db.getSetting('deepseek_api_key');
+    if (!encrypted) {
       return { success: false, key: '' };
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    if (!settings.deepseekApiKey) {
-      return { success: false, key: '' };
-    }
-    const decrypted = decryptPassword(settings.deepseekApiKey);
+    const decrypted = decryptPassword(encrypted);
     return { success: true, key: decrypted };
   } catch (error) {
     console.error('获取 DeepSeek API 密钥失败:', error);
@@ -965,12 +1020,11 @@ ipcMain.handle('get-deepseek-key', async () => {
 // IPC 通信处理 - 检查是否设置了 DeepSeek API 密钥
 ipcMain.handle('has-deepseek-key', async () => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
-      return { hasKey: false };
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    return { hasKey: !!settings.deepseekApiKey };
+    const apiKey = db.getSetting('deepseek_api_key');
+    return { hasKey: !!apiKey };
   } catch (error) {
     console.error('检查 DeepSeek API 密钥失败:', error);
     return { hasKey: false };
@@ -980,13 +1034,10 @@ ipcMain.handle('has-deepseek-key', async () => {
 // IPC 通信处理 - 删除 DeepSeek API 密钥
 ipcMain.handle('delete-deepseek-key', async () => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
-      return { success: true };
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    delete settings.deepseekApiKey;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    db.deleteSetting('deepseek_api_key');
     return { success: true };
   } catch (error) {
     console.error('删除 DeepSeek API 密钥失败:', error);
@@ -1002,16 +1053,13 @@ ipcMain.handle('set-doubao-config', async (event, config) => {
     if (!config.apiKey) {
       return { success: false, error: 'API 密钥不能为空' };
     }
-    const encrypted = encryptPassword(config.apiKey);
-    const settingsPath = getSettingsPath();
-    let settings = {};
-    if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8') || '{}');
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    settings.doubaoApiKey = encrypted;
-    settings.doubaoEndpoint = config.endpoint || 'https://ark.cn-beijing.volces.com/api/v3';
-    settings.doubaoModel = config.model || 'ep-20241211105939-jpn2s';
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    const encrypted = encryptPassword(config.apiKey);
+    db.setSetting('doubao_api_key', encrypted);
+    db.setSetting('doubao_endpoint', config.endpoint || 'https://ark.cn-beijing.volces.com/api/v3');
+    db.setSetting('doubao_model', config.model || 'ep-20241211105939-jpn2s');
     return { success: true };
   } catch (error) {
     console.error('设置豆包 API 配置失败:', error);
@@ -1022,20 +1070,21 @@ ipcMain.handle('set-doubao-config', async (event, config) => {
 // IPC 通信处理 - 获取豆包 API 配置
 ipcMain.handle('get-doubao-config', async () => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const encrypted = db.getSetting('doubao_api_key');
+    if (!encrypted) {
       return { success: false, key: '', endpoint: '', model: '' };
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    if (!settings.doubaoApiKey) {
-      return { success: false, key: '', endpoint: '', model: '' };
-    }
-    const decrypted = decryptPassword(settings.doubaoApiKey);
+    const decrypted = decryptPassword(encrypted);
+    const endpoint = db.getSetting('doubao_endpoint') || 'https://ark.cn-beijing.volces.com/api/v3';
+    const model = db.getSetting('doubao_model') || 'ep-20241211105939-jpn2s';
     return { 
       success: true, 
       key: decrypted,
-      endpoint: settings.doubaoEndpoint || 'https://ark.cn-beijing.volces.com/api/v3',
-      model: settings.doubaoModel || 'ep-20241211105939-jpn2s'
+      endpoint,
+      model
     };
   } catch (error) {
     console.error('获取豆包 API 配置失败:', error);
@@ -1046,15 +1095,12 @@ ipcMain.handle('get-doubao-config', async () => {
 // IPC 通信处理 - 删除豆包 API 配置
 ipcMain.handle('delete-doubao-config', async () => {
   try {
-    const settingsPath = getSettingsPath();
-    if (!fs.existsSync(settingsPath)) {
-      return { success: true };
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    delete settings.doubaoApiKey;
-    delete settings.doubaoEndpoint;
-    delete settings.doubaoModel;
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+    db.deleteSetting('doubao_api_key');
+    db.deleteSetting('doubao_endpoint');
+    db.deleteSetting('doubao_model');
     return { success: true };
   } catch (error) {
     console.error('删除豆包 API 配置失败:', error);
@@ -1180,7 +1226,7 @@ ipcMain.handle('change-data-path', async (event, newPath) => {
     initDatabase();
 
     // 保存新路径到设置
-    saveSettings();
+    saveCustomDataPath();
 
     return {
       success: true,
@@ -1214,7 +1260,7 @@ ipcMain.handle('reset-data-path', async () => {
     // 重新初始化数据库
     initDatabase();
     
-    saveSettings();
+    saveCustomDataPath();
 
     return {
       success: true,
