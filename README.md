@@ -151,6 +151,7 @@ npm start
 - **状态管理**: Pinia
 - **构建工具**: Vite
 - **桌面框架**: Electron
+- **数据库**: SQLite (better-sqlite3)
 - **样式**: CSS Variables
 
 ## 📁 项目结构
@@ -177,12 +178,25 @@ TodoX/
 
 ### 数据存储
 
-默认存储位置：
-- Windows: `%APPDATA%/todox/`
-- macOS: `~/Library/Application Support/todox/`
-- Linux: `~/.config/todox/`
+**数据库**：使用 SQLite 存储所有数据（项目、任务、聊天记录等）
 
-可在应用内修改存储路径。
+默认存储位置：
+- Windows: `%APPDATA%/todox/todox.db`
+- macOS: `~/Library/Application Support/todox/todox.db`
+- Linux: `~/.config/todox/todox.db`
+
+**特性**：
+- 自动从旧版 JSON 文件迁移数据
+- 原 JSON 文件自动备份至 `json-backup/` 目录
+- WAL 模式提升并发性能
+- 事务处理保证数据一致性
+- 版本管理系统支持平滑升级
+- 可在应用内修改存储路径（自动迁移数据库文件）
+
+**版本管理**：
+- 当前数据库版本：v1
+- 自动检测版本并逐版本升级
+- 详见 `数据库升级指南.md`
 
 ### 自定义主题
 

@@ -1,6 +1,6 @@
 {
   "name": "todox",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "一个现代化的桌面任务清单应用 - 支持项目管理、进度追踪、多图片附件、粘贴图片、桌面背景模式、窗口置顶、迷你模式、系统托盘",
   "main": "main.js",
   "scripts": {
@@ -13,7 +13,12 @@
     "build:mac": "npm run vue:build && electron-builder --mac",
     "build:linux": "npm run vue:build && electron-builder --linux"
   },
-  "keywords": ["electron", "todo", "task", "productivity"],
+  "keywords": [
+    "electron",
+    "todo",
+    "task",
+    "productivity"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
@@ -39,7 +44,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -51,7 +58,10 @@
     },
     "linux": {
       "icon": "assets/X.png",
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility"
     },
     "nsis": {
@@ -60,6 +70,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1"
   }
 }
-

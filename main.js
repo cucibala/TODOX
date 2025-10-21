@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const TodoXDatabase = require('./database');
 
 // 单实例锁定 - 只允许运行一个应用实例
 const gotTheLock = app.requestSingleInstanceLock();
@@ -25,7 +26,10 @@ const globalSettingsPath = path.join(app.getPath('userData'), 'settings.json');
 // 当前数据存储路径（可自定义）
 let currentDataPath = app.getPath('userData');
 
-// 动态获取数据文件路径
+// 数据库实例
+let db = null;
+
+// 动态获取数据文件路径（用于数据迁移和向后兼容）
 function getDataPath() {
   return path.join(currentDataPath, 'todos.json');
 }
@@ -50,6 +54,10 @@ function getSettingsPath() {
   return globalSettingsPath; // 全局设置始终在 userData
 }
 
+function getDatabasePath() {
+  return path.join(currentDataPath, 'todox.db');
+}
+
 // 初始化数据目录
 function initDataDirectory(dataDir) {
   try {
@@ -68,6 +76,106 @@ function initDataDirectory(dataDir) {
   } catch (error) {
     console.error('初始化数据目录失败:', error);
     return false;
+  }
+}
+
+// 初始化数据库
+function initDatabase() {
+  try {
+    const dbPath = getDatabasePath();
+    db = new TodoXDatabase(dbPath);
+    const success = db.init();
+    
+    if (success) {
+      // 检查是否需要从 JSON 迁移数据
+      migrateFromJSONIfNeeded();
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('初始化数据库失败:', error);
+    return false;
+  }
+}
+
+// 从 JSON 迁移数据（如果需要）
+function migrateFromJSONIfNeeded() {
+  try {
+    const dbPath = getDatabasePath();
+    const todosPath = getDataPath();
+    const projectsPath = getProjectsPath();
+    const conversationsPath = getConversationsPath();
+    
+    // 检查是否是新数据库（空数据库）
+    const todos = db.getTodos();
+    const projects = db.getProjects();
+    
+    // 如果数据库为空且有 JSON 文件，则迁移
+    if (todos.length === 0 && projects.length === 0) {
+      const jsonData = {};
+      
+      // 读取项目数据
+      if (fs.existsSync(projectsPath)) {
+        try {
+          const projectData = JSON.parse(fs.readFileSync(projectsPath, 'utf-8'));
+          jsonData.projects = projectData.projects || [];
+          jsonData.currentProjectId = projectData.currentProjectId;
+          console.log(`发现项目数据，准备迁移 ${jsonData.projects.length} 个项目`);
+        } catch (error) {
+          console.error('读取项目 JSON 失败:', error);
+        }
+      }
+      
+      // 读取任务数据
+      if (fs.existsSync(todosPath)) {
+        try {
+          jsonData.todos = JSON.parse(fs.readFileSync(todosPath, 'utf-8'));
+          console.log(`发现任务数据，准备迁移 ${jsonData.todos.length} 个任务`);
+        } catch (error) {
+          console.error('读取任务 JSON 失败:', error);
+        }
+      }
+      
+      // 读取会话数据
+      if (fs.existsSync(conversationsPath)) {
+        try {
+          jsonData.conversations = JSON.parse(fs.readFileSync(conversationsPath, 'utf-8'));
+          console.log(`发现会话数据，准备迁移 ${jsonData.conversations.conversations?.length || 0} 个会话`);
+        } catch (error) {
+          console.error('读取会话 JSON 失败:', error);
+        }
+      }
+      
+      // 执行迁移
+      if (Object.keys(jsonData).length > 0) {
+        console.log('开始迁移数据到 SQLite...');
+        const success = db.migrateFromJSON(jsonData);
+        
+        if (success) {
+          console.log('数据迁移成功！');
+          
+          // 备份原有 JSON 文件
+          const backupDir = path.join(currentDataPath, 'json-backup');
+          if (!fs.existsSync(backupDir)) {
+            fs.mkdirSync(backupDir, { recursive: true });
+          }
+          
+          if (fs.existsSync(todosPath)) {
+            fs.copyFileSync(todosPath, path.join(backupDir, 'todos.json'));
+          }
+          if (fs.existsSync(projectsPath)) {
+            fs.copyFileSync(projectsPath, path.join(backupDir, 'projects.json'));
+          }
+          if (fs.existsSync(conversationsPath)) {
+            fs.copyFileSync(conversationsPath, path.join(backupDir, 'conversations.json'));
+          }
+          
+          console.log('原 JSON 文件已备份到:', backupDir);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('数据迁移检查失败:', error);
   }
 }
 
@@ -430,6 +538,9 @@ function toggleDesktopMode() {
 
 // 应用准备就绪
 app.whenReady().then(() => {
+  // 初始化数据库
+  initDatabase();
+  
   createWindow();
   createTray();
 
@@ -444,6 +555,14 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
+  }
+});
+
+// 应用退出前清理
+app.on('before-quit', () => {
+  if (db) {
+    db.close();
+    console.log('数据库已关闭');
   }
 });
 
@@ -489,12 +608,12 @@ ipcMain.on('toggle-desktop-mode', () => {
 // IPC 通信处理 - 读取项目数据
 ipcMain.handle('load-projects', async () => {
   try {
-    const projectsPath = getProjectsPath();
-    if (fs.existsSync(projectsPath)) {
-      const data = fs.readFileSync(projectsPath, 'utf-8');
-      return JSON.parse(data);
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    return { projects: [], currentProjectId: null };
+    const projects = db.getProjects();
+    const currentProjectId = db.getCurrentProjectId();
+    return { projects, currentProjectId };
   } catch (error) {
     console.error('读取项目数据失败:', error);
     return { projects: [], currentProjectId: null };
@@ -504,8 +623,13 @@ ipcMain.handle('load-projects', async () => {
 // IPC 通信处理 - 保存项目数据
 ipcMain.handle('save-projects', async (event, projectData) => {
   try {
-    const projectsPath = getProjectsPath();
-    fs.writeFileSync(projectsPath, JSON.stringify(projectData, null, 2), 'utf-8');
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.saveProjects(projectData.projects || []);
+    if (projectData.currentProjectId !== undefined) {
+      db.setCurrentProjectId(projectData.currentProjectId);
+    }
     return { success: true };
   } catch (error) {
     console.error('保存项目数据失败:', error);
@@ -516,12 +640,10 @@ ipcMain.handle('save-projects', async (event, projectData) => {
 // IPC 通信处理 - 读取任务数据
 ipcMain.handle('load-todos', async () => {
   try {
-    const dataPath = getDataPath();
-    if (fs.existsSync(dataPath)) {
-      const data = fs.readFileSync(dataPath, 'utf-8');
-      return JSON.parse(data);
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    return [];
+    return db.getTodos();
   } catch (error) {
     console.error('读取任务数据失败:', error);
     return [];
@@ -531,8 +653,10 @@ ipcMain.handle('load-todos', async () => {
 // IPC 通信处理 - 保存任务数据
 ipcMain.handle('save-todos', async (event, todos) => {
   try {
-    const dataPath = getDataPath();
-    fs.writeFileSync(dataPath, JSON.stringify(todos, null, 2), 'utf-8');
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.saveTodos(todos);
     return { success: true };
   } catch (error) {
     console.error('保存任务数据失败:', error);
@@ -954,16 +1078,8 @@ ipcMain.handle('change-data-path', async (event, newPath) => {
     }
 
     const oldPath = currentDataPath;
-    const oldTodosPath = getDataPath();
-    const oldProjectsPath = getProjectsPath();
-    const oldChatHistoryPath = getChatHistoryPath();
+    const oldDbPath = getDatabasePath();
     const oldImagesPath = getImagesPath();
-
-    // 创建新的数据目录结构
-    const newTodosPath = path.join(newPath, 'todos.json');
-    const newProjectsPath = path.join(newPath, 'projects.json');
-    const newChatHistoryPath = path.join(newPath, 'chat-history.json');
-    const newImagesPath = path.join(newPath, 'images');
 
     // 初始化新数据目录
     if (!initDataDirectory(newPath)) {
@@ -973,41 +1089,41 @@ ipcMain.handle('change-data-path', async (event, newPath) => {
     // 迁移数据文件
     let migratedFiles = [];
     
-    // 复制 todos.json
-    if (fs.existsSync(oldTodosPath)) {
-      fs.copyFileSync(oldTodosPath, newTodosPath);
-      migratedFiles.push('todos.json');
-    }
-
-    // 复制 projects.json
-    if (fs.existsSync(oldProjectsPath)) {
-      fs.copyFileSync(oldProjectsPath, newProjectsPath);
-      migratedFiles.push('projects.json');
-    }
-
-    // 复制 chat-history.json（旧版）
-    if (fs.existsSync(oldChatHistoryPath)) {
-      fs.copyFileSync(oldChatHistoryPath, newChatHistoryPath);
-      migratedFiles.push('chat-history.json');
-    }
-
-    // 复制 conversations.json
-    const oldConversationsPath = path.join(oldPath, 'conversations.json');
-    const newConversationsPath = path.join(newPath, 'conversations.json');
-    if (fs.existsSync(oldConversationsPath)) {
-      fs.copyFileSync(oldConversationsPath, newConversationsPath);
-      migratedFiles.push('conversations.json');
+    // 复制数据库文件
+    const newDbPath = path.join(newPath, 'todox.db');
+    if (fs.existsSync(oldDbPath)) {
+      fs.copyFileSync(oldDbPath, newDbPath);
+      migratedFiles.push('todox.db');
+      
+      // 同时复制 WAL 和 SHM 文件（如果存在）
+      const oldWalPath = oldDbPath + '-wal';
+      const oldShmPath = oldDbPath + '-shm';
+      if (fs.existsSync(oldWalPath)) {
+        fs.copyFileSync(oldWalPath, newDbPath + '-wal');
+      }
+      if (fs.existsSync(oldShmPath)) {
+        fs.copyFileSync(oldShmPath, newDbPath + '-shm');
+      }
     }
 
     // 复制 images 文件夹
+    const newImagesPath = path.join(newPath, 'images');
     if (fs.existsSync(oldImagesPath)) {
       copyFolderSync(oldImagesPath, newImagesPath);
       const imageFiles = fs.readdirSync(oldImagesPath);
       migratedFiles.push(`images (${imageFiles.length} 个文件)`);
     }
 
+    // 关闭当前数据库连接
+    if (db) {
+      db.close();
+    }
+
     // 更新当前数据路径
     currentDataPath = newPath;
+
+    // 重新初始化数据库
+    initDatabase();
 
     // 保存新路径到设置
     saveSettings();
@@ -1033,8 +1149,17 @@ ipcMain.handle('reset-data-path', async () => {
       return { success: false, error: '当前已是默认路径' };
     }
 
+    // 关闭当前数据库连接
+    if (db) {
+      db.close();
+    }
+
     currentDataPath = defaultPath;
     initDataDirectory(currentDataPath);
+    
+    // 重新初始化数据库
+    initDatabase();
+    
     saveSettings();
 
     return {
@@ -1080,17 +1205,16 @@ ipcMain.handle('set-auto-launch', async (event, enabled) => {
 // IPC 通信处理 - 加载会话列表
 ipcMain.handle('load-conversations', async () => {
   try {
-    const conversationsPath = getConversationsPath();
-    if (fs.existsSync(conversationsPath)) {
-      const data = fs.readFileSync(conversationsPath, 'utf-8');
-      return { success: true, data: JSON.parse(data) };
+    if (!db) {
+      throw new Error('数据库未初始化');
     }
-    // 返回默认结构
+    const conversations = db.getConversations();
+    const currentConversationId = db.getCurrentConversationId();
     return { 
       success: true, 
       data: {
-        conversations: [],
-        currentConversationId: null
+        conversations,
+        currentConversationId
       }
     };
   } catch (error) {
@@ -1109,8 +1233,13 @@ ipcMain.handle('load-conversations', async () => {
 // IPC 通信处理 - 保存会话列表
 ipcMain.handle('save-conversations', async (event, conversationsData) => {
   try {
-    const conversationsPath = getConversationsPath();
-    fs.writeFileSync(conversationsPath, JSON.stringify(conversationsData, null, 2), 'utf-8');
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.saveConversations(conversationsData);
+    if (conversationsData.currentConversationId !== undefined) {
+      db.setCurrentConversationId(conversationsData.currentConversationId);
+    }
     return { success: true };
   } catch (error) {
     console.error('保存会话列表失败:', error);
