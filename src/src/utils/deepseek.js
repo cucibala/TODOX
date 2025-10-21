@@ -191,14 +191,18 @@ export async function aiBreakdownTask(taskText, apiKey) {
   }
   
   // 格式化子任务
-  return subtasks.map(st => ({
-    text: st.text || '',
-    weight: st.weight || 3,
-    completed: false,
-    requiresInput: st.requiresInput || false,
-    inputValue: '',
-    id: Date.now() + Math.random()
-  }))
+  return subtasks.map((st, idx) => {
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).substring(2, 5)
+    return {
+      text: st.text || '',
+      weight: st.weight || 3,
+      completed: false,
+      requiresInput: st.requiresInput || false,
+      inputValue: '',
+      id: `${timestamp}${idx}${random}`
+    }
+  })
 }
 
 /**

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useProjectStore } from './project'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
+import { generateId, generateSubId } from '../utils/tools'
 
 export const useTodoStore = defineStore('todo', () => {
   // 状态
@@ -243,7 +244,7 @@ export const useTodoStore = defineStore('todo', () => {
     }
     
     const task = {
-      id: Date.now(),
+      id: generateId(),
       text: text.trim(),
       projectId: projectStore.currentProjectId,
       completed: false,
@@ -381,7 +382,7 @@ export const useTodoStore = defineStore('todo', () => {
       }
       
       const subtask = {
-        id: Date.now(),
+        id: generateId(),
         text: text.trim(),
         weight,
         completed: false,
@@ -498,7 +499,7 @@ export const useTodoStore = defineStore('todo', () => {
       const progressImages = currentProgressImages.value[taskId] || []
       
       const record = {
-        id: Date.now(),
+        id: generateId(),
         text: progressText.trim(),
         createdAt: new Date().toISOString(),
         images: [...progressImages]

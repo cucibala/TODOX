@@ -5,7 +5,7 @@ import { useTodoStore } from './todo'
 import { useProjectStore } from './project'
 import { DeepSeekClient } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
-import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask, executeEditSubtask } from '../utils/tools'
+import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask, executeEditSubtask, executeDeleteTask, executeDeleteSubtask, generateId } from '../utils/tools'
 
 export const useChatStore = defineStore('chat', () => {
   const appStore = useAppStore()
@@ -157,6 +157,7 @@ export const useChatStore = defineStore('chat', () => {
 
     // 添加用户消息
     messages.value.push({
+      id: generateId(),
       role: 'user',
       content: messageContent,
       timestamp: Date.now(),
@@ -171,6 +172,7 @@ export const useChatStore = defineStore('chat', () => {
     
     // 添加一个空的 AI 消息，准备接收流式内容
     messages.value.push({
+      id: generateId(),
       role: 'assistant',
       content: '',
       timestamp: Date.now()
@@ -330,6 +332,7 @@ export const useChatStore = defineStore('chat', () => {
               
               // 添加工具调用消息
               messages.value.push({
+                id: generateId(),
                 role: 'tool',
                 content: '执行中...',
                 tool_call_id: toolCall.id,
@@ -364,6 +367,7 @@ export const useChatStore = defineStore('chat', () => {
                       : '创建项目'
                     
                     messages.value.push({
+                      id: generateId(),
                       role: 'assistant',
                       content: `🚀 开始${actionText}...`,
                       timestamp: Date.now(),
@@ -474,6 +478,7 @@ export const useChatStore = defineStore('chat', () => {
             
             // 添加新的 AI 消息
             messages.value.push({
+              id: generateId(),
               role: 'assistant',
               content: '',
               timestamp: Date.now()
@@ -521,7 +526,7 @@ export const useChatStore = defineStore('chat', () => {
     }
     
     const newConv = {
-      id: Date.now(),
+      id: generateId(),
       title: '新对话',
       messages: [],
       roleId: roleId,
@@ -668,6 +673,9 @@ export const useChatStore = defineStore('chat', () => {
       
       // 准备消息数据（完整保存所有字段）
       currentConv.messages = messages.value.map(msg => {
+        // 确保消息有ID
+        const msgId = msg.id || generateId()
+        
         // 确保 tool 消息的 content 是字符串格式
         let content = msg.content
         if (msg.role === 'tool' && typeof content !== 'string') {
@@ -675,6 +683,7 @@ export const useChatStore = defineStore('chat', () => {
         }
         
         const plainMsg = {
+          id: msgId,
           role: msg.role,
           content: content,
           timestamp: msg.timestamp

@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { useAppStore } from './app'
 import { useTodoStore } from './todo'
 import { encrypt, decrypt } from '../utils/crypto'
+import { generateId } from '../utils/tools'
 
 export const useProjectStore = defineStore('project', () => {
   // 状态
@@ -38,7 +39,7 @@ export const useProjectStore = defineStore('project', () => {
     
     const appStore = useAppStore()
     const project = {
-      id: Date.now(),
+      id: generateId(),
       name,
       color,
       createdAt: new Date().toISOString()
@@ -237,8 +238,8 @@ export const useProjectStore = defineStore('project', () => {
       // 导入任务（逐条插入）
       const oldIdToNewId = {}
       for (const taskData of importData.tasks) {
-        // 使用整数避免浮点数ID，添加随机数避免冲突
-        const newTaskId = Date.now() + Math.floor(Math.random() * 10000)
+        // 生成新的唯一ID
+        const newTaskId = generateId()
         oldIdToNewId[taskData.originalId] = newTaskId
         
         const newTask = {

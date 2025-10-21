@@ -196,7 +196,7 @@ class TodoXDatabase {
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
     stmt.run(
-          project.id,
+          String(project.id),
           project.name,
           project.color || null,
           project.icon || null,
@@ -232,7 +232,7 @@ class TodoXDatabase {
     
     fields.push('updated_at = ?');
     values.push(new Date().toISOString());
-    values.push(projectId);
+    values.push(String(projectId));
     
     const stmt = this.db.prepare(`
       UPDATE projects SET ${fields.join(', ')} WHERE id = ?
@@ -244,7 +244,7 @@ class TodoXDatabase {
    * 删除单个项目
    */
   deleteProject(projectId) {
-    this.db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
+    this.db.prepare('DELETE FROM projects WHERE id = ?').run(String(projectId));
   }
 
   /**
@@ -346,8 +346,8 @@ class TodoXDatabase {
     `);
     
     stmt.run(
-      todo.id,
-      todo.projectId || todo.project_id || null,
+      String(todo.id),
+      todo.projectId || todo.project_id ? String(todo.projectId || todo.project_id) : null,
       todo.text,
       todo.completed ? 1 : 0,
       todo.priority || 'medium',
@@ -360,13 +360,13 @@ class TodoXDatabase {
     
     // 保存任务图片
     if (todo.images && todo.images.length > 0) {
-      this.saveImages('todo', todo.id, todo.images);
+      this.saveImages('todo', String(todo.id), todo.images);
     }
     
     // 保存子任务
     if (todo.subtasks && todo.subtasks.length > 0) {
       todo.subtasks.forEach(subtask => {
-        this.addSubtask(todo.id, subtask);
+        this.addSubtask(String(todo.id), subtask);
       });
     }
     
@@ -374,7 +374,7 @@ class TodoXDatabase {
     const progressList = todo.progressRecords || todo.progress || [];
     if (progressList.length > 0) {
       progressList.forEach(record => {
-        this.addProgressRecord(todo.id, record);
+        this.addProgressRecord(String(todo.id), record);
       });
     }
   }
@@ -412,12 +412,12 @@ class TodoXDatabase {
     }
     if (updates.projectId !== undefined) {
       fields.push('project_id = ?');
-      values.push(updates.projectId);
+      values.push(updates.projectId ? String(updates.projectId) : null);
     }
     
     fields.push('updated_at = ?');
     values.push(new Date().toISOString());
-    values.push(todoId);
+    values.push(String(todoId));
     
     const stmt = this.db.prepare(`
       UPDATE todos SET ${fields.join(', ')} WHERE id = ?
@@ -426,7 +426,7 @@ class TodoXDatabase {
     
     // 如果更新了图片，重新保存
     if (updates.images !== undefined) {
-      this.saveImages('todo', todoId, updates.images);
+      this.saveImages('todo', String(todoId), updates.images);
     }
   }
 
@@ -435,7 +435,7 @@ class TodoXDatabase {
    */
   deleteTodo(todoId) {
     // 外键级联删除会自动删除子任务和进度记录
-    this.db.prepare('DELETE FROM todos WHERE id = ?').run(todoId);
+    this.db.prepare('DELETE FROM todos WHERE id = ?').run(String(todoId));
   }
 
   /**
@@ -448,8 +448,8 @@ class TodoXDatabase {
     `);
     
     stmt.run(
-      subtask.id,
-      todoId,
+      String(subtask.id),
+      String(todoId),
       subtask.text,
       subtask.completed ? 1 : 0,
       subtask.weight || 3,
@@ -462,7 +462,7 @@ class TodoXDatabase {
     
     // 保存子任务图片
     if (subtask.images && subtask.images.length > 0) {
-      this.saveImages('subtask', subtask.id, subtask.images);
+      this.saveImages('subtask', String(subtask.id), subtask.images);
     }
   }
 
@@ -500,7 +500,7 @@ class TodoXDatabase {
     
     fields.push('updated_at = ?');
     values.push(new Date().toISOString());
-    values.push(subtaskId);
+    values.push(String(subtaskId));
     
     const stmt = this.db.prepare(`
       UPDATE subtasks SET ${fields.join(', ')} WHERE id = ?
@@ -509,7 +509,7 @@ class TodoXDatabase {
     
     // 如果更新了图片，重新保存
     if (updates.images !== undefined) {
-      this.saveImages('subtask', subtaskId, updates.images);
+      this.saveImages('subtask', String(subtaskId), updates.images);
     }
   }
 
@@ -517,7 +517,7 @@ class TodoXDatabase {
    * 删除子任务
    */
   deleteSubtask(subtaskId) {
-    this.db.prepare('DELETE FROM subtasks WHERE id = ?').run(subtaskId);
+    this.db.prepare('DELETE FROM subtasks WHERE id = ?').run(String(subtaskId));
   }
 
   /**
@@ -530,8 +530,8 @@ class TodoXDatabase {
     `);
     
     stmt.run(
-      record.id,
-      todoId,
+      String(record.id),
+      String(todoId),
       record.description || record.text || '',
       record.createdAt || record.created_at || new Date().toISOString(),
       new Date().toISOString()
@@ -539,7 +539,7 @@ class TodoXDatabase {
     
     // 保存进度记录图片
     if (record.images && record.images.length > 0) {
-      this.saveImages('progress', record.id, record.images);
+      this.saveImages('progress', String(record.id), record.images);
     }
   }
 
@@ -557,7 +557,7 @@ class TodoXDatabase {
     
     fields.push('updated_at = ?');
     values.push(new Date().toISOString());
-    values.push(recordId);
+    values.push(String(recordId));
     
     const stmt = this.db.prepare(`
       UPDATE progress_records SET ${fields.join(', ')} WHERE id = ?
@@ -566,7 +566,7 @@ class TodoXDatabase {
     
     // 如果更新了图片，重新保存
     if (updates.images !== undefined) {
-      this.saveImages('progress', recordId, updates.images);
+      this.saveImages('progress', String(recordId), updates.images);
     }
   }
 
@@ -574,7 +574,7 @@ class TodoXDatabase {
    * 删除进度记录
    */
   deleteProgressRecord(recordId) {
-    this.db.prepare('DELETE FROM progress_records WHERE id = ?').run(recordId);
+    this.db.prepare('DELETE FROM progress_records WHERE id = ?').run(String(recordId));
   }
 
   // ==================== 图片相关操作 ====================
@@ -588,7 +588,7 @@ class TodoXDatabase {
       WHERE entity_type = ? AND entity_id = ?
       ORDER BY created_at ASC
     `);
-    const images = stmt.all(entityType, entityId);
+    const images = stmt.all(entityType, String(entityId));
     return images.map(img => img.file_name);
   }
 
@@ -598,7 +598,7 @@ class TodoXDatabase {
   saveImages(entityType, entityId, fileNames) {
     // 先删除旧的图片记录
     this.db.prepare('DELETE FROM images WHERE entity_type = ? AND entity_id = ?')
-      .run(entityType, entityId);
+      .run(entityType, String(entityId));
     
     // 插入新的图片记录
     if (fileNames && fileNames.length > 0) {
@@ -609,7 +609,7 @@ class TodoXDatabase {
       
       fileNames.forEach(fileName => {
         const id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        insert.run(id, entityType, entityId, fileName, new Date().toISOString());
+        insert.run(id, entityType, String(entityId), fileName, new Date().toISOString());
       });
     }
   }
@@ -696,7 +696,7 @@ class TodoXDatabase {
     `);
     
     stmt.run(
-      conversation.id,
+      String(conversation.id),
       conversation.title,
       conversation.createdAt || conversation.created_at || new Date().toISOString(),
       conversation.updatedAt || conversation.updated_at || new Date().toISOString(),
@@ -707,7 +707,7 @@ class TodoXDatabase {
     // 保存消息
     if (conversation.messages && conversation.messages.length > 0) {
       conversation.messages.forEach((msg, index) => {
-        this.addMessage(conversation.id, msg, index);
+        this.addMessage(String(conversation.id), msg, index);
       });
     }
   }
@@ -734,7 +734,7 @@ class TodoXDatabase {
     
     fields.push('updated_at = ?');
     values.push(new Date().toISOString());
-    values.push(conversationId);
+    values.push(String(conversationId));
     
     const stmt = this.db.prepare(`
       UPDATE conversations SET ${fields.join(', ')} WHERE id = ?
@@ -747,13 +747,16 @@ class TodoXDatabase {
    */
   deleteConversation(conversationId) {
     // 外键级联删除会自动删除消息
-    this.db.prepare('DELETE FROM conversations WHERE id = ?').run(conversationId);
+    this.db.prepare('DELETE FROM conversations WHERE id = ?').run(String(conversationId));
   }
 
   /**
    * 添加消息
    */
   addMessage(conversationId, message, order) {
+    // 确保消息有ID，如果没有则生成一个
+    const messageId = message.id || `${Date.now()}${Math.random().toString(36).substring(2, 5)}`
+    
     // 准备额外数据（tool_calls, reasoning_content, images等）
     const extraData = {};
     if (message.tool_calls) extraData.tool_calls = message.tool_calls;
@@ -770,8 +773,8 @@ class TodoXDatabase {
     `);
     
     stmt.run(
-      message.id,
-      conversationId,
+      String(messageId),
+      String(conversationId),
       message.role,
       typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
       message.imagePath || message.image_path || null,
@@ -892,7 +895,7 @@ class TodoXDatabase {
    * 设置当前项目 ID
    */
   setCurrentProjectId(projectId) {
-    this.setSetting('current_project_id', projectId);
+    this.setSetting('current_project_id', projectId ? String(projectId) : null);
   }
 
   /**
@@ -906,7 +909,7 @@ class TodoXDatabase {
    * 设置当前会话 ID
    */
   setCurrentConversationId(conversationId) {
-    this.setSetting('current_conversation_id', conversationId);
+    this.setSetting('current_conversation_id', conversationId ? String(conversationId) : null);
   }
 
   // ==================== 数据迁移相关 ====================

@@ -1,5 +1,28 @@
 // 工具函数定义和执行
 
+/**
+ * 生成唯一ID（时间戳 + 3位随机字符串）
+ * 格式: "1761041377337abc"
+ * @returns {string} 唯一ID
+ */
+export function generateId() {
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 5) // 3位随机字符
+  return `${timestamp}${random}`
+}
+
+/**
+ * 生成子任务ID（基于任务ID + 索引 + 随机字符）
+ * @param {string|number} baseId - 基础ID（任务ID或其他）
+ * @param {number} index - 索引
+ * @returns {string} 子任务ID
+ */
+export function generateSubId(baseId, index) {
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 5)
+  return `${timestamp}${index}${random}`
+}
+
 // 定义可用的工具函数列表
 export const availableTools = [
   {
@@ -541,7 +564,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   const projectColor = projectData.c || projectData.color || '#8A9DFB'
   
   const project = {
-    id: Date.now(),
+    id: generateId(),
     name: finalProjectName,
     color: projectColor,
     createdAt: new Date().toISOString()
@@ -591,8 +614,9 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
     else if (taskPriority) priority = taskPriority
     
+    const taskId = generateId()
     const task = {
-      id: Date.now() + i,
+      id: taskId,
       text: taskText,
       completed: false,
       priority,
@@ -608,7 +632,7 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
         const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
         
         return {
-          id: Date.now() + i * 1000 + idx,
+          id: generateSubId(taskId, idx),
           text: subtaskText,
           completed: false,
           weight: subtaskWeight,
@@ -714,8 +738,9 @@ async function createRemainingDays(project, totalDays, currentDay, description, 
       else if (taskPriority) priority = taskPriority
       
       // 创建任务
+      const taskId = generateId()
       const task = {
-        id: Date.now() + currentDay,
+        id: taskId,
         text: taskText,
         completed: false,
         priority,
@@ -731,7 +756,7 @@ async function createRemainingDays(project, totalDays, currentDay, description, 
           const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
           
           return {
-            id: Date.now() + currentDay * 1000 + idx,
+            id: generateSubId(taskId, idx),
             text: subtaskText,
             completed: false,
             weight: subtaskWeight,
@@ -882,8 +907,9 @@ ${JSON.stringify(tasksInfo, null, 2)}
       finalDueDate = dueDate.toISOString().split('T')[0]
     }
     
+    const taskId = originalTask?.id || generateId()
     const task = {
-      id: originalTask?.id || (Date.now() + i),
+      id: taskId,
       text: taskData.text,
       completed: taskData.completed || false,
       priority: taskData.priority || 'medium',
@@ -896,7 +922,7 @@ ${JSON.stringify(tasksInfo, null, 2)}
       subtasks: (taskData.subtasks || []).map((st, idx) => {
         const originalSubtask = originalTask?.subtasks?.[idx]
         return {
-          id: originalSubtask?.id || (Date.now() + i * 1000 + idx),
+          id: originalSubtask?.id || generateSubId(taskId, idx),
           text: st.text,
           completed: st.completed || false,
           weight: st.weight || 3,
@@ -1060,8 +1086,9 @@ export async function executeAddProjectTasks(args, stores, deepseekClient, onPro
       taskDate = date.toISOString().split('T')[0]
     }
     
+    const taskId = generateId()
     const task = {
-      id: Date.now() + i,
+      id: taskId,
       text: taskData.text,
       completed: false,
       priority: taskData.priority || 'medium',
@@ -1072,7 +1099,7 @@ export async function executeAddProjectTasks(args, stores, deepseekClient, onPro
       images: [],
       pinned: false,
       subtasks: (taskData.subtasks || []).map((st, idx) => ({
-        id: Date.now() + i * 1000 + idx,
+        id: generateSubId(taskId, idx),
         text: st.text,
         completed: false,
         weight: st.weight || 3,
@@ -1226,7 +1253,7 @@ ${operation === 'replace' ? `- 根据用户要求重新设计所有子任务
     const originalSubtask = task.subtasks?.[idx]
     
     return {
-      id: originalSubtask?.id || (Date.now() + idx),
+      id: originalSubtask?.id || generateSubId(task.id, idx),
       text: st.text,
       completed: st.completed || false,
       weight: st.weight || 3,
@@ -1368,8 +1395,9 @@ ${projectContext}
   }
   
   // 创建新任务
+  const newTaskId = generateId()
   const newTask = {
-    id: Date.now(),
+    id: newTaskId,
     text: taskData.text,
     completed: false,
     priority: taskData.priority || 'medium',
@@ -1380,7 +1408,7 @@ ${projectContext}
     images: [],
     pinned: false,
     subtasks: (taskData.subtasks || []).map((st, idx) => ({
-      id: Date.now() + idx + 1,
+      id: generateSubId(newTaskId, idx),
       text: st.text,
       completed: false,
       weight: st.weight || 3,
