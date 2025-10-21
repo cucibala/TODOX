@@ -36,16 +36,4 @@
   font-weight: 600;
 }
 
-/* 迷你模式样式 */
-.compact-mode .header {
-  padding: 12px 16px;
-}
-
-.compact-mode .header-stats {
-  gap: 16px;
-}
-
-.compact-mode .stat-item {
-  font-size: 12px;
-}
 

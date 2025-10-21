@@ -214,7 +214,6 @@ function migrateFromJSONIfNeeded() {
 
 let mainWindow;
 let tray = null;
-let isCompactMode = false;
 let isAlwaysOnTop = false;
 
 // 简单的密码加密（Base64 + 混淆）
@@ -245,7 +244,6 @@ function loadSettings() {
     if (fs.existsSync(globalSettingsPath)) {
       const data = fs.readFileSync(globalSettingsPath, 'utf-8');
       const settings = JSON.parse(data);
-      isCompactMode = settings.compactMode || false;
       isAlwaysOnTop = settings.alwaysOnTop !== undefined ? settings.alwaysOnTop : true;
       
       // 加载自定义数据路径
@@ -280,7 +278,6 @@ function saveSettings() {
     // 只更新窗口相关的设置，保留其他字段
     const settings = {
       ...existingSettings, // 保留现有的所有设置
-      compactMode: isCompactMode,
       alwaysOnTop: isAlwaysOnTop,
       customDataPath: currentDataPath !== app.getPath('userData') ? currentDataPath : undefined
     };
@@ -302,11 +299,10 @@ function createWindow() {
   }
 
   mainWindow = new BrowserWindow({
-    width: isCompactMode ? 350 : 1400,
-    height: isCompactMode ? 500 : 880,
-    minWidth: 350,
-    minHeight: 400,
-    maxWidth: isCompactMode ? 350 : undefined,
+    width: 1400,
+    height: 880,
+    minWidth: 800,
+    minHeight: 600,
     icon: windowIcon, // 设置窗口图标
     webPreferences: {
       nodeIntegration: false,
@@ -319,7 +315,7 @@ function createWindow() {
     transparent: false,
     alwaysOnTop: isAlwaysOnTop,
     skipTaskbar: false,
-    resizable: !isCompactMode
+    resizable: true
   });
 
   // 开发模式：加载 Vite 开发服务器
@@ -345,7 +341,6 @@ function createWindow() {
       mainWindow.show();
       
       // 发送初始状态
-      mainWindow.webContents.send('mode-changed', isCompactMode);
       mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
     }, 100); // 100ms 延迟，减少闪烁
   });
@@ -368,57 +363,8 @@ function createWindow() {
     }
     return false;
   });
-
-  // 监听窗口移动，智能切换模式
-  let moveTimeout = null;
-  mainWindow.on('moved', () => {
-    // 防抖处理，避免频繁触发
-    if (moveTimeout) clearTimeout(moveTimeout);
-    
-    moveTimeout = setTimeout(() => {
-      checkWindowPosition();
-    }, 300);
-  });
 }
 
-// 检查窗口位置并自动切换模式
-function checkWindowPosition() {
-  if (!mainWindow) return;
-
-  const { screen } = require('electron');
-  const windowBounds = mainWindow.getBounds();
-  const display = screen.getDisplayNearestPoint({ x: windowBounds.x, y: windowBounds.y });
-  const { workArea } = display;
-
-  // 定义右上角区域：屏幕右侧 30% 且顶部 30% 的区域
-  const rightEdge = workArea.x + workArea.width;
-  const topEdge = workArea.y;
-  const rightThreshold = workArea.x + workArea.width * 0.7; // 右侧30%区域
-  const topThreshold = workArea.y + workArea.height * 0.3; // 顶部30%区域
-
-  const windowCenterX = windowBounds.x + windowBounds.width / 2;
-  const windowCenterY = windowBounds.y + windowBounds.height / 2;
-
-  // 检查窗口是否在右上角区域
-  const isInTopRight = windowCenterX >= rightThreshold && windowCenterY <= topThreshold;
-
-  if (isInTopRight && !isCompactMode) {
-    // 自动切换到迷你模式和置顶
-    console.log('窗口移动到右上角，自动切换到迷你模式');
-    
-    if (!isCompactMode) {
-      toggleCompactMode();
-    }
-    
-    if (!isAlwaysOnTop) {
-      isAlwaysOnTop = true;
-      mainWindow.setAlwaysOnTop(isAlwaysOnTop);
-      mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
-      saveSettings();
-      updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
-    }
-  }
-}
 
 // 创建系统托盘
 function createTray() {
@@ -474,12 +420,6 @@ function updateTrayMenu() {
         updateTrayMenu(); // 只更新菜单，不重新创建托盘
       }
     },
-    {
-      label: isCompactMode ? '完整模式' : '迷你模式',
-      click: () => {
-        toggleCompactMode();
-      }
-    },
     { type: 'separator' },
     {
       label: '退出',
@@ -492,26 +432,6 @@ function updateTrayMenu() {
   
   tray.setContextMenu(contextMenu);
 }
-
-// 切换迷你模式
-function toggleCompactMode() {
-  isCompactMode = !isCompactMode;
-  
-  if (isCompactMode) {
-    mainWindow.setSize(350, 500);
-    mainWindow.setResizable(false);
-    mainWindow.setMaximumSize(350, 2000);
-  } else {
-    mainWindow.setSize(1000, 700);
-    mainWindow.setResizable(true);
-    mainWindow.setMaximumSize(0, 0);
-  }
-  
-  mainWindow.webContents.send('mode-changed', isCompactMode);
-  saveSettings();
-  updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
-}
-
 
 // 应用准备就绪
 app.whenReady().then(() => {
@@ -563,21 +483,12 @@ ipcMain.on('window-close', () => {
   mainWindow.hide();
 });
 
-ipcMain.on('toggle-compact-mode', () => {
-  toggleCompactMode();
-});
-
 ipcMain.on('toggle-always-on-top', () => {
   isAlwaysOnTop = !isAlwaysOnTop;
   mainWindow.setAlwaysOnTop(isAlwaysOnTop);
   mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
   saveSettings();
   updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
-});
-
-// 手动触发位置检查（用于测试）
-ipcMain.on('check-window-position', () => {
-  checkWindowPosition();
 });
 
 // IPC 通信处理 - 读取项目数据

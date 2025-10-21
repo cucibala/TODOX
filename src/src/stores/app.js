@@ -3,7 +3,6 @@ import { ref } from 'vue'
 
 export const useAppStore = defineStore('app', () => {
   // 状态
-  const isCompactMode = ref(false)
   const isAlwaysOnTop = ref(true)
   const showLockScreen = ref(false)
   const currentPage = ref('home') // 'home' | 'settings' | 'chat'
@@ -60,12 +59,6 @@ export const useAppStore = defineStore('app', () => {
   
   // 监听模式变化
   function listenModeChanges() {
-    // 监听迷你模式变化
-    electronAPI.onModeChanged((compact) => {
-      isCompactMode.value = compact
-      toast(compact ? '已切换到迷你模式' : '已切换到完整模式')
-    })
-    
     // 监听置顶状态变化
     electronAPI.onAlwaysOnTopChanged((onTop) => {
       isAlwaysOnTop.value = onTop
@@ -120,10 +113,6 @@ export const useAppStore = defineStore('app', () => {
     electronAPI.windowClose()
   }
   
-  function toggleCompactMode() {
-    electronAPI.toggleCompactMode()
-  }
-  
   function toggleAlwaysOnTop() {
     electronAPI.toggleAlwaysOnTop()
   }
@@ -155,7 +144,6 @@ export const useAppStore = defineStore('app', () => {
   
   return {
     // 状态
-    isCompactMode,
     isAlwaysOnTop,
     showLockScreen,
     currentPage,
@@ -190,7 +178,6 @@ export const useAppStore = defineStore('app', () => {
     closeImageViewer,
     minimizeWindow,
     closeWindow,
-    toggleCompactMode,
     toggleAlwaysOnTop,
     lockApp,
     unlockApp

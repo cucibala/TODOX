@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container" :class="{ 'compact-mode': isCompactMode }">
+  <div class="app-container">
     <!-- 自定义标题栏 -->
     <TitleBar />
 
@@ -14,7 +14,7 @@
       <!-- 首页 -->
       <template v-if="currentPage === 'home'">
         <!-- 侧边栏 -->
-        <Sidebar v-if="!isCompactMode" />
+        <Sidebar />
 
         <!-- 任务列表区域 -->
         <TaskContent />
@@ -95,7 +95,7 @@ const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
 
-const { isCompactMode, showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
+const { showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
 
 onMounted(async () => {
   try {
