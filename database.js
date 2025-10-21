@@ -730,13 +730,23 @@ class TodoXDatabase {
       `).all(conv.id);
       
       conv.messages = messages.map(msg => {
+        // 解析 content（可能是字符串或 JSON 序列化的数组）
+        let content = msg.content;
+        if (typeof content === 'string' && (content.startsWith('[') || content.startsWith('{'))) {
+          try {
+            content = JSON.parse(content);
+          } catch (error) {
+            // 解析失败，保持原字符串
+          }
+        }
+        
         const message = {
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        imagePath: msg.image_path,
-        thinking: msg.thinking,
-        createdAt: msg.created_at
+          id: msg.id,
+          role: msg.role,
+          content: content,
+          imagePath: msg.image_path,
+          thinking: msg.thinking,
+          createdAt: msg.created_at
         };
         
         // 解析额外数据
