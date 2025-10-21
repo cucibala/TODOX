@@ -4,7 +4,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
   // 项目管理
   loadProjects: () => ipcRenderer.invoke('load-projects'),
-  saveProjects: (projects) => ipcRenderer.invoke('save-projects', projects),
   addProject: (project) => ipcRenderer.invoke('add-project', project),
   updateProject: (projectId, updates) => ipcRenderer.invoke('update-project', projectId, updates),
   deleteProject: (projectId) => ipcRenderer.invoke('delete-project', projectId),
@@ -14,7 +13,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),
-  saveTodos: (todos) => ipcRenderer.invoke('save-todos', todos),
   addTodo: (todo) => ipcRenderer.invoke('add-todo', todo),
   updateTodo: (todoId, updates) => ipcRenderer.invoke('update-todo', todoId, updates),
   deleteTodo: (todoId) => ipcRenderer.invoke('delete-todo', todoId),
@@ -52,7 +50,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 会话管理
   loadConversations: () => ipcRenderer.invoke('load-conversations'),
-  saveConversations: (conversationsData) => ipcRenderer.invoke('save-conversations', conversationsData),
+  saveConversations: (conversationsData) => ipcRenderer.invoke('save-conversations', conversationsData), // 仅用于批量保存消息
   addConversation: (conversation) => ipcRenderer.invoke('add-conversation', conversation),
   updateConversation: (conversationId, updates) => ipcRenderer.invoke('update-conversation', conversationId, updates),
   deleteConversation: (conversationId) => ipcRenderer.invoke('delete-conversation', conversationId),

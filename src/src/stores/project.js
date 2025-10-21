@@ -228,10 +228,13 @@ export const useProjectStore = defineStore('project', () => {
         createdAt: new Date().toISOString()
       }
       
+      // 添加到本地状态
       projects.value.push(newProject)
-      await saveProjects()
       
-      // 导入任务
+      // 单条插入项目到数据库
+      await electronAPI.addProject(JSON.parse(JSON.stringify(newProject)))
+      
+      // 导入任务（逐条插入）
       const oldIdToNewId = {}
       for (const taskData of importData.tasks) {
         // 使用整数避免浮点数ID，添加随机数避免冲突
@@ -251,14 +254,16 @@ export const useProjectStore = defineStore('project', () => {
         delete newTask.originalId
         delete newTask.originalProjectId
         
+        // 添加到本地状态
         todoStore.todos.push(newTask)
+        
+        // 单条插入任务到数据库
+        await electronAPI.addTodo(JSON.parse(JSON.stringify(newTask)))
       }
-      
-      await todoStore.saveTodos()
       
       // 切换到新导入的项目
       currentProjectId.value = newProjectId
-      await saveProjects()
+      await electronAPI.setCurrentProject(newProjectId)
       
       appStore.toast(`项目"${projectName}"导入成功，包含 ${importData.tasks.length} 个任务`)
       return { success: true, projectId: newProjectId }

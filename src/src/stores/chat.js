@@ -492,7 +492,7 @@ export const useChatStore = defineStore('chat', () => {
   }
   
   // 创建新对话
-  function createNewConversation(roleId = null, projectIds = []) {
+  async function createNewConversation(roleId = null, projectIds = []) {
     // 检查当前是否已经是新对话（未发送过消息）
     const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
     if (currentConv && currentConv.title === '新对话' && messages.value.length === 0) {
@@ -515,18 +515,24 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
     recentProjectId.value = null
     
-    saveConversations()
+    // 单条插入会话到数据库
+    await electronAPI.addConversation(JSON.parse(JSON.stringify(newConv)))
+    await electronAPI.setCurrentConversation(newConv.id)
+    
     appStore.toast('已创建新对话')
     return true
   }
   
   // 选择对话
-  function selectConversation(conversationId) {
+  async function selectConversation(conversationId) {
     const conv = conversations.value.find(c => c.id === conversationId)
     if (conv) {
       currentConversationId.value = conversationId
       messages.value = cleanMessageSequence(conv.messages || [])
       recentProjectId.value = null
+      
+      // 更新当前会话ID到数据库
+      await electronAPI.setCurrentConversation(conversationId)
     }
   }
   
@@ -537,25 +543,31 @@ export const useChatStore = defineStore('chat', () => {
     
     conversations.value = conversations.value.filter(c => c.id !== conversationId)
     
+    // 单条删除数据库中的会话
+    await electronAPI.deleteConversation(conversationId)
+    
     if (currentConversationId.value === conversationId) {
       if (conversations.value.length > 0) {
-        selectConversation(conversations.value[0].id)
+        await selectConversation(conversations.value[0].id)
       } else {
-        createNewConversation()
+        await createNewConversation()
       }
     }
     
-    await saveConversations()
     appStore.toast('对话已删除')
   }
   
   // 设置当前对话的角色
-  function setConversationRole(roleId, projectIds = []) {
+  async function setConversationRole(roleId, projectIds = []) {
     const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
     if (currentConv) {
       currentConv.roleId = roleId
       currentConv.projectIds = projectIds || []
-      saveConversations()
+      
+      // 更新数据库
+      await electronAPI.updateConversation(currentConv.id, {
+        roleId: roleId
+      })
     }
   }
   
@@ -622,54 +634,62 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
   
-  // 保存会话列表
+  // 保存当前会话的消息
   async function saveConversations() {
     try {
       const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
-      if (currentConv) {
-        currentConv.messages = messages.value.map(msg => {
-          const plainMsg = {
-            role: msg.role,
-            content: msg.content,
-            timestamp: msg.timestamp
-          }
-          if (msg.tool_calls) {
-            plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
-          }
-          if (msg.tool_call_id) {
-            plainMsg.tool_call_id = msg.tool_call_id
-          }
-          if (msg.name) {
-            plainMsg.name = msg.name
-          }
-          if (msg.reasoning_content) {
-            plainMsg.reasoning_content = msg.reasoning_content
-            // 不保存 showReasoning 状态，默认让它折叠
-            // plainMsg.showReasoning = msg.showReasoning
-          }
-          if (msg.images) { // 保存图片数据
-            plainMsg.images = JSON.parse(JSON.stringify(msg.images))
-          }
-          return plainMsg
-        })
-        currentConv.updatedAt = Date.now()
-        
-        if (!currentConv.roleId) {
-          currentConv.roleId = null
+      if (!currentConv) return
+      
+      // 准备消息数据
+      currentConv.messages = messages.value.map(msg => {
+        const plainMsg = {
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
         }
-        if (!currentConv.projectIds) {
-          currentConv.projectIds = []
+        if (msg.tool_calls) {
+          plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
         }
+        if (msg.tool_call_id) {
+          plainMsg.tool_call_id = msg.tool_call_id
+        }
+        if (msg.name) {
+          plainMsg.name = msg.name
+        }
+        if (msg.reasoning_content) {
+          plainMsg.reasoning_content = msg.reasoning_content
+        }
+        if (msg.images) {
+          plainMsg.images = JSON.parse(JSON.stringify(msg.images))
+        }
+        return plainMsg
+      })
+      currentConv.updatedAt = Date.now()
+      
+      if (!currentConv.roleId) {
+        currentConv.roleId = null
+      }
+      if (!currentConv.projectIds) {
+        currentConv.projectIds = []
       }
       
-      const conversationsData = JSON.parse(JSON.stringify({
-        conversations: conversations.value,
-        currentConversationId: currentConversationId.value
-      }))
+      // 更新会话的 updatedAt
+      await electronAPI.updateConversation(currentConv.id, {
+        title: currentConv.title,
+        updatedAt: currentConv.updatedAt
+      })
       
-      await electronAPI.saveConversations(conversationsData)
+      // 批量保存消息（消息需要原子性保存，保留批量操作）
+      // 先删除旧消息，再插入新消息
+      const conversationData = JSON.parse(JSON.stringify(currentConv))
+      
+      // 使用数据库的批量保存方法（仅用于消息）
+      await electronAPI.saveConversations({
+        conversations: [conversationData],
+        currentConversationId: currentConversationId.value
+      })
     } catch (error) {
-      console.error('保存会话列表失败:', error)
+      console.error('保存会话消息失败:', error)
     }
   }
   
