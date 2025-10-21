@@ -83,6 +83,7 @@ function initDataDirectory(dataDir) {
 function initDatabase() {
   try {
     const dbPath = getDatabasePath();
+    console.log('初始化数据库路径:', dbPath);
     db = new TodoXDatabase(dbPath);
     const success = db.init();
     
@@ -154,6 +155,9 @@ function migrateFromJSONIfNeeded() {
         if (success) {
           console.log('数据迁移成功！');
           
+          // 清理孤立任务（project_id 为空的任务）
+          db.cleanOrphanedTasks();
+          
           // 备份原有 JSON 文件
           const backupDir = path.join(currentDataPath, 'json-backup');
           if (!fs.existsSync(backupDir)) {
@@ -220,12 +224,16 @@ function loadSettings() {
       // 加载自定义数据路径
       if (settings.customDataPath) {
         currentDataPath = settings.customDataPath;
+        console.log('加载自定义数据路径:', currentDataPath);
+      } else {
+        console.log('使用默认数据路径:', currentDataPath);
       }
       
       // 初始化数据目录
       initDataDirectory(currentDataPath);
     } else {
       // 首次运行，初始化默认数据目录
+      console.log('首次运行，使用默认数据路径:', currentDataPath);
       initDataDirectory(currentDataPath);
     }
   } catch (error) {
@@ -262,7 +270,8 @@ function saveSettings() {
 }
 
 function createWindow() {
-  loadSettings();
+  // 注意：loadSettings() 已在 app.whenReady() 时调用
+  // 这里不再重复调用，以避免重复初始化
 
   // 设置窗口图标
   const iconPath = path.join(__dirname, 'assets', 'X.png');
@@ -538,7 +547,10 @@ function toggleDesktopMode() {
 
 // 应用准备就绪
 app.whenReady().then(() => {
-  // 初始化数据库
+  // 先加载设置（包括自定义数据路径）
+  loadSettings();
+  
+  // 然后初始化数据库（使用正确的数据路径）
   initDatabase();
   
   createWindow();

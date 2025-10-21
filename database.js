@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -82,6 +82,9 @@ class TodoXDatabase {
         todo_id TEXT NOT NULL,
         text TEXT NOT NULL,
         completed INTEGER DEFAULT 0,
+        weight INTEGER DEFAULT 3,
+        requires_input INTEGER DEFAULT 0,
+        input_value TEXT,
         "order" INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -206,7 +209,7 @@ class TodoXDatabase {
           project.color || null,
           project.icon || null,
           project.order || 0,
-          project.createdAt || new Date().toISOString(),
+          project.createdAt || project.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
           new Date().toISOString()
         );
       });
@@ -216,6 +219,25 @@ class TodoXDatabase {
   }
 
   // ==================== 任务相关操作 ====================
+
+  /**
+   * 清理孤立任务（project_id 为空或不存在的任务）
+   */
+  cleanOrphanedTasks() {
+    try {
+      // 删除 project_id 为 NULL 的任务
+      const result = this.db.prepare('DELETE FROM todos WHERE project_id IS NULL').run();
+      
+      if (result.changes > 0) {
+        console.log(`已自动清理 ${result.changes} 个无项目归属的任务`);
+      }
+      
+      return result.changes;
+    } catch (error) {
+      console.error('清理孤立任务失败:', error);
+      return 0;
+    }
+  }
 
   /**
    * 获取所有任务（包含子任务、进度记录、图片）
@@ -233,19 +255,24 @@ class TodoXDatabase {
         SELECT * FROM subtasks WHERE todo_id = ? ORDER BY "order" ASC
       `).all(todo.id);
       todo.subtasks = subtasks.map(st => ({
-        ...st,
+        id: st.id,
+        text: st.text,
         completed: Boolean(st.completed),
+        weight: st.weight || 3,
+        requiresInput: Boolean(st.requires_input),
+        inputValue: st.input_value || '',
+        order: st.order,
         createdAt: st.created_at,
-        todoId: st.todo_id
+        images: this.getImages('subtask', st.id)
       }));
       
-      // 加载进度记录
+      // 加载进度记录（使用前端的字段名 progress 和 text）
       const progressRecords = this.db.prepare(`
         SELECT * FROM progress_records WHERE todo_id = ? ORDER BY created_at DESC
       `).all(todo.id);
-      todo.progressRecords = progressRecords.map(pr => ({
+      todo.progress = progressRecords.map(pr => ({
         id: pr.id,
-        description: pr.description,
+        text: pr.description,  // 数据库用 description，前端用 text
         createdAt: pr.created_at,
         images: this.getImages('progress', pr.id)
       }));
@@ -289,8 +316,8 @@ class TodoXDatabase {
       `);
       
       const insertSubtask = this.db.prepare(`
-        INSERT INTO subtasks (id, todo_id, text, completed, "order", created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO subtasks (id, todo_id, text, completed, weight, requires_input, input_value, "order", created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       const insertProgress = this.db.prepare(`
@@ -302,13 +329,13 @@ class TodoXDatabase {
       todos.forEach((todo, index) => {
         insertTodo.run(
           todo.id,
-          todo.projectId || null,
+          todo.projectId || todo.project_id || null,  // 兼容驼峰和下划线命名
           todo.text,
           todo.completed ? 1 : 0,
           todo.priority || 'medium',
-          todo.dueDate || null,
-          todo.createdAt || new Date().toISOString(),
-          todo.completedAt || null,
+          todo.dueDate || todo.due_date || null,  // 兼容驼峰和下划线命名
+          todo.createdAt || todo.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
+          todo.completedAt || todo.completed_at || null,  // 兼容驼峰和下划线命名
           todo.order !== undefined ? todo.order : index,
           new Date().toISOString()
         );
@@ -321,8 +348,11 @@ class TodoXDatabase {
               todo.id,
               subtask.text,
               subtask.completed ? 1 : 0,
+              subtask.weight || 3,  // 权重，默认3
+              subtask.requiresInput || subtask.requires_input ? 1 : 0,  // 是否需要输入
+              subtask.inputValue || subtask.input_value || null,  // 输入值
               subtask.order !== undefined ? subtask.order : subIndex,
-              subtask.createdAt || new Date().toISOString(),
+              subtask.createdAt || subtask.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
               new Date().toISOString()
             );
             
@@ -333,14 +363,15 @@ class TodoXDatabase {
           });
         }
         
-        // 插入进度记录
-        if (todo.progressRecords && todo.progressRecords.length > 0) {
-          todo.progressRecords.forEach(record => {
+        // 插入进度记录（兼容 progress 和 progressRecords 两种字段名）
+        const progressList = todo.progressRecords || todo.progress || [];
+        if (progressList.length > 0) {
+          progressList.forEach(record => {
             insertProgress.run(
               record.id,
               todo.id,
-              record.description,
-              record.createdAt || new Date().toISOString(),
+              record.description || record.text || '',  // 兼容 description 和 text 字段
+              record.createdAt || record.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
               new Date().toISOString()
             );
             
@@ -359,6 +390,9 @@ class TodoXDatabase {
     });
     
     transaction();
+    
+    // 保存后自动清理孤立任务
+    this.cleanOrphanedTasks();
   }
 
   // ==================== 图片相关操作 ====================
@@ -455,8 +489,8 @@ class TodoXDatabase {
         insertConv.run(
           conv.id,
           conv.title,
-          conv.createdAt || new Date().toISOString(),
-          conv.updatedAt || new Date().toISOString()
+          conv.createdAt || conv.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
+          conv.updatedAt || conv.updated_at || new Date().toISOString()  // 兼容驼峰和下划线命名
         );
         
         // 插入消息
@@ -467,10 +501,10 @@ class TodoXDatabase {
               conv.id,
               msg.role,
               msg.content,
-              msg.imagePath || null,
+              msg.imagePath || msg.image_path || null,  // 兼容驼峰和下划线命名
               msg.thinking || null,
               index,
-              msg.createdAt || new Date().toISOString()
+              msg.createdAt || msg.created_at || new Date().toISOString()  // 兼容驼峰和下划线命名
             );
           });
         }
@@ -662,26 +696,29 @@ class TodoXDatabase {
       // 版本 1 - 初始版本（无需迁移）
       // 1: null,
       
-      // 版本 2 示例 - 添加新字段
-      // 2: function() {
-      //   this.db.exec(`
-      //     ALTER TABLE todos ADD COLUMN tags TEXT;
-      //   `);
-      //   console.log('  - 为 todos 表添加 tags 字段');
-      // },
-      
-      // 版本 3 示例 - 创建新表
-      // 3: function() {
-      //   this.db.exec(`
-      //     CREATE TABLE IF NOT EXISTS tags (
-      //       id TEXT PRIMARY KEY,
-      //       name TEXT NOT NULL,
-      //       color TEXT,
-      //       created_at TEXT NOT NULL
-      //     );
-      //   `);
-      //   console.log('  - 创建 tags 表');
-      // },
+      // 版本 2 - 为子任务添加 weight、requiresInput、inputValue 字段
+      2: function() {
+        console.log('  - 为 subtasks 表添加新字段...');
+        
+        // SQLite 不支持 ADD COLUMN IF NOT EXISTS，需要检查列是否存在
+        const tableInfo = this.db.prepare('PRAGMA table_info(subtasks)').all();
+        const columnNames = tableInfo.map(col => col.name);
+        
+        if (!columnNames.includes('weight')) {
+          this.db.exec('ALTER TABLE subtasks ADD COLUMN weight INTEGER DEFAULT 3;');
+          console.log('  - 添加 weight 字段');
+        }
+        
+        if (!columnNames.includes('requires_input')) {
+          this.db.exec('ALTER TABLE subtasks ADD COLUMN requires_input INTEGER DEFAULT 0;');
+          console.log('  - 添加 requires_input 字段');
+        }
+        
+        if (!columnNames.includes('input_value')) {
+          this.db.exec('ALTER TABLE subtasks ADD COLUMN input_value TEXT;');
+          console.log('  - 添加 input_value 字段');
+        }
+      },
       
       // 未来的迁移函数在这里添加...
     };

@@ -245,7 +245,8 @@ export const useProjectStore = defineStore('project', () => {
       // 导入任务
       const oldIdToNewId = {}
       for (const taskData of importData.tasks) {
-        const newTaskId = Date.now() + Math.random()
+        // 使用整数避免浮点数ID，添加随机数避免冲突
+        const newTaskId = Date.now() + Math.floor(Math.random() * 10000)
         oldIdToNewId[taskData.originalId] = newTaskId
         
         const newTask = {
