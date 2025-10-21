@@ -98,27 +98,27 @@ export const availableTools = [
       }
     }
   },
-  {
-    type: 'function',
-    function: {
-      name: 'updateProjectTasks',
-      description: '根据用户反馈调整现有项目的任务。用于修改、优化或重新规划项目任务，如"第3天太难了，简化一下"、"增加一些饮食控制的任务"等',
-      parameters: {
-        type: 'object',
-        properties: {
-          projectId: {
-            type: 'number',
-            description: '要更新的项目ID'
-          },
-          feedback: {
-            type: 'string',
-            description: '用户的反馈和调整要求'
-          }
-        },
-        required: ['projectId', 'feedback']
-      }
-    }
-  },
+  // {
+  //   type: 'function',
+  //   function: {
+  //     name: 'updateProjectTasks',
+  //     description: '根据用户反馈调整现有项目的任务。用于修改、优化或重新规划项目任务，如"第3天太难了，简化一下"、"增加一些饮食控制的任务"等',
+  //     parameters: {
+  //       type: 'object',
+  //       properties: {
+  //         projectId: {
+  //           type: 'number',
+  //           description: '要更新的项目ID'
+  //         },
+  //         feedback: {
+  //           type: 'string',
+  //           description: '用户的反馈和调整要求'
+  //         }
+  //       },
+  //       required: ['projectId', 'feedback']
+  //     }
+  //   }
+  // },
   {
     type: 'function',
     function: {
@@ -171,6 +171,70 @@ export const availableTools = [
           }
         },
         required: ['taskId', 'operation', 'feedback']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'editSubtask',
+      description: '直接编辑指定子任务的属性（文本、权重、是否需要输入等）。用于精确修改单个子任务，如"把第一个任务的第2个子任务的权重改为5"、"修改子任务的描述为XX"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '任务ID'
+          },
+          subtaskId: {
+            type: 'number',
+            description: '子任务ID'
+          },
+          updates: {
+            type: 'object',
+            description: '要更新的字段，可包含：text（文本）、weight（权重1-5）、requiresInput（是否需要输入）',
+            properties: {
+              text: {
+                type: 'string',
+                description: '新的子任务文本'
+              },
+              weight: {
+                type: 'number',
+                description: '权重（1-5）'
+              },
+              requiresInput: {
+                type: 'boolean',
+                description: '是否需要输入'
+              }
+            }
+          }
+        },
+        required: ['taskId', 'subtaskId', 'updates']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deleteSubtask',
+      description: '删除指定任务的指定子任务。用于移除不需要的子任务，如"删除第一个任务的第2个子任务"、"把环境准备的第3个子任务删掉"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '任务ID'
+          },
+          subtaskId: {
+            type: 'number',
+            description: '子任务ID'
+          },
+          subtaskText: {
+            type: 'string',
+            description: '子任务文本（用于确认）'
+          }
+        },
+        required: ['taskId', 'subtaskId']
       }
     }
   },
@@ -267,7 +331,8 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         const targetProjectId = args.projectId === 'null' || args.projectId === null 
           ? null 
           : Number(args.projectId)
-        return todos.filter(t => t.projectId === targetProjectId)
+        let tmp = todos.filter(t => t.projectId === targetProjectId)
+        return tmp
       
       case 'getProjects':
         return projects.map(p => ({
@@ -314,6 +379,22 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         return {
           _async: true,
           functionName: 'updateTaskSubtasks',
+          args
+        }
+      
+      case 'editSubtask':
+        // 同步工具，直接编辑子任务
+        return {
+          _async: true,
+          functionName: 'editSubtask',
+          args
+        }
+      
+      case 'deleteSubtask':
+        // 异步工具，删除子任务
+        return {
+          _async: true,
+          functionName: 'deleteSubtask',
           args
         }
       
@@ -830,11 +911,25 @@ ${JSON.stringify(tasksInfo, null, 2)}
     todoStore.todos.push(task)
     createdTasks.push(task)
     
-    // 保存到数据库
-    await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+    // 保存到数据库：如果是原有任务则更新，否则新增
+    if (originalTask) {
+      await window.electronAPI.updateTodo(task.id, JSON.parse(JSON.stringify(task)))
+    } else {
+      await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+    }
     
     if (i < updatedPlan.tasks.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 10))
+    }
+  }
+  
+  // 删除多余的原有任务（如果更新后的任务数量少于原有任务数量）
+  if (updatedPlan.tasks.length < projectTasks.length) {
+    for (let i = updatedPlan.tasks.length; i < projectTasks.length; i++) {
+      const taskToDelete = projectTasks[i]
+      if (taskToDelete) {
+        await window.electronAPI.deleteTodo(taskToDelete.id)
+      }
     }
   }
   
@@ -1322,6 +1417,161 @@ ${projectContext}
     projectId: project.id,
     projectName: project.name,
     subtasksCount: newTask.subtasks.length
+  }
+}
+
+/**
+ * 执行异步工具函数 - 直接编辑子任务
+ * @param {object} args - { taskId, subtaskId, updates }
+ * @param {object} stores - { todoStore, projectStore }
+ * @param {object} deepseekClient - DeepSeek 客户端（此函数不需要）
+ * @param {function} onProgress - 进度更新回调
+ * @returns {Promise<object>} 编辑结果
+ */
+export async function executeEditSubtask(args, stores, deepseekClient = null, onProgress = null) {
+  const { todoStore, projectStore } = stores
+  const { taskId, subtaskId, updates } = args
+  
+  
+  // 查找任务
+  const task = todoStore.todos.find(t => t.id === taskId)
+  if (!task) {
+    throw new Error(`找不到ID为${taskId}的任务`)
+  }
+  
+  // 查找子任务
+  const subtaskIndex = task.subtasks?.findIndex(st => st.id === subtaskId)
+  if (subtaskIndex === undefined || subtaskIndex === -1) {
+    throw new Error(`在任务"${task.text}"中找不到ID为${subtaskId}的子任务`)
+  }
+  
+  const subtask = task.subtasks[subtaskIndex]
+  const oldText = subtask.text
+  
+  if (onProgress) onProgress(`✏️ 正在编辑子任务"${oldText}"...`)
+  
+  // 应用更新
+  if (updates.text !== undefined) {
+    subtask.text = updates.text
+  }
+  if (updates.weight !== undefined) {
+    subtask.weight = Math.max(1, Math.min(5, updates.weight)) // 限制在1-5之间
+  }
+  if (updates.requiresInput !== undefined) {
+    subtask.requiresInput = updates.requiresInput
+  }
+  
+  // 保存到数据库
+  await window.electronAPI.updateTodo(task.id, { 
+    subtasks: JSON.parse(JSON.stringify(task.subtasks)) 
+  })
+  
+  // 构建变更描述
+  const changes = []
+  if (updates.text !== undefined) changes.push(`文本: "${oldText}" → "${updates.text}"`)
+  if (updates.weight !== undefined) changes.push(`权重: ${updates.weight}`)
+  if (updates.requiresInput !== undefined) changes.push(`需要输入: ${updates.requiresInput ? '是' : '否'}`)
+  
+  if (onProgress) onProgress(`✅ 子任务已更新！${changes.join(', ')}`)
+  
+  return {
+    success: true,
+    taskId: task.id,
+    taskText: task.text,
+    subtaskId: subtask.id,
+    subtaskText: subtask.text,
+    changes: changes.join(', ')
+  }
+}
+
+/**
+ * 执行异步工具函数 - 删除任务
+ * @param {object} args - { taskId, taskText }
+ * @param {object} stores - { todoStore, projectStore }
+ * @param {object} deepseekClient - DeepSeek 客户端（此函数不需要）
+ * @param {function} onProgress - 进度更新回调
+ * @returns {Promise<object>} 删除结果
+ */
+export async function executeDeleteTask(args, stores, deepseekClient = null, onProgress = null) {
+  const { todoStore, projectStore } = stores
+  const { taskId, taskText } = args
+  
+  // 查找任务
+  const task = todoStore.todos.find(t => t.id === taskId)
+  if (!task) {
+    throw new Error(`找不到ID为${taskId}的任务`)
+  }
+  
+  const taskTitle = task.text
+  const projectId = task.projectId
+  
+  if (onProgress) onProgress(`🗑️ 正在删除任务"${taskTitle}"...`)
+  
+  // 从 store 中删除
+  const index = todoStore.todos.findIndex(t => t.id === taskId)
+  if (index !== -1) {
+    todoStore.todos.splice(index, 1)
+  }
+  
+  // 从数据库中删除
+  await window.electronAPI.deleteTodo(taskId)
+  
+  if (onProgress) onProgress(`✅ 任务"${taskTitle}"已删除！`)
+  
+  return {
+    success: true,
+    taskId: taskId,
+    taskText: taskTitle,
+    projectId: projectId
+  }
+}
+
+/**
+ * 执行异步工具函数 - 删除子任务
+ * @param {object} args - { taskId, subtaskId, subtaskText }
+ * @param {object} stores - { todoStore, projectStore }
+ * @param {object} deepseekClient - DeepSeek 客户端（此函数不需要）
+ * @param {function} onProgress - 进度更新回调
+ * @returns {Promise<object>} 删除结果
+ */
+export async function executeDeleteSubtask(args, stores, deepseekClient = null, onProgress = null) {
+  const { todoStore, projectStore } = stores
+  const { taskId, subtaskId, subtaskText } = args
+  
+  // 查找任务
+  const task = todoStore.todos.find(t => t.id === taskId)
+  if (!task) {
+    throw new Error(`找不到ID为${taskId}的任务`)
+  }
+  
+  // 查找子任务
+  const subtaskIndex = task.subtasks?.findIndex(st => st.id === subtaskId)
+  if (subtaskIndex === undefined || subtaskIndex === -1) {
+    throw new Error(`在任务"${task.text}"中找不到ID为${subtaskId}的子任务`)
+  }
+  
+  const subtask = task.subtasks[subtaskIndex]
+  const subtaskTitle = subtask.text
+  
+  if (onProgress) onProgress(`🗑️ 正在删除子任务"${subtaskTitle}"...`)
+  
+  // 从子任务列表中删除
+  task.subtasks.splice(subtaskIndex, 1)
+  
+  // 保存到数据库
+  await window.electronAPI.updateTodo(task.id, {
+    subtasks: JSON.parse(JSON.stringify(task.subtasks))
+  })
+  
+  if (onProgress) onProgress(`✅ 子任务"${subtaskTitle}"已删除！`)
+  
+  return {
+    success: true,
+    taskId: task.id,
+    taskText: task.text,
+    subtaskId: subtaskId,
+    subtaskText: subtaskTitle,
+    remainingSubtasks: task.subtasks.length
   }
 }
 

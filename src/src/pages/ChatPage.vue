@@ -359,10 +359,12 @@ import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useChatStore } from '../stores/chat'
 import { useProjectStore } from '../stores/project'
+import { useTodoStore } from '../stores/todo'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
 const projectStore = useProjectStore()
+const todoStore = useTodoStore()
 const electronAPI = window.electronAPI
 
 // 使用 chatStore 的响应式状态
@@ -533,7 +535,7 @@ function confirmNewConversation() {
   const conv = conversations.value.find(c => c.id === currentConversationId.value)
   if (conv) {
     conv.projectIds = [...newConversationProjects.value]
-  saveConversations()
+    chatStore.saveConversations()
   }
   showNewConversationDialog.value = false
   appStore.toast('项目关联已设置')
@@ -628,267 +630,6 @@ async function handleSend() {
   }
 }
 
-// 发送消息到 AI（支持函数调用循环）
-async function sendToAI(isContinuation = false) {
-  isLoading.value = true
-  try {
-    // 准备发送的消息列表
-    let messagesToSend = messages.value.slice(0, -1)
-    
-    // 构建系统提示词
-    let systemContent = currentRole.value.systemPrompt || ''
-    
-    // 如果选择了项目，添加项目上下文信息
-    if (currentRole.value.enableProjects && selectedProjectIds.value.length > 0) {
-      const contextInfo = buildProjectContext()
-      if (contextInfo) {
-        systemContent += '\n\n' + contextInfo
-      }
-    }
-    
-    // 如果有最近创建/操作的项目，添加上下文提示
-    if (recentProjectId.value) {
-      const recentProject = projectStore.projects.find(p => p.id === recentProjectId.value)
-      if (recentProject) {
-        systemContent += `\n\n【最近操作的项目】：${recentProject.name}（ID: ${recentProject.id}）\n提示：如果用户反馈与这个项目相关，可以使用 updateProjectTasks 工具调整任务。`
-      }
-    }
-    
-    // 添加系统提示词（如果是第一条消息或者没有 system 消息）
-    const hasSystemMessage = messagesToSend.some(m => m.role === 'system')
-    if (!hasSystemMessage && systemContent) {
-      messagesToSend = [
-        { role: 'system', content: systemContent },
-        ...messagesToSend
-      ]
-    } else if (hasSystemMessage && systemContent) {
-      // 如果已有系统消息，更新它
-      messagesToSend = messagesToSend.map(msg => 
-        msg.role === 'system' 
-          ? { ...msg, content: systemContent }
-          : msg
-      )
-    }
-    
-    const plainMessages = messagesToSend.map(msg => {
-      const plainMsg = {
-        role: msg.role,
-        content: msg.content || ''
-      }
-      
-      // 只在有这些字段时才添加
-      if (msg.tool_calls) {
-        plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
-      }
-      if (msg.tool_call_id) {
-        plainMsg.tool_call_id = msg.tool_call_id
-      }
-      if (msg.name) {
-        plainMsg.name = msg.name
-      }
-      
-      return plainMsg
-    })
-    
-    // 内容回调
-    const onContent = (content) => {
-      if (streamingMessageIndex.value >= 0) {
-        messages.value[streamingMessageIndex.value].content += content
-        scrollToBottom()
-      }
-    }
-    
-    // 工具调用回调
-    const onToolCalls = async (toolCalls) => {
-      // 更新当前 assistant 消息，添加 tool_calls（保留可能已有的 content）
-      if (streamingMessageIndex.value >= 0) {
-        messages.value[streamingMessageIndex.value].tool_calls = toolCalls
-      }
-      
-      // 执行所有工具调用（使用前端 store 数据）
-      for (const toolCall of toolCalls) {
-        try {
-          const args = JSON.parse(toolCall.function.arguments)
-          let result = executeToolFunction(
-            toolCall.function.name, 
-            args, 
-            { todoStore, projectStore },
-            null,
-            selectedProjectIds.value // 传递选中的项目ID列表
-          )
-          
-          // 处理异步工具
-          if (result && result._async) {
-            if (result.functionName === 'createProjectWithTasks' || result.functionName === 'updateProjectTasks' || result.functionName === 'addProjectTasks' || result.functionName === 'updateTaskSubtasks' || result.functionName === 'addTask') {
-              // 添加进度提示消息
-              const progressMessageIndex = messages.value.length
-              const actionText = result.functionName === 'updateProjectTasks' ? '调整项目' 
-                : result.functionName === 'addProjectTasks' ? '添加任务'
-                : result.functionName === 'updateTaskSubtasks' ? '修改子任务'
-                : result.functionName === 'addTask' ? '添加任务'
-                : '创建项目'
-  messages.value.push({
-                role: 'assistant',
-                content: `🚀 开始${actionText}...`,
-                timestamp: Date.now(),
-                isProgress: true
-              })
-  scrollToBottom()
-
-              // 计时器：记录等待秒数
-              let elapsedSeconds = 0
-              let currentStatus = `🚀 开始${actionText}...`
-              const startTime = Date.now()
-              const timerInterval = setInterval(() => {
-                elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
-                // 实时更新进度消息
-                if (messages.value[progressMessageIndex]) {
-                  messages.value[progressMessageIndex].content = `${currentStatus}\n⏱️ 已等待 ${elapsedSeconds} 秒`
-                  scrollToBottom()
-                }
-              }, 1000)
-              
-              // 进度更新回调（带计时显示）
-              const onProgress = (status) => {
-                currentStatus = status
-                if (messages.value[progressMessageIndex]) {
-                  messages.value[progressMessageIndex].content = `${status}\n⏱️ 已等待 ${elapsedSeconds} 秒`
-  scrollToBottom()
-                }
-              }
-              
-              try {
-                // 执行异步工具
-                if (result.functionName === 'createProjectWithTasks') {
-                  result = await executeCreateProjectWithTasks(
-                    result.args,
-                    { todoStore, projectStore },
-                    deepseekClient.value,
-                    onProgress,
-                    selectedProjectIds.value
-                  )
-                  // 记录新创建的项目ID
-                  if (result.projectId) {
-                    recentProjectId.value = result.projectId
-                  }
-                } else if (result.functionName === 'updateProjectTasks') {
-                  // 如果参数中没有projectId，使用最近创建的项目
-                  if (!result.args.projectId && recentProjectId.value) {
-                    result.args.projectId = recentProjectId.value
-                  }
-                  result = await executeUpdateProjectTasks(
-                    result.args,
-                    { todoStore, projectStore },
-                    deepseekClient.value,
-                    onProgress
-                  )
-                } else if (result.functionName === 'addProjectTasks') {
-                  // 如果参数中没有projectId，使用最近创建的项目
-                  if (!result.args.projectId && recentProjectId.value) {
-                    result.args.projectId = recentProjectId.value
-                  }
-                  result = await executeAddProjectTasks(
-                    result.args,
-                    { todoStore, projectStore },
-                    deepseekClient.value,
-                    onProgress
-                  )
-                } else if (result.functionName === 'updateTaskSubtasks') {
-                  result = await executeUpdateTaskSubtasks(
-                    result.args,
-                    { todoStore, projectStore },
-                    deepseekClient.value,
-                    onProgress
-                  )
-                } else if (result.functionName === 'addTask') {
-                  // 如果参数中没有projectId，使用最近创建的项目
-                  if (!result.args.projectId && recentProjectId.value) {
-                    result.args.projectId = recentProjectId.value
-                  }
-                  result = await executeAddTask(
-                    result.args,
-                    { todoStore, projectStore },
-                    deepseekClient.value,
-                    onProgress
-                  )
-                }
-              } finally {
-                // 清除计时器
-                clearInterval(timerInterval)
-                // 更新为最终状态（不删除，保留完成消息）
-                if (messages.value[progressMessageIndex]) {
-                  // 移除计时信息，只保留最终状态
-                  const finalStatus = currentStatus.split('\n')[0] // 移除 "⏱️ 已等待 X 秒"
-                  messages.value[progressMessageIndex].content = finalStatus
-                  messages.value[progressMessageIndex].isProgress = false // 标记为普通消息（停止动画）
-                  scrollToBottom()
-                }
-              }
-            }
-          }
-          
-          messages.value.push({
-            role: 'tool',
-            content: JSON.stringify(result, null, 2),
-            name: toolCall.function.name,
-            tool_call_id: toolCall.id,
-            timestamp: Date.now()
-          })
-        } catch (error) {
-          console.error('工具执行失败:', error)
-          messages.value.push({
-            role: 'tool',
-            content: JSON.stringify({ error: error.message }),
-            name: toolCall.function.name,
-            tool_call_id: toolCall.id,
-            timestamp: Date.now()
-          })
-        }
-      }
-      
-      // 【关键】添加新的 assistant 消息槽位，用于接收模型基于工具结果的最终回复
-  messages.value.push({
-    role: 'assistant',
-    content: '',
-    timestamp: Date.now()
-  })
-  streamingMessageIndex.value = messages.value.length - 1
-
-      // 继续调用 API，让模型根据工具结果生成最终回复
-      await sendToAI(true)
-    }
-    
-    // 调用 DeepSeek API
-    // 根据当前角色决定是否启用工具
-    const tools = currentRole.value.enableTools ? availableTools : []
-    await deepseekClient.value.chatCompletionsStream(
-      plainMessages,
-      {
-        tools,
-        onContent,
-        onToolCalls
-      }
-    )
-    
-    // 如果没有工具调用，完成
-    if (isLoading.value) {
-      isLoading.value = false
-      streamingMessageIndex.value = -1
-      scrollToBottom()
-      saveConversations()
-    }
-  } catch (error) {
-    console.error('聊天失败:', error)
-    appStore.toast('AI 回复失败：' + error.message)
-    messages.value.pop()
-    if (messages.value.length > 0 && messages.value[messages.value.length - 1].role === 'user') {
-    messages.value.pop()
-    }
-    streamingMessageIndex.value = -1
-    isLoading.value = false
-  }
-}
-
 // 清空当前对话
 async function handleClearHistory() {
   const confirmed = await appStore.confirm('确定要清空当前对话吗？')
@@ -900,7 +641,7 @@ async function handleClearHistory() {
       currentConv.title = '新对话'
       currentConv.updatedAt = Date.now()
     }
-    saveConversations()
+    chatStore.saveConversations()
     appStore.toast('对话已清空')
   }
 }
@@ -986,136 +727,6 @@ function cleanMessageSequence(messages) {
   }
   
   return cleaned
-}
-
-// 加载会话列表
-async function loadConversations() {
-  try {
-    const result = await electronAPI.loadConversations()
-    if (result.success) {
-      // 迁移旧数据：为没有 roleId 和 projectIds 的对话添加默认值
-      conversations.value = (result.data.conversations || []).map(conv => ({
-        ...conv,
-        roleId: conv.roleId !== undefined ? conv.roleId : null,  // 保持 null 而不是默认为 'general'
-        projectIds: conv.projectIds || []
-      }))
-      currentConversationId.value = result.data.currentConversationId
-      
-      // 如果有当前对话，加载其消息
-      if (currentConversationId.value) {
-        const conv = conversations.value.find(c => c.id === currentConversationId.value)
-        if (conv) {
-          console.log(`📂 加载会话: ${conv.title} (${conv.messages?.length || 0} 条消息)`)
-          // 清理不完整的消息序列（移除孤立的 tool 消息）
-          messages.value = cleanMessageSequence(conv.messages || [])
-          nextTick(() => {
-            scrollToBottom()
-          })
-        }
-      }
-      
-      // 如果没有对话，创建一个新的
-      if (conversations.value.length === 0) {
-        handleNewConversation()
-      }
-    }
-  } catch (error) {
-    console.error('加载会话列表失败:', error)
-    handleNewConversation()
-  } finally {
-    isDataLoaded.value = true
-  }
-}
-
-// 保存会话列表
-async function saveConversations() {
-  try {
-    // 更新当前对话的消息和时间
-    const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
-    if (currentConv) {
-      currentConv.messages = messages.value.map(msg => {
-        const plainMsg = {
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp
-        }
-        // 保存函数调用相关字段
-        if (msg.tool_calls) {
-          plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
-        }
-        if (msg.tool_call_id) {
-          plainMsg.tool_call_id = msg.tool_call_id
-        }
-        if (msg.name) {
-          plainMsg.name = msg.name
-        }
-        // 保存思考内容
-        if (msg.reasoning_content) {
-          plainMsg.reasoning_content = msg.reasoning_content
-        }
-        // 保存图片数据
-        if (msg.images) {
-          plainMsg.images = JSON.parse(JSON.stringify(msg.images))
-        }
-        return plainMsg
-      })
-      currentConv.updatedAt = Date.now()
-      
-      // 确保 roleId 和 projectIds 被保存
-      if (!currentConv.roleId) {
-        currentConv.roleId = null
-      }
-      if (!currentConv.projectIds) {
-        currentConv.projectIds = []
-      }
-    }
-    
-    // 将响应式对象转换为普通对象（使用 JSON 序列化彻底转换）
-    const plainConversations = conversations.value.map(conv => ({
-        id: conv.id,
-        title: conv.title,
-      messages: (conv.messages || []).map(msg => {
-        const plainMsg = {
-          role: msg.role,
-          content: msg.content,
-          timestamp: msg.timestamp
-        }
-        // 保存函数调用相关字段
-        if (msg.tool_calls) {
-          plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
-        }
-        if (msg.tool_call_id) {
-          plainMsg.tool_call_id = msg.tool_call_id
-        }
-        if (msg.name) {
-          plainMsg.name = msg.name
-        }
-        // 保存思考内容
-        if (msg.reasoning_content) {
-          plainMsg.reasoning_content = msg.reasoning_content
-        }
-        // 保存图片数据
-        if (msg.images) {
-          plainMsg.images = JSON.parse(JSON.stringify(msg.images))
-        }
-        return plainMsg
-      }),
-      roleId: conv.roleId,
-      projectIds: conv.projectIds || [],
-        createdAt: conv.createdAt,
-        updatedAt: conv.updatedAt
-    }))
-    
-    // 使用 JSON 序列化确保彻底转换为普通对象
-    const conversationsData = JSON.parse(JSON.stringify({
-      conversations: plainConversations,
-      currentConversationId: currentConversationId.value
-    }))
-    
-    await electronAPI.saveConversations(conversationsData)
-  } catch (error) {
-    console.error('保存会话列表失败:', error)
-  }
 }
 
 // 滚动到底部
@@ -1233,7 +844,7 @@ function toggleProject(projectId) {
     } else {
       conv.projectIds.push(projectId)
     }
-    saveConversations()
+    chatStore.saveConversations()
   }
 }
 
@@ -1241,7 +852,7 @@ function selectAllProjects() {
   const conv = conversations.value.find(c => c.id === currentConversationId.value)
   if (conv) {
     conv.projectIds = projectStore.projects.map(p => p.id)
-    saveConversations()
+    chatStore.saveConversations()
   }
 }
 
@@ -1249,7 +860,7 @@ function clearAllProjects() {
   const conv = conversations.value.find(c => c.id === currentConversationId.value)
   if (conv) {
     conv.projectIds = []
-    saveConversations()
+    chatStore.saveConversations()
   }
 }
 

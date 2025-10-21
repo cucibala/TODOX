@@ -5,7 +5,7 @@ import { useTodoStore } from './todo'
 import { useProjectStore } from './project'
 import { DeepSeekClient } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
-import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask } from '../utils/tools'
+import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask, executeEditSubtask } from '../utils/tools'
 
 export const useChatStore = defineStore('chat', () => {
   const appStore = useAppStore()
@@ -216,10 +216,17 @@ export const useChatStore = defineStore('chat', () => {
       let filteredMessages = messages.value
         .filter(m => !m.isProgress)
         .map(m => {
+          let content = m.content !== undefined ? m.content : ''
+          
+          // 确保 tool 消息的 content 是字符串
+          if (m.role === 'tool' && typeof content !== 'string') {
+            content = JSON.stringify(content)
+          }
+          
           const msg = {
             role: m.role,
             // 保持 content 的原始类型（可能是字符串或数组）
-            content: m.content !== undefined ? m.content : ''
+            content: content
           }
           // 只在这些字段存在时才添加
           if (m.tool_calls) msg.tool_calls = m.tool_calls
@@ -432,6 +439,13 @@ export const useChatStore = defineStore('chat', () => {
                           currentClient.value,
                           onProgress
                         )
+                      } else if (result.functionName === 'editSubtask') {
+                        result = await executeEditSubtask(
+                          result.args,
+                          { todoStore, projectStore },
+                          currentClient.value,
+                          onProgress
+                        )
                       }
                     } finally {
                       clearInterval(timerInterval)
@@ -590,7 +604,12 @@ export const useChatStore = defineStore('chat', () => {
       if (msg.role === 'tool') {
         const prevMsg = i > 0 ? msgs[i - 1] : null
         if (prevMsg && prevMsg.role === 'assistant' && prevMsg.tool_calls) {
-          cleaned.push(msg)
+          // 确保 tool 消息的 content 是字符串格式
+          const cleanedMsg = { ...msg }
+          if (typeof cleanedMsg.content !== 'string') {
+            cleanedMsg.content = JSON.stringify(cleanedMsg.content)
+          }
+          cleaned.push(cleanedMsg)
         }
       } else {
         cleaned.push(msg)
@@ -649,9 +668,15 @@ export const useChatStore = defineStore('chat', () => {
       
       // 准备消息数据（完整保存所有字段）
       currentConv.messages = messages.value.map(msg => {
+        // 确保 tool 消息的 content 是字符串格式
+        let content = msg.content
+        if (msg.role === 'tool' && typeof content !== 'string') {
+          content = JSON.stringify(content)
+        }
+        
         const plainMsg = {
           role: msg.role,
-          content: msg.content,
+          content: content,
           timestamp: msg.timestamp
         }
         // 保存函数调用相关字段
