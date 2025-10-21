@@ -318,18 +318,11 @@ export function executeToolFunction(functionName, args, stores, deepseekClient =
         }
       
       case 'deleteTask':
-        // 同步工具，删除任务
-        const task = todoStore.todos.find(t => t.id === args.taskId)
-        if (!task) {
-          throw new Error(`找不到ID为${args.taskId}的任务`)
-        }
-        todoStore.todos = todoStore.todos.filter(t => t.id !== args.taskId)
-        todoStore.saveTodos()
+        // 异步工具，删除任务
         return {
-          success: true,
-          taskId: args.taskId,
-          taskText: task.text,
-          message: `已删除任务"${task.text}"`
+          _async: true,
+          functionName: 'deleteTask',
+          args
         }
       
       case 'addTask':
@@ -546,13 +539,14 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
     todoStore.todos.push(task)
     createdTasks.push(task)
     
+    // 保存到数据库
+    await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+    
     // 避免 ID 冲突，添加小延迟
     if (i < firstBatchTasks.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 10))
     }
   }
-  
-  await todoStore.saveTodos()
   
   // 如果是渐进模式且还有剩余天数，继续创建
   if (isProgressiveMode && firstBatchTasks.length < totalDays) {
@@ -666,7 +660,8 @@ async function createRemainingDays(project, totalDays, currentDay, description, 
       }
       
       todoStore.todos.push(task)
-      await todoStore.saveTodos()
+      // 保存到数据库
+      await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
       
       // 进入下一天
       currentDay++
@@ -833,12 +828,13 @@ ${JSON.stringify(tasksInfo, null, 2)}
     todoStore.todos.push(task)
     createdTasks.push(task)
     
+    // 保存到数据库
+    await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+    
     if (i < updatedPlan.tasks.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 10))
     }
   }
-  
-  await todoStore.saveTodos()
   
   if (onProgress) onProgress(`🎉 项目"${project.name}"已更新！共 ${createdTasks.length} 个任务`)
   
@@ -992,12 +988,13 @@ export async function executeAddProjectTasks(args, stores, deepseekClient, onPro
     todoStore.todos.push(task)
     addedTasks.push(task)
     
+    // 保存到数据库
+    await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+    
     if (i < newTasks.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 10))
     }
   }
-  
-  await todoStore.saveTodos()
   
   if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加 ${addedTasks.length} 个新任务！`)
   
@@ -1143,7 +1140,8 @@ ${operation === 'replace' ? `- 根据用户要求重新设计所有子任务
     }
   })
   
-  await todoStore.saveTodos()
+  // 保存到数据库
+  await window.electronAPI.updateTodo(task.id, { subtasks: JSON.parse(JSON.stringify(task.subtasks)) })
   
   const changeDesc = operation === 'add' ? `新增 ${newSubtasks.length - oldSubtasksCount} 个子任务`
     : operation === 'delete' ? `删除 ${oldSubtasksCount - newSubtasks.length} 个子任务`
@@ -1310,7 +1308,8 @@ ${projectContext}
     todoStore.todos.push(newTask)
   }
   
-  await todoStore.saveTodos()
+  // 保存到数据库
+  await window.electronAPI.addTodo(JSON.parse(JSON.stringify(newTask)))
   
   if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加新任务！`)
   

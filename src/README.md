@@ -182,8 +182,14 @@ const electronAPI = window.electronAPI
 // 加载数据
 const todos = await electronAPI.loadTodos()
 
-// 保存数据
-await electronAPI.saveTodos(todos)
+// 添加任务
+await electronAPI.addTodo(todo)
+
+// 更新任务
+await electronAPI.updateTodo(todoId, updates)
+
+// 删除任务
+await electronAPI.deleteTodo(todoId)
 
 // 窗口控制
 electronAPI.windowMinimize()

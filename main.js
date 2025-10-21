@@ -592,20 +592,6 @@ ipcMain.handle('load-todos', async () => {
   }
 });
 
-// IPC 通信处理 - 保存任务数据（批量，仅用于兼容）
-ipcMain.handle('save-todos', async (event, todos) => {
-  try {
-    if (!db) {
-      throw new Error('数据库未初始化');
-    }
-    db.saveTodos(todos);
-    return { success: true };
-  } catch (error) {
-    console.error('保存任务数据失败:', error);
-    return { success: false, error: error.message };
-  }
-});
-
 // IPC 通信处理 - 添加单个任务
 ipcMain.handle('add-todo', async (event, todo) => {
   try {

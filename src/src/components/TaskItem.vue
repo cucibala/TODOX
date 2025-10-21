@@ -1031,8 +1031,11 @@ function handleRemoveProgressImage(index) {
 
 // 子任务评论功能
 // 处理子任务输入值变化
-function handleSubtaskInputChange(subtaskId) {
-  todoStore.saveTodos()
+async function handleSubtaskInputChange(subtaskId) {
+  const subtask = props.task.subtasks?.find(st => st.id === subtaskId)
+  if (subtask) {
+    await electronAPI.updateSubtask(subtaskId, { inputValue: subtask.inputValue })
+  }
 }
 
 // 检查子任务是否可以完成（需要输入的子任务必须有值）
