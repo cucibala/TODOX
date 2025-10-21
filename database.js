@@ -32,11 +32,10 @@ class TodoXDatabase {
       
       // 检查并执行数据库迁移
       this.checkAndMigrate();
-      
-      console.log('数据库初始化成功:', this.dbPath);
+      console.log('Database initialized successfully:', this.dbPath);
       return true;
     } catch (error) {
-      console.error('数据库初始化失败:', error);
+      console.error('Database initialization failed:', error);
       return false;
     }
   }
@@ -227,14 +226,9 @@ class TodoXDatabase {
     try {
       // 删除 project_id 为 NULL 的任务
       const result = this.db.prepare('DELETE FROM todos WHERE project_id IS NULL').run();
-      
-      if (result.changes > 0) {
-        console.log(`已自动清理 ${result.changes} 个无项目归属的任务`);
-      }
-      
       return result.changes;
     } catch (error) {
-      console.error('清理孤立任务失败:', error);
+      console.error('Failed to clean orphaned tasks:', error);
       return 0;
     }
   }
@@ -599,7 +593,6 @@ class TodoXDatabase {
       });
       
       transaction();
-      console.log('数据迁移成功');
       return true;
     } catch (error) {
       console.error('数据迁移失败:', error);
@@ -633,7 +626,7 @@ class TodoXDatabase {
         VALUES (?, ?, ?)
       `);
       stmt.run(version, new Date().toISOString(), description);
-      console.log(`数据库版本已更新至 v${version}: ${description}`);
+      console.log(`DataBase Version Updated to v${version}: ${description}`);
     } catch (error) {
       console.error('设置数据库版本失败:', error);
     }
@@ -648,21 +641,21 @@ class TodoXDatabase {
     // 如果是新数据库，直接设置为最新版本
     if (currentDbVersion === 0) {
       this.setDatabaseVersion(this.currentVersion, '初始数据库版本');
-      console.log(`新数据库已初始化为版本 v${this.currentVersion}`);
+      console.log(`New database initialized to version v${this.currentVersion}`);
       return;
     }
     
     // 如果数据库版本已是最新，无需迁移
     if (currentDbVersion >= this.currentVersion) {
-      console.log(`数据库版本 v${currentDbVersion} 已是最新`);
+      console.log(`Database version v${currentDbVersion} is already the latest`);
       return;
     }
     
     // 执行逐版本迁移
-    console.log(`开始数据库迁移：v${currentDbVersion} → v${this.currentVersion}`);
+    console.log(`Starting database migration: v${currentDbVersion} → v${this.currentVersion}`);
     
     for (let version = currentDbVersion + 1; version <= this.currentVersion; version++) {
-      console.log(`正在执行迁移到版本 v${version}...`);
+      console.log(`Migrating to version v${version}...`);
       const migrationFunc = this.getMigrationFunction(version);
       
       if (migrationFunc) {
@@ -674,18 +667,18 @@ class TodoXDatabase {
           });
           
           transaction();
-          console.log(`✓ 成功迁移到版本 v${version}`);
+          console.log(`✓ Successfully migrated to version v${version}`);
         } catch (error) {
-          console.error(`✗ 迁移到版本 v${version} 失败:`, error);
+          console.error(`✗ Failed to migrate to version v${version}:`, error);
           throw error;
         }
       } else {
-        console.log(`版本 v${version} 无需迁移操作`);
+        console.log(`Version v${version} does not need migration operations`);
         this.setDatabaseVersion(version, `版本 ${version}`);
       }
     }
     
-    console.log(`数据库迁移完成，当前版本 v${this.currentVersion}`);
+    console.log(`Database migration completed, current version v${this.currentVersion}`);
   }
 
   /**
@@ -698,25 +691,20 @@ class TodoXDatabase {
       
       // 版本 2 - 为子任务添加 weight、requiresInput、inputValue 字段
       2: function() {
-        console.log('  - 为 subtasks 表添加新字段...');
-        
         // SQLite 不支持 ADD COLUMN IF NOT EXISTS，需要检查列是否存在
         const tableInfo = this.db.prepare('PRAGMA table_info(subtasks)').all();
         const columnNames = tableInfo.map(col => col.name);
         
         if (!columnNames.includes('weight')) {
           this.db.exec('ALTER TABLE subtasks ADD COLUMN weight INTEGER DEFAULT 3;');
-          console.log('  - 添加 weight 字段');
         }
         
         if (!columnNames.includes('requires_input')) {
           this.db.exec('ALTER TABLE subtasks ADD COLUMN requires_input INTEGER DEFAULT 0;');
-          console.log('  - 添加 requires_input 字段');
         }
         
         if (!columnNames.includes('input_value')) {
           this.db.exec('ALTER TABLE subtasks ADD COLUMN input_value TEXT;');
-          console.log('  - 添加 input_value 字段');
         }
       },
       

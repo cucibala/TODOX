@@ -83,7 +83,7 @@ function initDataDirectory(dataDir) {
 function initDatabase() {
   try {
     const dbPath = getDatabasePath();
-    console.log('初始化数据库路径:', dbPath);
+    console.log('Default database path:', dbPath);
     db = new TodoXDatabase(dbPath);
     const success = db.init();
     
@@ -121,7 +121,6 @@ function migrateFromJSONIfNeeded() {
           const projectData = JSON.parse(fs.readFileSync(projectsPath, 'utf-8'));
           jsonData.projects = projectData.projects || [];
           jsonData.currentProjectId = projectData.currentProjectId;
-          console.log(`发现项目数据，准备迁移 ${jsonData.projects.length} 个项目`);
         } catch (error) {
           console.error('读取项目 JSON 失败:', error);
         }
@@ -131,7 +130,6 @@ function migrateFromJSONIfNeeded() {
       if (fs.existsSync(todosPath)) {
         try {
           jsonData.todos = JSON.parse(fs.readFileSync(todosPath, 'utf-8'));
-          console.log(`发现任务数据，准备迁移 ${jsonData.todos.length} 个任务`);
         } catch (error) {
           console.error('读取任务 JSON 失败:', error);
         }
@@ -141,7 +139,6 @@ function migrateFromJSONIfNeeded() {
       if (fs.existsSync(conversationsPath)) {
         try {
           jsonData.conversations = JSON.parse(fs.readFileSync(conversationsPath, 'utf-8'));
-          console.log(`发现会话数据，准备迁移 ${jsonData.conversations.conversations?.length || 0} 个会话`);
         } catch (error) {
           console.error('读取会话 JSON 失败:', error);
         }
@@ -149,12 +146,9 @@ function migrateFromJSONIfNeeded() {
       
       // 执行迁移
       if (Object.keys(jsonData).length > 0) {
-        console.log('开始迁移数据到 SQLite...');
         const success = db.migrateFromJSON(jsonData);
         
         if (success) {
-          console.log('数据迁移成功！');
-          
           // 清理孤立任务（project_id 为空的任务）
           db.cleanOrphanedTasks();
           
@@ -173,8 +167,6 @@ function migrateFromJSONIfNeeded() {
           if (fs.existsSync(conversationsPath)) {
             fs.copyFileSync(conversationsPath, path.join(backupDir, 'conversations.json'));
           }
-          
-          console.log('原 JSON 文件已备份到:', backupDir);
         }
       }
     }
@@ -224,16 +216,11 @@ function loadSettings() {
       // 加载自定义数据路径
       if (settings.customDataPath) {
         currentDataPath = settings.customDataPath;
-        console.log('加载自定义数据路径:', currentDataPath);
-      } else {
-        console.log('使用默认数据路径:', currentDataPath);
       }
       
       // 初始化数据目录
       initDataDirectory(currentDataPath);
     } else {
-      // 首次运行，初始化默认数据目录
-      console.log('首次运行，使用默认数据路径:', currentDataPath);
       initDataDirectory(currentDataPath);
     }
   } catch (error) {
