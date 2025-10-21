@@ -102,72 +102,109 @@ function initDatabase() {
 // 从 JSON 迁移数据（如果需要）
 function migrateFromJSONIfNeeded() {
   try {
-    const dbPath = getDatabasePath();
     const todosPath = getDataPath();
     const projectsPath = getProjectsPath();
     const conversationsPath = getConversationsPath();
     
-    // 检查是否是新数据库（空数据库）
+    // 检查是否有旧的 JSON 文件
+    const hasOldData = fs.existsSync(todosPath) || 
+                       fs.existsSync(projectsPath) || 
+                       fs.existsSync(conversationsPath);
+    
+    if (!hasOldData) {
+      console.log('未发现旧数据文件，跳过迁移');
+      return;
+    }
+    
+    // 检查数据库是否已有数据
     const todos = db.getTodos();
     const projects = db.getProjects();
     
-    // 如果数据库为空且有 JSON 文件，则迁移
-    if (todos.length === 0 && projects.length === 0) {
-      const jsonData = {};
-      
-      // 读取项目数据
-      if (fs.existsSync(projectsPath)) {
-        try {
-          const projectData = JSON.parse(fs.readFileSync(projectsPath, 'utf-8'));
-          jsonData.projects = projectData.projects || [];
-          jsonData.currentProjectId = projectData.currentProjectId;
-        } catch (error) {
-          console.error('读取项目 JSON 失败:', error);
-        }
+    if (todos.length > 0 || projects.length > 0) {
+      console.log('数据库已有数据，跳过迁移');
+      return;
+    }
+    
+    console.log('发现旧数据文件，开始迁移...');
+    const jsonData = {};
+    
+    // 读取项目数据
+    if (fs.existsSync(projectsPath)) {
+      try {
+        const projectData = JSON.parse(fs.readFileSync(projectsPath, 'utf-8'));
+        jsonData.projects = projectData.projects || [];
+        jsonData.currentProjectId = projectData.currentProjectId;
+        console.log(`读取到 ${jsonData.projects.length} 个项目`);
+      } catch (error) {
+        console.error('读取项目 JSON 失败:', error);
       }
-      
-      // 读取任务数据
-      if (fs.existsSync(todosPath)) {
-        try {
-          jsonData.todos = JSON.parse(fs.readFileSync(todosPath, 'utf-8'));
-        } catch (error) {
-          console.error('读取任务 JSON 失败:', error);
-        }
+    }
+    
+    // 读取任务数据
+    if (fs.existsSync(todosPath)) {
+      try {
+        jsonData.todos = JSON.parse(fs.readFileSync(todosPath, 'utf-8'));
+        console.log(`读取到 ${jsonData.todos.length} 个任务`);
+      } catch (error) {
+        console.error('读取任务 JSON 失败:', error);
       }
-      
-      // 读取会话数据
-      if (fs.existsSync(conversationsPath)) {
-        try {
-          jsonData.conversations = JSON.parse(fs.readFileSync(conversationsPath, 'utf-8'));
-        } catch (error) {
-          console.error('读取会话 JSON 失败:', error);
-        }
+    }
+    
+    // 读取会话数据
+    if (fs.existsSync(conversationsPath)) {
+      try {
+        jsonData.conversations = JSON.parse(fs.readFileSync(conversationsPath, 'utf-8'));
+        const convCount = jsonData.conversations.conversations ? jsonData.conversations.conversations.length : 0;
+        console.log(`读取到 ${convCount} 个会话`);
+      } catch (error) {
+        console.error('读取会话 JSON 失败:', error);
       }
+    }
+    
+    // 执行迁移
+    if (Object.keys(jsonData).length > 0) {
+      const result = db.migrateFromJSON(jsonData);
       
-      // 执行迁移
-      if (Object.keys(jsonData).length > 0) {
-        const success = db.migrateFromJSON(jsonData);
+      if (result.success) {
+        console.log('数据迁移成功:', result.migratedCount);
         
-        if (success) {
-          // 清理孤立任务（project_id 为空的任务）
-          db.cleanOrphanedTasks();
-          
-          // 备份原有 JSON 文件
-          const backupDir = path.join(currentDataPath, 'json-backup');
-          if (!fs.existsSync(backupDir)) {
-            fs.mkdirSync(backupDir, { recursive: true });
-          }
-          
-          if (fs.existsSync(todosPath)) {
-            fs.copyFileSync(todosPath, path.join(backupDir, 'todos.json'));
-          }
-          if (fs.existsSync(projectsPath)) {
-            fs.copyFileSync(projectsPath, path.join(backupDir, 'projects.json'));
-          }
-          if (fs.existsSync(conversationsPath)) {
-            fs.copyFileSync(conversationsPath, path.join(backupDir, 'conversations.json'));
-          }
+        // 清理孤立任务（project_id 为空的任务）
+        const cleanedCount = db.cleanOrphanedTasks();
+        if (cleanedCount > 0) {
+          console.log(`清理了 ${cleanedCount} 个孤立任务`);
         }
+        
+        // 创建备份目录
+        const backupDir = path.join(currentDataPath, 'json-backup');
+        if (!fs.existsSync(backupDir)) {
+          fs.mkdirSync(backupDir, { recursive: true });
+        }
+        
+        // 移动（而不是复制）旧文件到备份目录
+        const movedFiles = [];
+        if (fs.existsSync(todosPath)) {
+          fs.renameSync(todosPath, path.join(backupDir, 'todos.json'));
+          movedFiles.push('todos.json');
+        }
+        if (fs.existsSync(projectsPath)) {
+          fs.renameSync(projectsPath, path.join(backupDir, 'projects.json'));
+          movedFiles.push('projects.json');
+        }
+        if (fs.existsSync(conversationsPath)) {
+          fs.renameSync(conversationsPath, path.join(backupDir, 'conversations.json'));
+          movedFiles.push('conversations.json');
+        }
+        
+        // 移动旧的chat-history.json（如果存在）
+        const chatHistoryPath = getChatHistoryPath();
+        if (fs.existsSync(chatHistoryPath)) {
+          fs.renameSync(chatHistoryPath, path.join(backupDir, 'chat-history.json'));
+          movedFiles.push('chat-history.json');
+        }
+        
+        console.log(`旧数据文件已移动到备份目录: ${movedFiles.join(', ')}`);
+      } else {
+        console.error('数据迁移失败:', result.error);
       }
     }
   } catch (error) {
@@ -619,7 +656,7 @@ ipcMain.handle('load-projects', async () => {
   }
 });
 
-// IPC 通信处理 - 保存项目数据
+// IPC 通信处理 - 保存项目数据（批量，仅用于兼容）
 ipcMain.handle('save-projects', async (event, projectData) => {
   try {
     if (!db) {
@@ -632,6 +669,62 @@ ipcMain.handle('save-projects', async (event, projectData) => {
     return { success: true };
   } catch (error) {
     console.error('保存项目数据失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加单个项目
+ipcMain.handle('add-project', async (event, project) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addProject(project);
+    return { success: true };
+  } catch (error) {
+    console.error('添加项目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新单个项目
+ipcMain.handle('update-project', async (event, projectId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateProject(projectId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新项目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除单个项目
+ipcMain.handle('delete-project', async (event, projectId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteProject(projectId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除项目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 设置当前项目ID
+ipcMain.handle('set-current-project', async (event, projectId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.setCurrentProjectId(projectId);
+    return { success: true };
+  } catch (error) {
+    console.error('设置当前项目失败:', error);
     return { success: false, error: error.message };
   }
 });
@@ -649,7 +742,7 @@ ipcMain.handle('load-todos', async () => {
   }
 });
 
-// IPC 通信处理 - 保存任务数据
+// IPC 通信处理 - 保存任务数据（批量，仅用于兼容）
 ipcMain.handle('save-todos', async (event, todos) => {
   try {
     if (!db) {
@@ -659,6 +752,132 @@ ipcMain.handle('save-todos', async (event, todos) => {
     return { success: true };
   } catch (error) {
     console.error('保存任务数据失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加单个任务
+ipcMain.handle('add-todo', async (event, todo) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addTodo(todo);
+    return { success: true };
+  } catch (error) {
+    console.error('添加任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新单个任务
+ipcMain.handle('update-todo', async (event, todoId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateTodo(todoId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除单个任务
+ipcMain.handle('delete-todo', async (event, todoId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteTodo(todoId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加子任务
+ipcMain.handle('add-subtask', async (event, todoId, subtask) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addSubtask(todoId, subtask);
+    return { success: true };
+  } catch (error) {
+    console.error('添加子任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新子任务
+ipcMain.handle('update-subtask', async (event, subtaskId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateSubtask(subtaskId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新子任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除子任务
+ipcMain.handle('delete-subtask', async (event, subtaskId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteSubtask(subtaskId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除子任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加进度记录
+ipcMain.handle('add-progress', async (event, todoId, record) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addProgressRecord(todoId, record);
+    return { success: true };
+  } catch (error) {
+    console.error('添加进度记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新进度记录
+ipcMain.handle('update-progress', async (event, recordId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateProgressRecord(recordId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新进度记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除进度记录
+ipcMain.handle('delete-progress', async (event, recordId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteProgressRecord(recordId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除进度记录失败:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1229,7 +1448,7 @@ ipcMain.handle('load-conversations', async () => {
   }
 });
 
-// IPC 通信处理 - 保存会话列表
+// IPC 通信处理 - 保存会话列表（批量，仅用于兼容）
 ipcMain.handle('save-conversations', async (event, conversationsData) => {
   try {
     if (!db) {
@@ -1242,6 +1461,104 @@ ipcMain.handle('save-conversations', async (event, conversationsData) => {
     return { success: true };
   } catch (error) {
     console.error('保存会话列表失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加单个会话
+ipcMain.handle('add-conversation', async (event, conversation) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addConversation(conversation);
+    return { success: true };
+  } catch (error) {
+    console.error('添加会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新单个会话
+ipcMain.handle('update-conversation', async (event, conversationId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateConversation(conversationId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除单个会话
+ipcMain.handle('delete-conversation', async (event, conversationId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteConversation(conversationId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加消息
+ipcMain.handle('add-message', async (event, conversationId, message, order) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addMessage(conversationId, message, order);
+    return { success: true };
+  } catch (error) {
+    console.error('添加消息失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新消息
+ipcMain.handle('update-message', async (event, messageId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateMessage(messageId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新消息失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除消息
+ipcMain.handle('delete-message', async (event, messageId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteMessage(messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除消息失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 设置当前会话ID
+ipcMain.handle('set-current-conversation', async (event, conversationId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.setCurrentConversationId(conversationId);
+    return { success: true };
+  } catch (error) {
+    console.error('设置当前会话失败:', error);
     return { success: false, error: error.message };
   }
 });

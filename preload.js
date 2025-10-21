@@ -5,12 +5,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 项目管理
   loadProjects: () => ipcRenderer.invoke('load-projects'),
   saveProjects: (projects) => ipcRenderer.invoke('save-projects', projects),
+  addProject: (project) => ipcRenderer.invoke('add-project', project),
+  updateProject: (projectId, updates) => ipcRenderer.invoke('update-project', projectId, updates),
+  deleteProject: (projectId) => ipcRenderer.invoke('delete-project', projectId),
+  setCurrentProject: (projectId) => ipcRenderer.invoke('set-current-project', projectId),
   exportProject: (fileName, encryptedData) => ipcRenderer.invoke('export-project', fileName, encryptedData),
   importProject: () => ipcRenderer.invoke('import-project'),
   
   // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),
   saveTodos: (todos) => ipcRenderer.invoke('save-todos', todos),
+  addTodo: (todo) => ipcRenderer.invoke('add-todo', todo),
+  updateTodo: (todoId, updates) => ipcRenderer.invoke('update-todo', todoId, updates),
+  deleteTodo: (todoId) => ipcRenderer.invoke('delete-todo', todoId),
+  addSubtask: (todoId, subtask) => ipcRenderer.invoke('add-subtask', todoId, subtask),
+  updateSubtask: (subtaskId, updates) => ipcRenderer.invoke('update-subtask', subtaskId, updates),
+  deleteSubtask: (subtaskId) => ipcRenderer.invoke('delete-subtask', subtaskId),
+  addProgress: (todoId, record) => ipcRenderer.invoke('add-progress', todoId, record),
+  updateProgress: (recordId, updates) => ipcRenderer.invoke('update-progress', recordId, updates),
+  deleteProgress: (recordId) => ipcRenderer.invoke('delete-progress', recordId),
   
   // 图片管理
   selectImage: () => ipcRenderer.invoke('select-image'),
@@ -40,6 +53,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 会话管理
   loadConversations: () => ipcRenderer.invoke('load-conversations'),
   saveConversations: (conversationsData) => ipcRenderer.invoke('save-conversations', conversationsData),
+  addConversation: (conversation) => ipcRenderer.invoke('add-conversation', conversation),
+  updateConversation: (conversationId, updates) => ipcRenderer.invoke('update-conversation', conversationId, updates),
+  deleteConversation: (conversationId) => ipcRenderer.invoke('delete-conversation', conversationId),
+  addMessage: (conversationId, message, order) => ipcRenderer.invoke('add-message', conversationId, message, order),
+  updateMessage: (messageId, updates) => ipcRenderer.invoke('update-message', messageId, updates),
+  deleteMessage: (messageId) => ipcRenderer.invoke('delete-message', messageId),
+  setCurrentConversation: (conversationId) => ipcRenderer.invoke('set-current-conversation', conversationId),
   
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),

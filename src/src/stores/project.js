@@ -32,19 +32,6 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
   
-  // 保存项目
-  async function saveProjects() {
-    try {
-      // 将响应式对象转换为普通对象，避免 IPC 传递错误
-      await electronAPI.saveProjects({
-        projects: JSON.parse(JSON.stringify(projects.value)),
-        currentProjectId: currentProjectId.value
-      })
-    } catch (error) {
-      console.error('保存项目数据失败:', error)
-    }
-  }
-  
   // 添加项目
   async function addProject(name, color) {
     if (!name) return
@@ -57,21 +44,24 @@ export const useProjectStore = defineStore('project', () => {
       createdAt: new Date().toISOString()
     }
     
+    // 先添加到本地状态
     projects.value.push(project)
     
     // 如果是第一个项目，自动选中
     if (projects.value.length === 1) {
       currentProjectId.value = project.id
+      await electronAPI.setCurrentProject(project.id)
     }
     
-    await saveProjects()
+    // 单条插入数据库
+    await electronAPI.addProject(JSON.parse(JSON.stringify(project)))
     appStore.toast(`项目"${name}"创建成功`)
   }
   
   // 选择项目
   async function selectProject(projectId) {
     currentProjectId.value = projectId
-    await saveProjects()
+    await electronAPI.setCurrentProject(projectId)
     
     const project = projects.value.find(p => p.id === projectId)
     if (project) {
@@ -98,25 +88,24 @@ export const useProjectStore = defineStore('project', () => {
     const confirmed = await appStore.confirm(message)
     if (!confirmed) return
     
-    // 删除项目下的所有任务及其图片
+    // 删除项目下的所有任务及其图片（逐条删除）
     for (const task of projectTodos) {
-      await todoStore.deleteTaskWithImages(task.id)
+      await todoStore.deleteTask(task.id)
     }
-    // 持久化保存任务删除结果，避免仅内存删除
-    await todoStore.saveTodos()
     
-    // 删除项目
+    // 从本地状态删除项目
     projects.value = projects.value.filter(p => p.id !== projectId)
     
     // 如果删除的是当前项目，切换到第一个项目
     if (currentProjectId.value === projectId) {
       currentProjectId.value = projects.value.length > 0 ? projects.value[0].id : null
+      if (currentProjectId.value) {
+        await electronAPI.setCurrentProject(currentProjectId.value)
+      }
     }
     
-    await saveProjects()
-    
-    // 清理可能遗漏的孤立任务
-    await todoStore.cleanOrphanedTasks()
+    // 单条删除数据库中的项目（会级联删除任务）
+    await electronAPI.deleteProject(projectId)
     
     appStore.toast(`项目"${project.name}"已删除`)
   }
@@ -288,7 +277,6 @@ export const useProjectStore = defineStore('project', () => {
     
     // 方法
     loadProjects,
-    saveProjects,
     addProject,
     selectProject,
     deleteProject,

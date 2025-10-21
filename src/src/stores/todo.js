@@ -213,24 +213,12 @@ export const useTodoStore = defineStore('todo', () => {
     if (orphanedTasks.length > 0) {
       console.log(`检测到 ${orphanedTasks.length} 个孤立任务，正在清理...`)
       
-      // 删除孤立任务及其图片
+      // 删除孤立任务及其图片（逐条删除）
       for (const task of orphanedTasks) {
-        await deleteTaskWithImages(task.id)
+        await deleteTask(task.id)
       }
       
-      // 保存清理结果
-      await saveTodos()
       console.log(`已清理 ${orphanedTasks.length} 个孤立任务`)
-    }
-  }
-  
-  // 保存任务
-  async function saveTodos() {
-    try {
-      // 将响应式对象转换为普通对象，避免 IPC 传递错误
-      await electronAPI.saveTodos(JSON.parse(JSON.stringify(todos.value)))
-    } catch (error) {
-      console.error('保存任务数据失败:', error)
     }
   }
   
@@ -268,12 +256,14 @@ export const useTodoStore = defineStore('todo', () => {
       subtasks: []
     }
     
+    // 添加到本地状态
     todos.value.unshift(task)
     
     // 清空当前图片
     currentImages.value = []
     
-    await saveTodos()
+    // 单条插入数据库
+    await electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
     return { success: true }
   }
   
@@ -287,7 +277,11 @@ export const useTodoStore = defineStore('todo', () => {
       } else {
         task.completedAt = null
       }
-      await saveTodos()
+      // 单条更新数据库
+      await electronAPI.updateTodo(id, {
+        completed: task.completed,
+        completedAt: task.completedAt
+      })
     }
   }
   
@@ -296,7 +290,8 @@ export const useTodoStore = defineStore('todo', () => {
     const task = todos.value.find(t => t.id === id)
     if (task) {
       task.pinned = !task.pinned
-      await saveTodos()
+      // 单条更新数据库
+      await electronAPI.updateTodo(id, { pinned: task.pinned })
     }
   }
   
@@ -322,6 +317,15 @@ export const useTodoStore = defineStore('todo', () => {
           }
         }
       }
+      if (task.subtasks) {
+        for (const subtask of task.subtasks) {
+          if (subtask.images) {
+            for (const image of subtask.images) {
+              await electronAPI.deleteImage(image)
+            }
+          }
+        }
+      }
     }
     todos.value = todos.value.filter(t => t.id !== id)
   }
@@ -329,7 +333,8 @@ export const useTodoStore = defineStore('todo', () => {
   // 删除任务
   async function deleteTask(id) {
     await deleteTaskWithImages(id)
-    await saveTodos()
+    // 单条删除数据库（级联删除子任务和进度）
+    await electronAPI.deleteTodo(id)
   }
   
   // 编辑任务
@@ -337,7 +342,8 @@ export const useTodoStore = defineStore('todo', () => {
     const task = todos.value.find(t => t.id === id)
     if (task) {
       Object.assign(task, updates)
-      await saveTodos()
+      // 单条更新数据库
+      await electronAPI.updateTodo(id, JSON.parse(JSON.stringify(updates)))
     }
   }
   
@@ -374,8 +380,7 @@ export const useTodoStore = defineStore('todo', () => {
         task.subtasks = []
       }
       
-      // 使用 unshift 将新子任务添加到数组开头
-      task.subtasks.unshift({
+      const subtask = {
         id: Date.now(),
         text: text.trim(),
         weight,
@@ -384,9 +389,13 @@ export const useTodoStore = defineStore('todo', () => {
         inputValue: '',
         images: images || [],
         createdAt: new Date().toISOString()
-      })
+      }
       
-      await saveTodos()
+      // 使用 unshift 将新子任务添加到数组开头
+      task.subtasks.unshift(subtask)
+      
+      // 单条插入数据库
+      await electronAPI.addSubtask(taskId, JSON.parse(JSON.stringify(subtask)))
     }
   }
   
@@ -409,7 +418,13 @@ export const useTodoStore = defineStore('todo', () => {
         } else {
           subtask.completedAt = null
         }
-        await saveTodos()
+        
+        // 单条更新数据库
+        await electronAPI.updateSubtask(subtaskId, {
+          completed: subtask.completed,
+          completedAt: subtask.completedAt
+        })
+        
         return { success: true }
       }
     }
@@ -420,8 +435,19 @@ export const useTodoStore = defineStore('todo', () => {
   async function deleteSubtask(taskId, subtaskId) {
     const task = todos.value.find(t => t.id === taskId)
     if (task && task.subtasks) {
+      const subtask = task.subtasks.find(st => st.id === subtaskId)
+      
+      // 删除子任务图片
+      if (subtask && subtask.images) {
+        for (const image of subtask.images) {
+          await electronAPI.deleteImage(image)
+        }
+      }
+      
       task.subtasks = task.subtasks.filter(st => st.id !== subtaskId)
-      await saveTodos()
+      
+      // 单条删除数据库
+      await electronAPI.deleteSubtask(subtaskId)
     }
   }
   
@@ -438,8 +464,11 @@ export const useTodoStore = defineStore('todo', () => {
     // 插入到目标位置
     task.subtasks.splice(targetIndex, 0, movedSubtask)
     
-    // 保存
-    await saveTodos()
+    // 更新每个子任务的order字段
+    for (let i = 0; i < task.subtasks.length; i++) {
+      task.subtasks[i].order = i
+      await electronAPI.updateSubtask(task.subtasks[i].id, { order: i })
+    }
   }
   
   // 添加子任务评论
@@ -468,17 +497,20 @@ export const useTodoStore = defineStore('todo', () => {
       
       const progressImages = currentProgressImages.value[taskId] || []
       
-      task.progress.push({
+      const record = {
         id: Date.now(),
         text: progressText.trim(),
         createdAt: new Date().toISOString(),
         images: [...progressImages]
-      })
+      }
+      
+      task.progress.push(record)
       
       // 清空当前任务的进度图片
       currentProgressImages.value[taskId] = []
       
-      await saveTodos()
+      // 单条插入数据库
+      await electronAPI.addProgress(taskId, JSON.parse(JSON.stringify(record)))
     }
   }
   
@@ -495,7 +527,9 @@ export const useTodoStore = defineStore('todo', () => {
       }
       
       task.progress = task.progress.filter(p => p.id !== progressId)
-      await saveTodos()
+      
+      // 单条删除数据库
+      await electronAPI.deleteProgress(progressId)
     }
   }
 
@@ -505,7 +539,9 @@ export const useTodoStore = defineStore('todo', () => {
       const progress = task.progress.find(p => p.id === progressId)
       if (progress) {
         progress.text = newText
-        await saveTodos()
+        
+        // 单条更新数据库
+        await electronAPI.updateProgress(progressId, { text: newText })
       }
     }
   }
@@ -538,7 +574,6 @@ export const useTodoStore = defineStore('todo', () => {
     
     // 方法
     loadTodos,
-    saveTodos,
     cleanOrphanedTasks,
     addTask,
     toggleTask,

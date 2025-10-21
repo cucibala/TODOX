@@ -188,32 +188,75 @@ class TodoXDatabase {
   }
 
   /**
-   * 保存项目（批量替换）
+   * 添加单个项目
+   */
+  addProject(project) {
+    const stmt = this.db.prepare(`
+      INSERT INTO projects (id, name, color, icon, "order", created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      project.id,
+      project.name,
+      project.color || null,
+      project.icon || null,
+      project.order || 0,
+      project.createdAt || project.created_at || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新单个项目
+   */
+  updateProject(projectId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.color !== undefined) {
+      fields.push('color = ?');
+      values.push(updates.color);
+    }
+    if (updates.icon !== undefined) {
+      fields.push('icon = ?');
+      values.push(updates.icon);
+    }
+    if (updates.order !== undefined) {
+      fields.push('"order" = ?');
+      values.push(updates.order);
+    }
+    
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(projectId);
+    
+    const stmt = this.db.prepare(`
+      UPDATE projects SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除单个项目
+   */
+  deleteProject(projectId) {
+    this.db.prepare('DELETE FROM projects WHERE id = ?').run(projectId);
+  }
+
+  /**
+   * 保存项目（批量替换，仅用于迁移）
+   * @deprecated 迁移后不再使用
    */
   saveProjects(projects) {
     const transaction = this.db.transaction(() => {
-      // 清空现有项目
-      this.db.prepare('DELETE FROM projects').run();
-      
-      // 插入新项目
-      const insert = this.db.prepare(`
-        INSERT INTO projects (id, name, color, icon, "order", created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      
       projects.forEach(project => {
-        insert.run(
-          project.id,
-          project.name,
-          project.color || null,
-          project.icon || null,
-          project.order || 0,
-          project.createdAt || project.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
-          new Date().toISOString()
-        );
+        this.addProject(project);
       });
     });
-    
     transaction();
   }
 
@@ -292,7 +335,251 @@ class TodoXDatabase {
   }
 
   /**
-   * 保存任务（批量替换）
+   * 添加单个任务
+   */
+  addTodo(todo) {
+    const stmt = this.db.prepare(`
+      INSERT INTO todos (
+        id, project_id, text, completed, priority, due_date, 
+        created_at, completed_at, "order", updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      todo.id,
+      todo.projectId || todo.project_id || null,
+      todo.text,
+      todo.completed ? 1 : 0,
+      todo.priority || 'medium',
+      todo.dueDate || todo.due_date || null,
+      todo.createdAt || todo.created_at || new Date().toISOString(),
+      todo.completedAt || todo.completed_at || null,
+      todo.order || 0,
+      new Date().toISOString()
+    );
+    
+    // 保存任务图片
+    if (todo.images && todo.images.length > 0) {
+      this.saveImages('todo', todo.id, todo.images);
+    }
+    
+    // 保存子任务
+    if (todo.subtasks && todo.subtasks.length > 0) {
+      todo.subtasks.forEach(subtask => {
+        this.addSubtask(todo.id, subtask);
+      });
+    }
+    
+    // 保存进度记录
+    const progressList = todo.progressRecords || todo.progress || [];
+    if (progressList.length > 0) {
+      progressList.forEach(record => {
+        this.addProgressRecord(todo.id, record);
+      });
+    }
+  }
+
+  /**
+   * 更新单个任务
+   */
+  updateTodo(todoId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.text !== undefined) {
+      fields.push('text = ?');
+      values.push(updates.text);
+    }
+    if (updates.completed !== undefined) {
+      fields.push('completed = ?');
+      values.push(updates.completed ? 1 : 0);
+    }
+    if (updates.priority !== undefined) {
+      fields.push('priority = ?');
+      values.push(updates.priority);
+    }
+    if (updates.dueDate !== undefined) {
+      fields.push('due_date = ?');
+      values.push(updates.dueDate);
+    }
+    if (updates.completedAt !== undefined) {
+      fields.push('completed_at = ?');
+      values.push(updates.completedAt);
+    }
+    if (updates.order !== undefined) {
+      fields.push('"order" = ?');
+      values.push(updates.order);
+    }
+    if (updates.projectId !== undefined) {
+      fields.push('project_id = ?');
+      values.push(updates.projectId);
+    }
+    
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(todoId);
+    
+    const stmt = this.db.prepare(`
+      UPDATE todos SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+    
+    // 如果更新了图片，重新保存
+    if (updates.images !== undefined) {
+      this.saveImages('todo', todoId, updates.images);
+    }
+  }
+
+  /**
+   * 删除单个任务（及其子任务、进度记录）
+   */
+  deleteTodo(todoId) {
+    // 外键级联删除会自动删除子任务和进度记录
+    this.db.prepare('DELETE FROM todos WHERE id = ?').run(todoId);
+  }
+
+  /**
+   * 添加子任务
+   */
+  addSubtask(todoId, subtask) {
+    const stmt = this.db.prepare(`
+      INSERT INTO subtasks (id, todo_id, text, completed, weight, requires_input, input_value, "order", created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      subtask.id,
+      todoId,
+      subtask.text,
+      subtask.completed ? 1 : 0,
+      subtask.weight || 3,
+      subtask.requiresInput || subtask.requires_input ? 1 : 0,
+      subtask.inputValue || subtask.input_value || null,
+      subtask.order || 0,
+      subtask.createdAt || subtask.created_at || new Date().toISOString(),
+      new Date().toISOString()
+    );
+    
+    // 保存子任务图片
+    if (subtask.images && subtask.images.length > 0) {
+      this.saveImages('subtask', subtask.id, subtask.images);
+    }
+  }
+
+  /**
+   * 更新子任务
+   */
+  updateSubtask(subtaskId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.text !== undefined) {
+      fields.push('text = ?');
+      values.push(updates.text);
+    }
+    if (updates.completed !== undefined) {
+      fields.push('completed = ?');
+      values.push(updates.completed ? 1 : 0);
+    }
+    if (updates.weight !== undefined) {
+      fields.push('weight = ?');
+      values.push(updates.weight);
+    }
+    if (updates.requiresInput !== undefined) {
+      fields.push('requires_input = ?');
+      values.push(updates.requiresInput ? 1 : 0);
+    }
+    if (updates.inputValue !== undefined) {
+      fields.push('input_value = ?');
+      values.push(updates.inputValue);
+    }
+    if (updates.order !== undefined) {
+      fields.push('"order" = ?');
+      values.push(updates.order);
+    }
+    
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(subtaskId);
+    
+    const stmt = this.db.prepare(`
+      UPDATE subtasks SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+    
+    // 如果更新了图片，重新保存
+    if (updates.images !== undefined) {
+      this.saveImages('subtask', subtaskId, updates.images);
+    }
+  }
+
+  /**
+   * 删除子任务
+   */
+  deleteSubtask(subtaskId) {
+    this.db.prepare('DELETE FROM subtasks WHERE id = ?').run(subtaskId);
+  }
+
+  /**
+   * 添加进度记录
+   */
+  addProgressRecord(todoId, record) {
+    const stmt = this.db.prepare(`
+      INSERT INTO progress_records (id, todo_id, description, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      record.id,
+      todoId,
+      record.description || record.text || '',
+      record.createdAt || record.created_at || new Date().toISOString(),
+      new Date().toISOString()
+    );
+    
+    // 保存进度记录图片
+    if (record.images && record.images.length > 0) {
+      this.saveImages('progress', record.id, record.images);
+    }
+  }
+
+  /**
+   * 更新进度记录
+   */
+  updateProgressRecord(recordId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.text !== undefined || updates.description !== undefined) {
+      fields.push('description = ?');
+      values.push(updates.text || updates.description);
+    }
+    
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(recordId);
+    
+    const stmt = this.db.prepare(`
+      UPDATE progress_records SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+    
+    // 如果更新了图片，重新保存
+    if (updates.images !== undefined) {
+      this.saveImages('progress', recordId, updates.images);
+    }
+  }
+
+  /**
+   * 删除进度记录
+   */
+  deleteProgressRecord(recordId) {
+    this.db.prepare('DELETE FROM progress_records WHERE id = ?').run(recordId);
+  }
+
+  /**
+   * 保存任务（批量替换，仅用于迁移）
+   * @deprecated 迁移后不再使用
    */
   saveTodos(todos) {
     const transaction = this.db.transaction(() => {
@@ -461,7 +748,116 @@ class TodoXDatabase {
   }
 
   /**
-   * 保存会话数据
+   * 添加单个会话
+   */
+  addConversation(conversation) {
+    const stmt = this.db.prepare(`
+      INSERT INTO conversations (id, title, created_at, updated_at)
+      VALUES (?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      conversation.id,
+      conversation.title,
+      conversation.createdAt || conversation.created_at || new Date().toISOString(),
+      conversation.updatedAt || conversation.updated_at || new Date().toISOString()
+    );
+    
+    // 保存消息
+    if (conversation.messages && conversation.messages.length > 0) {
+      conversation.messages.forEach((msg, index) => {
+        this.addMessage(conversation.id, msg, index);
+      });
+    }
+  }
+
+  /**
+   * 更新单个会话
+   */
+  updateConversation(conversationId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.title !== undefined) {
+      fields.push('title = ?');
+      values.push(updates.title);
+    }
+    
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(conversationId);
+    
+    const stmt = this.db.prepare(`
+      UPDATE conversations SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除单个会话（及其所有消息）
+   */
+  deleteConversation(conversationId) {
+    // 外键级联删除会自动删除消息
+    this.db.prepare('DELETE FROM conversations WHERE id = ?').run(conversationId);
+  }
+
+  /**
+   * 添加消息
+   */
+  addMessage(conversationId, message, order) {
+    const stmt = this.db.prepare(`
+      INSERT INTO messages (id, conversation_id, role, content, image_path, thinking, "order", created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      message.id,
+      conversationId,
+      message.role,
+      message.content,
+      message.imagePath || message.image_path || null,
+      message.thinking || null,
+      order !== undefined ? order : 0,
+      message.createdAt || message.created_at || new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新消息
+   */
+  updateMessage(messageId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.content !== undefined) {
+      fields.push('content = ?');
+      values.push(updates.content);
+    }
+    if (updates.thinking !== undefined) {
+      fields.push('thinking = ?');
+      values.push(updates.thinking);
+    }
+    
+    values.push(messageId);
+    
+    if (fields.length > 0) {
+      const stmt = this.db.prepare(`
+        UPDATE messages SET ${fields.join(', ')} WHERE id = ?
+      `);
+      stmt.run(...values);
+    }
+  }
+
+  /**
+   * 删除消息
+   */
+  deleteMessage(messageId) {
+    this.db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+  }
+
+  /**
+   * 保存会话数据（批量替换，仅用于迁移）
+   * @deprecated 迁移后不再使用
    */
   saveConversations(conversationsData) {
     const transaction = this.db.transaction(() => {
@@ -568,35 +964,97 @@ class TodoXDatabase {
   // ==================== 数据迁移相关 ====================
 
   /**
-   * 从 JSON 文件迁移数据
+   * 从 JSON 文件迁移数据（一条一条迁移）
    */
   migrateFromJSON(jsonData) {
     try {
+      let migratedCount = {
+        projects: 0,
+        todos: 0,
+        subtasks: 0,
+        progressRecords: 0,
+        conversations: 0,
+        messages: 0
+      };
+
       const transaction = this.db.transaction(() => {
-        // 迁移项目
-        if (jsonData.projects) {
-          this.saveProjects(jsonData.projects);
+        // 迁移项目（一条一条）
+        if (jsonData.projects && jsonData.projects.length > 0) {
+          console.log(`开始迁移 ${jsonData.projects.length} 个项目...`);
+          jsonData.projects.forEach((project, index) => {
+            try {
+              this.addProject(project);
+              migratedCount.projects++;
+              if ((index + 1) % 10 === 0) {
+                console.log(`已迁移 ${index + 1}/${jsonData.projects.length} 个项目`);
+              }
+            } catch (error) {
+              console.error(`迁移项目失败 (ID: ${project.id}):`, error);
+            }
+          });
+          
           if (jsonData.currentProjectId) {
             this.setCurrentProjectId(jsonData.currentProjectId);
           }
         }
         
-        // 迁移任务
-        if (jsonData.todos) {
-          this.saveTodos(jsonData.todos);
+        // 迁移任务（一条一条）
+        if (jsonData.todos && jsonData.todos.length > 0) {
+          console.log(`开始迁移 ${jsonData.todos.length} 个任务...`);
+          jsonData.todos.forEach((todo, index) => {
+            try {
+              // 统计子任务和进度记录数量
+              const subtasksCount = todo.subtasks ? todo.subtasks.length : 0;
+              const progressCount = (todo.progressRecords || todo.progress || []).length;
+              
+              this.addTodo(todo);
+              migratedCount.todos++;
+              migratedCount.subtasks += subtasksCount;
+              migratedCount.progressRecords += progressCount;
+              
+              if ((index + 1) % 50 === 0) {
+                console.log(`已迁移 ${index + 1}/${jsonData.todos.length} 个任务`);
+              }
+            } catch (error) {
+              console.error(`迁移任务失败 (ID: ${todo.id}):`, error);
+            }
+          });
         }
         
-        // 迁移会话
-        if (jsonData.conversations) {
-          this.saveConversations(jsonData.conversations);
+        // 迁移会话（一条一条）
+        if (jsonData.conversations && jsonData.conversations.conversations) {
+          const convList = jsonData.conversations.conversations;
+          console.log(`开始迁移 ${convList.length} 个会话...`);
+          
+          convList.forEach((conv, index) => {
+            try {
+              const messagesCount = conv.messages ? conv.messages.length : 0;
+              
+              this.addConversation(conv);
+              migratedCount.conversations++;
+              migratedCount.messages += messagesCount;
+              
+              if ((index + 1) % 10 === 0) {
+                console.log(`已迁移 ${index + 1}/${convList.length} 个会话`);
+              }
+            } catch (error) {
+              console.error(`迁移会话失败 (ID: ${conv.id}):`, error);
+            }
+          });
+          
+          if (jsonData.conversations.currentConversationId) {
+            this.setCurrentConversationId(jsonData.conversations.currentConversationId);
+          }
         }
       });
       
       transaction();
-      return true;
+      
+      console.log('数据迁移完成统计:', migratedCount);
+      return { success: true, migratedCount };
     } catch (error) {
       console.error('数据迁移失败:', error);
-      return false;
+      return { success: false, error: error.message };
     }
   }
 
