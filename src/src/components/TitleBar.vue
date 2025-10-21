@@ -59,18 +59,6 @@
       </button>
       <button 
         class="titlebar-btn" 
-        :class="{ active: isDesktopMode }"
-        @click="appStore.toggleDesktopMode" 
-        :title="isDesktopMode ? '退出桌面模式' : '桌面背景模式'"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-          <line x1="8" y1="21" x2="16" y2="21"></line>
-          <line x1="12" y1="17" x2="12" y2="21"></line>
-        </svg>
-      </button>
-      <button 
-        class="titlebar-btn" 
         :class="{ active: isAlwaysOnTop }"
         @click="appStore.toggleAlwaysOnTop" 
         :title="isAlwaysOnTop ? '取消置顶' : '窗口置顶'"
@@ -107,7 +95,7 @@ import { useAppStore } from '../stores/app'
 import SettingIcon from '../icon/setting.svg'
 
 const appStore = useAppStore()
-const { isAlwaysOnTop, isDesktopMode, currentPage, showChatStatusIndicator, chatStatusText } = storeToRefs(appStore)
+const { isAlwaysOnTop, currentPage, showChatStatusIndicator, chatStatusText } = storeToRefs(appStore)
 
 // 导航到主页
 function goToHome() {

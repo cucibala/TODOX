@@ -1,10 +1,16 @@
 <template>
-  <div class="app-container" :class="{ 'compact-mode': isCompactMode, 'desktop-mode': isDesktopMode }">
+  <div class="app-container" :class="{ 'compact-mode': isCompactMode }">
     <!-- 自定义标题栏 -->
     <TitleBar />
 
+    <!-- 加载状态 -->
+    <div v-if="!isAppReady" class="loading-container">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">加载中...</div>
+    </div>
+
     <!-- 主内容区 -->
-    <main class="main-content">
+    <main v-show="isAppReady" class="main-content">
       <!-- 首页 -->
       <template v-if="currentPage === 'home'">
         <!-- 侧边栏 -->
@@ -89,36 +95,48 @@ const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
 
-const { isCompactMode, isDesktopMode, showLockScreen, currentPage } = storeToRefs(appStore)
+const { isCompactMode, showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
 
 onMounted(async () => {
-  // 初始化应用
-  await appStore.init()
-  await projectStore.loadProjects()
-  await todoStore.loadTodos()
-  await chatStore.loadConversations()
-  await chatStore.initAIClients()
-  
-  // 智能选择默认 AI 模型（优先豆包）
-  const doubaoResult = await window.electronAPI.getDoubaoConfig()
-  const deepseekResult = await window.electronAPI.getDeepSeekKey()
-  
-  if (doubaoResult.success && doubaoResult.key) {
-    appStore.currentAIModel = 'doubao'
-    console.log('✅ 默认使用豆包模型')
-  } else if (deepseekResult.success && deepseekResult.key) {
-    appStore.currentAIModel = 'deepseek'
-    console.log('✅ 默认使用 DeepSeek 模型')
-  } else {
-    appStore.currentAIModel = 'deepseek'
-    console.log('⚠️ 未配置任何模型，默认 DeepSeek')
+  try {
+    // 初始化应用
+    await appStore.init()
+    
+    // 并行加载数据以提升速度
+    await Promise.all([
+      projectStore.loadProjects(),
+      todoStore.loadTodos(),
+      chatStore.loadConversations(),
+      chatStore.initAIClients()
+    ])
+    
+    // 智能选择默认 AI 模型（优先豆包）
+    const doubaoResult = await window.electronAPI.getDoubaoConfig()
+    const deepseekResult = await window.electronAPI.getDeepSeekKey()
+    
+    if (doubaoResult.success && doubaoResult.key) {
+      appStore.currentAIModel = 'doubao'
+      console.log('✅ 默认使用豆包模型')
+    } else if (deepseekResult.success && deepseekResult.key) {
+      appStore.currentAIModel = 'deepseek'
+      console.log('✅ 默认使用 DeepSeek 模型')
+    } else {
+      appStore.currentAIModel = 'deepseek'
+      console.log('⚠️ 未配置任何模型，默认 DeepSeek')
+    }
+    
+    // 检查密码保护
+    await appStore.checkPasswordOnStartup()
+    
+    // 监听窗口模式变化
+    appStore.listenModeChanges()
+    
+    // 标记应用已准备就绪
+    appStore.isAppReady = true
+  } catch (error) {
+    console.error('应用初始化失败:', error)
+    appStore.isAppReady = true // 即使出错也显示界面
   }
-  
-  // 检查密码保护
-  await appStore.checkPasswordOnStartup()
-  
-  // 监听窗口模式变化
-  appStore.listenModeChanges()
 })
 </script>
 
@@ -132,6 +150,40 @@ body {
 #app {
   width: 100vw;
   height: 100vh;
+}
+
+/* 加载动画 */
+.loading-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  z-index: 9999;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(108, 92, 231, 0.2);
+  border-top-color: #6c5ce7;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-text {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
 

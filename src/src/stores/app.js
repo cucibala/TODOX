@@ -5,9 +5,9 @@ export const useAppStore = defineStore('app', () => {
   // 状态
   const isCompactMode = ref(false)
   const isAlwaysOnTop = ref(true)
-  const isDesktopMode = ref(false)
   const showLockScreen = ref(false)
   const currentPage = ref('home') // 'home' | 'settings' | 'chat'
+  const isAppReady = ref(false) // 应用是否初始化完成
   
   // Toast
   const toastMessage = ref('')
@@ -70,12 +70,6 @@ export const useAppStore = defineStore('app', () => {
     electronAPI.onAlwaysOnTopChanged((onTop) => {
       isAlwaysOnTop.value = onTop
     })
-    
-    // 监听桌面模式变化
-    electronAPI.onDesktopModeChanged((desktop) => {
-      isDesktopMode.value = desktop
-      toast(desktop ? '已进入桌面背景模式' : '已退出桌面背景模式')
-    })
   }
   
   // Toast 提示
@@ -134,10 +128,6 @@ export const useAppStore = defineStore('app', () => {
     electronAPI.toggleAlwaysOnTop()
   }
   
-  function toggleDesktopMode() {
-    electronAPI.toggleDesktopMode()
-  }
-  
   // 锁定/解锁
   async function lockApp() {
     const result = await electronAPI.hasPassword()
@@ -167,9 +157,9 @@ export const useAppStore = defineStore('app', () => {
     // 状态
     isCompactMode,
     isAlwaysOnTop,
-    isDesktopMode,
     showLockScreen,
     currentPage,
+    isAppReady,
     toastMessage,
     showToast,
     showSubtaskDialog,
@@ -202,7 +192,6 @@ export const useAppStore = defineStore('app', () => {
     closeWindow,
     toggleCompactMode,
     toggleAlwaysOnTop,
-    toggleDesktopMode,
     lockApp,
     unlockApp
   }

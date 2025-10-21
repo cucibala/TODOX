@@ -76,11 +76,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowClose: () => ipcRenderer.send('window-close'),
   toggleCompactMode: () => ipcRenderer.send('toggle-compact-mode'),
   toggleAlwaysOnTop: () => ipcRenderer.send('toggle-always-on-top'),
-  toggleDesktopMode: () => ipcRenderer.send('toggle-desktop-mode'),
   
   // 监听模式变化
   onModeChanged: (callback) => ipcRenderer.on('mode-changed', (event, isCompact) => callback(isCompact)),
-  onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop)),
-  onDesktopModeChanged: (callback) => ipcRenderer.on('desktop-mode-changed', (event, isDesktop) => callback(isDesktop))
+  onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop))
 });
 

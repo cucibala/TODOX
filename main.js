@@ -215,8 +215,7 @@ function migrateFromJSONIfNeeded() {
 let mainWindow;
 let tray = null;
 let isCompactMode = false;
-let isAlwaysOnTop = true;
-let isDesktopMode = false; // 桌面模式
+let isAlwaysOnTop = false;
 
 // 简单的密码加密（Base64 + 混淆）
 function encryptPassword(password) {
@@ -248,7 +247,6 @@ function loadSettings() {
       const settings = JSON.parse(data);
       isCompactMode = settings.compactMode || false;
       isAlwaysOnTop = settings.alwaysOnTop !== undefined ? settings.alwaysOnTop : true;
-      isDesktopMode = settings.desktopMode || false;
       
       // 加载自定义数据路径
       if (settings.customDataPath) {
@@ -284,7 +282,6 @@ function saveSettings() {
       ...existingSettings, // 保留现有的所有设置
       compactMode: isCompactMode,
       alwaysOnTop: isAlwaysOnTop,
-      desktopMode: isDesktopMode,
       customDataPath: currentDataPath !== app.getPath('userData') ? currentDataPath : undefined
     };
     fs.writeFileSync(globalSettingsPath, JSON.stringify(settings, null, 2), 'utf-8');
@@ -316,12 +313,12 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    backgroundColor: isDesktopMode ? 'rgba(0, 0, 0, 0)' : '#f5f7fa',
+    backgroundColor: '#f7fafc',
     show: false,
     frame: false, // 无边框
-    transparent: isDesktopMode, // 桌面模式时启用透明
-    alwaysOnTop: isDesktopMode ? false : isAlwaysOnTop, // 桌面模式时不置顶
-    skipTaskbar: isDesktopMode, // 桌面模式时不显示在任务栏
+    transparent: false,
+    alwaysOnTop: isAlwaysOnTop,
+    skipTaskbar: false,
     resizable: !isCompactMode
   });
 
@@ -341,19 +338,16 @@ function createWindow() {
     mainWindow.loadFile(vueDistPath);
   }
 
-  // 窗口加载完成后显示
+  // 窗口加载完成后显示（添加短暂延迟，等待初始数据加载）
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    
-    // 如果是桌面模式，设置为最底层
-    if (isDesktopMode) {
-      setDesktopLevel();
-    }
-    
-    // 发送初始状态
-    mainWindow.webContents.send('mode-changed', isCompactMode);
-    mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
-    mainWindow.webContents.send('desktop-mode-changed', isDesktopMode);
+    // 延迟显示窗口，给 Vue 应用更多时间初始化
+    setTimeout(() => {
+      mainWindow.show();
+      
+      // 发送初始状态
+      mainWindow.webContents.send('mode-changed', isCompactMode);
+      mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
+    }, 100); // 100ms 延迟，减少闪烁
   });
 
 
@@ -471,12 +465,6 @@ function updateTrayMenu() {
       }
     },
     {
-      label: isDesktopMode ? '退出桌面模式' : '桌面背景模式',
-      click: () => {
-        toggleDesktopMode();
-      }
-    },
-    {
       label: isAlwaysOnTop ? '取消置顶' : '窗口置顶',
       click: () => {
         isAlwaysOnTop = !isAlwaysOnTop;
@@ -484,8 +472,7 @@ function updateTrayMenu() {
         mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
         saveSettings();
         updateTrayMenu(); // 只更新菜单，不重新创建托盘
-      },
-      enabled: !isDesktopMode // 桌面模式下禁用
+      }
     },
     {
       label: isCompactMode ? '完整模式' : '迷你模式',
@@ -525,49 +512,6 @@ function toggleCompactMode() {
   updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
 }
 
-// 设置桌面层级
-function setDesktopLevel() {
-  if (process.platform === 'win32') {
-    // Windows 上设置为最底层
-    mainWindow.setAlwaysOnTop(false, 'normal', -1);
-  } else if (process.platform === 'darwin') {
-    // macOS 上设置为桌面层级
-    mainWindow.setAlwaysOnTop(false);
-    app.dock.hide();
-  } else {
-    // Linux 上设置为桌面层级
-    mainWindow.setAlwaysOnTop(false);
-  }
-}
-
-// 切换桌面模式
-function toggleDesktopMode() {
-  isDesktopMode = !isDesktopMode;
-  
-  if (isDesktopMode) {
-    // 进入桌面模式
-    // 先关闭窗口，重新创建以应用透明背景
-    const bounds = mainWindow.getBounds();
-    mainWindow.close();
-    
-    setTimeout(() => {
-      createWindow();
-      mainWindow.setBounds(bounds);
-    }, 100);
-  } else {
-    // 退出桌面模式
-    const bounds = mainWindow.getBounds();
-    mainWindow.close();
-    
-    setTimeout(() => {
-      createWindow();
-      mainWindow.setBounds(bounds);
-    }, 100);
-  }
-  
-  saveSettings();
-  updateTrayMenu();
-}
 
 // 应用准备就绪
 app.whenReady().then(() => {
@@ -634,11 +578,6 @@ ipcMain.on('toggle-always-on-top', () => {
 // 手动触发位置检查（用于测试）
 ipcMain.on('check-window-position', () => {
   checkWindowPosition();
-});
-
-// 切换桌面模式
-ipcMain.on('toggle-desktop-mode', () => {
-  toggleDesktopMode();
 });
 
 // IPC 通信处理 - 读取项目数据
