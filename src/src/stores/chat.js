@@ -5,7 +5,8 @@ import { useTodoStore } from './todo'
 import { useProjectStore } from './project'
 import { DeepSeekClient } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
-import { availableTools, executeToolFunction, executeCreateProjectWithTasks, executeUpdateProjectTasks, executeAddProjectTasks, executeUpdateTaskSubtasks, executeAddTask, executeEditSubtask, executeDeleteTask, executeDeleteSubtask, generateId } from '../utils/tools'
+import { generateId } from '../utils/tools'
+import { AITool, availableTools } from '../utils/ai_tool'
 
 export const useChatStore = defineStore('chat', () => {
   const appStore = useAppStore()
@@ -319,6 +320,13 @@ export const useChatStore = defineStore('chat', () => {
               messages.value[streamingMessageIndex.value].tool_calls = toolCalls
             }
             
+            // 创建 AI 工具实例
+            const aiTool = new AITool(
+              { todoStore: useTodoStore(), projectStore: useProjectStore() },
+              currentClient.value,
+              projectIds
+            )
+            
             // 执行工具调用
             for (const toolCall of toolCalls) {
               console.log('🔧 执行工具:', toolCall.function.name, toolCall.function.arguments)
@@ -343,125 +351,76 @@ export const useChatStore = defineStore('chat', () => {
               const toolMessageIndex = messages.value.length - 1
               
               try {
-                // 执行工具函数
-                let result = executeToolFunction(
-                  toolCall.function.name,
-                  args,
-                  { todoStore: useTodoStore(), projectStore: useProjectStore() },
-                  currentClient.value,
-                  projectIds
-                )
+                // 检查工具是否存在
+                if (!aiTool[toolCall.function.name]) {
+                  throw new Error(`未知的工具函数: ${toolCall.function.name}`)
+                }
                 
-                // 如果是异步工具（返回 _async 标记）
-                if (result._async) {
-                  // 处理需要进度显示的异步工具
-                  if (result.functionName === 'createProjectWithTasks' || result.functionName === 'updateProjectTasks' || 
-                      result.functionName === 'addProjectTasks' || result.functionName === 'updateTaskSubtasks' || 
-                      result.functionName === 'addTask') {
-                    
-                    const progressMessageIndex = messages.value.length
-                    const actionText = result.functionName === 'updateProjectTasks' ? '调整项目'
-                      : result.functionName === 'addProjectTasks' ? '添加任务'
-                      : result.functionName === 'updateTaskSubtasks' ? '修改子任务'
-                      : result.functionName === 'addTask' ? '添加任务'
-                      : '创建项目'
-                    
-                    messages.value.push({
-                      id: generateId(),
-                      role: 'assistant',
-                      content: `🚀 开始${actionText}...`,
-                      timestamp: Date.now(),
-                      isProgress: true
-                    })
-                    
-                    let elapsedSeconds = 0
-                    let currentStatus = `🚀 开始${actionText}...`
-                    const startTime = Date.now()
-                    const timerInterval = setInterval(() => {
-                      elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
-                      if (messages.value[progressMessageIndex]) {
-                        messages.value[progressMessageIndex].content = `${currentStatus}\n⏱️ 已等待 ${elapsedSeconds} 秒`
-                      }
-                    }, 1000)
-                    
-                    const onProgress = (status) => {
-                      currentStatus = status
-                      if (messages.value[progressMessageIndex]) {
-                        messages.value[progressMessageIndex].content = `${status}\n⏱️ 已等待 ${elapsedSeconds} 秒`
-                      }
+                let result
+                
+                // 需要进度显示的异步工具
+                const needsProgress = ['createProjectWithTasks', 'updateProjectTasks', 
+                  'addProjectTasks', 'updateTaskSubtasks', 'addTask'].includes(toolCall.function.name)
+                
+                if (needsProgress) {
+                  const progressMessageIndex = messages.value.length
+                  const actionText = toolCall.function.name === 'updateProjectTasks' ? '调整项目'
+                    : toolCall.function.name === 'addProjectTasks' ? '添加任务'
+                    : toolCall.function.name === 'updateTaskSubtasks' ? '修改子任务'
+                    : toolCall.function.name === 'addTask' ? '添加任务'
+                    : '创建项目'
+                  
+                  messages.value.push({
+                    id: generateId(),
+                    role: 'assistant',
+                    content: `🚀 开始${actionText}...`,
+                    timestamp: Date.now(),
+                    isProgress: true
+                  })
+                  
+                  let elapsedSeconds = 0
+                  let currentStatus = `🚀 开始${actionText}...`
+                  const startTime = Date.now()
+                  const timerInterval = setInterval(() => {
+                    elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+                    if (messages.value[progressMessageIndex]) {
+                      messages.value[progressMessageIndex].content = `${currentStatus}\n⏱️ 已等待 ${elapsedSeconds} 秒`
                     }
-                    
-                    try {
-                      const todoStore = useTodoStore()
-                      const projectStore = useProjectStore()
-                      
-                      if (result.functionName === 'createProjectWithTasks') {
-                        result = await executeCreateProjectWithTasks(
-                          result.args,
-                          { todoStore, projectStore },
-                          currentClient.value,
-                          onProgress,
-                          projectIds
-                        )
-                        if (result.projectId) {
-                          recentProjectId.value = result.projectId
-                        }
-                      } else if (result.functionName === 'updateProjectTasks') {
-                        if (!result.args.projectId && recentProjectId.value) {
-                          result.args.projectId = recentProjectId.value
-                        }
-                        result = await executeUpdateProjectTasks(
-                          result.args,
-                          { todoStore, projectStore },
-                          currentClient.value,
-                          onProgress
-                        )
-                      } else if (result.functionName === 'addProjectTasks') {
-                        if (!result.args.projectId && recentProjectId.value) {
-                          result.args.projectId = recentProjectId.value
-                        }
-                        result = await executeAddProjectTasks(
-                          result.args,
-                          { todoStore, projectStore },
-                          currentClient.value,
-                          onProgress
-                        )
-                      } else if (result.functionName === 'updateTaskSubtasks') {
-                        result = await executeUpdateTaskSubtasks(
-                          result.args,
-                          { todoStore, projectStore },
-                          currentClient.value,
-                          onProgress
-                        )
-                      } else if (result.functionName === 'addTask') {
-                        if (!result.args.projectId && recentProjectId.value) {
-                          result.args.projectId = recentProjectId.value
-                        }
-                        result = await executeAddTask(
-                          result.args,
-                          { todoStore, projectStore },
-                          currentClient.value,
-                          onProgress
-                        )
-                      } else if (result.functionName === 'editSubtask') {
-                        result = await executeEditSubtask(
-                          result.args,
-                          { todoStore, projectStore },
-                          currentClient.value,
-                          onProgress
-                        )
-                      }
-                    } finally {
-                      clearInterval(timerInterval)
-                      // 更新为最终状态（不删除，保留完成消息）
-                      if (messages.value[progressMessageIndex]) {
-                        // 移除计时信息，只保留最终状态
-                        const finalStatus = currentStatus.split('\n')[0] // 移除 "⏱️ 已等待 X 秒"
-                        messages.value[progressMessageIndex].content = finalStatus
-                        messages.value[progressMessageIndex].isProgress = false // 标记为普通消息（停止动画）
-                      }
+                  }, 1000)
+                  
+                  const onProgress = (status) => {
+                    currentStatus = status
+                    if (messages.value[progressMessageIndex]) {
+                      messages.value[progressMessageIndex].content = `${status}\n⏱️ 已等待 ${elapsedSeconds} 秒`
                     }
                   }
+                  
+                  try {
+                    // 自动补充 projectId（如果需要）
+                    if (!args.projectId && recentProjectId.value && 
+                        ['updateProjectTasks', 'addProjectTasks', 'addTask'].includes(toolCall.function.name)) {
+                      args.projectId = recentProjectId.value
+                    }
+                    
+                    // 执行工具
+                    result = await aiTool.execute(toolCall.function.name, args, onProgress)
+                    
+                    // 保存最近创建的项目ID
+                    if (toolCall.function.name === 'createProjectWithTasks' && result.projectId) {
+                      recentProjectId.value = result.projectId
+                    }
+                  } finally {
+                    clearInterval(timerInterval)
+                    // 更新为最终状态
+                    if (messages.value[progressMessageIndex]) {
+                      const finalStatus = currentStatus.split('\n')[0]
+                      messages.value[progressMessageIndex].content = finalStatus
+                      messages.value[progressMessageIndex].isProgress = false
+                    }
+                  }
+                } else {
+                  // 同步工具或不需要进度显示的工具
+                  result = await aiTool.execute(toolCall.function.name, args)
                 }
                 
                 // 更新工具结果

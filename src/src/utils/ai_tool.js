@@ -1,0 +1,1428 @@
+// AI 工具类 - 封装所有 AI 可调用的工具函数
+import { generateId, generateSubId } from './tools'
+
+
+// 定义可用的工具函数列表
+export const availableTools = [
+  {
+    type: 'function',
+    function: {
+      name: 'getTodayTasks',
+      description: '获取今天添加的任务列表，包括任务内容、优先级、完成状态、子任务等信息',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getAllTasks',
+      description: '获取所有任务列表，包括已完成和未完成的任务',
+      parameters: {
+        type: 'object',
+        properties: {
+          includeCompleted: {
+            type: 'boolean',
+            description: '是否包括已完成的任务，默认为 true'
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getTasksByProject',
+      description: '获取指定项目下的任务',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'string',
+            description: '项目 ID，如果为 null 则获取未分类的任务'
+          }
+        },
+        required: ['projectId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getProjects',
+      description: '获取所有项目列表，包括项目名称、颜色、统计信息等',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'searchTasks',
+      description: '搜索包含关键词的任务',
+      parameters: {
+        type: 'object',
+        properties: {
+          keyword: {
+            type: 'string',
+            description: '搜索关键词'
+          }
+        },
+        required: ['keyword']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'createProjectWithTasks',
+      description: '根据用户描述智能创建项目并生成任务和子任务。适用于制定计划、项目管理等场景，如"减肥计划30天"、"学习Python课程"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          description: {
+            type: 'string',
+            description: '项目描述，包括项目目标、时间范围、具体要求等信息'
+          },
+          projectName: {
+            type: 'string',
+            description: '项目名称，如果用户未明确指定，可以从描述中提取'
+          }
+        },
+        required: ['description', 'projectName']
+      }
+    }
+  },
+  // {
+  //   type: 'function',
+  //   function: {
+  //     name: 'updateProjectTasks',
+  //     description: '根据用户反馈调整现有项目的任务。用于修改、优化或重新规划项目任务，如"第3天太难了，简化一下"、"增加一些饮食控制的任务"等',
+  //     parameters: {
+  //       type: 'object',
+  //       properties: {
+  //         projectId: {
+  //           type: 'number',
+  //           description: '要更新的项目ID'
+  //         },
+  //         feedback: {
+  //           type: 'string',
+  //           description: '用户的反馈和调整要求'
+  //         }
+  //       },
+  //       required: ['projectId', 'feedback']
+  //     }
+  //   }
+  // },
+  {
+    type: 'function',
+    function: {
+      name: 'addProjectTasks',
+      description: '为现有项目添加新任务。用于扩展项目、增加新的每日任务或补充内容，如"再添加7天任务"、"增加第31-40天的内容"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'number',
+            description: '要添加任务的项目ID'
+          },
+          description: {
+            type: 'string',
+            description: '新任务的描述，包括要添加的内容、天数、具体要求等'
+          },
+          startDay: {
+            type: 'number',
+            description: '从第几天开始添加（可选，默认为项目现有任务数+1）'
+          }
+        },
+        required: ['projectId', 'description']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'updateTaskSubtasks',
+      description: '修改指定任务的子任务列表。用于增加、删除或修改子任务，如"给第一个任务增加权限申请的子任务"、"删除第二个任务的第3个子任务"、"修改环境准备任务的子任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '要修改的任务ID'
+          },
+          taskText: {
+            type: 'string',
+            description: '任务标题（用于AI确认是否是正确的任务）'
+          },
+          operation: {
+            type: 'string',
+            enum: ['add', 'delete', 'update', 'replace'],
+            description: '操作类型：add=添加新子任务, delete=删除指定子任务, update=修改特定子任务, replace=完全替换所有子任务'
+          },
+          feedback: {
+            type: 'string',
+            description: '用户的具体要求，如"增加权限申请相关的子任务"、"删除第3个子任务"、"把子任务改得更详细一些"'
+          }
+        },
+        required: ['taskId', 'operation', 'feedback']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'editSubtask',
+      description: '直接编辑指定子任务的属性（文本、权重、是否需要输入等）。用于精确修改单个子任务，如"把第一个任务的第2个子任务的权重改为5"、"修改子任务的描述为XX"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '任务ID'
+          },
+          subtaskId: {
+            type: 'number',
+            description: '子任务ID'
+          },
+          updates: {
+            type: 'object',
+            description: '要更新的字段，可包含：text（文本）、weight（权重1-5）、requiresInput（是否需要输入）',
+            properties: {
+              text: {
+                type: 'string',
+                description: '新的子任务文本'
+              },
+              weight: {
+                type: 'number',
+                description: '权重（1-5）'
+              },
+              requiresInput: {
+                type: 'boolean',
+                description: '是否需要输入'
+              }
+            }
+          }
+        },
+        required: ['taskId', 'subtaskId', 'updates']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deleteSubtask',
+      description: '删除指定任务的指定子任务。用于移除不需要的子任务，如"删除第一个任务的第2个子任务"、"把环境准备的第3个子任务删掉"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '任务ID'
+          },
+          subtaskId: {
+            type: 'number',
+            description: '子任务ID'
+          },
+          subtaskText: {
+            type: 'string',
+            description: '子任务文本（用于确认）'
+          }
+        },
+        required: ['taskId', 'subtaskId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deleteTask',
+      description: '删除指定的任务。用于移除不需要的任务，如"删除第3个任务"、"删除环境准备这个任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskId: {
+            type: 'number',
+            description: '要删除的任务ID'
+          },
+          taskText: {
+            type: 'string',
+            description: '任务标题（用于确认）'
+          }
+        },
+        required: ['taskId']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'addTask',
+      description: '为项目添加一个新任务。用于补充单个任务，如"添加一个部署任务"、"增加代码审查任务"等',
+      parameters: {
+        type: 'object',
+        properties: {
+          projectId: {
+            type: 'number',
+            description: '要添加任务的项目ID'
+          },
+          taskDescription: {
+            type: 'string',
+            description: '新任务的描述，包括任务内容、要求等'
+          },
+          position: {
+            type: 'string',
+            enum: ['beginning', 'end', 'after'],
+            description: '插入位置：beginning=开头, end=结尾, after=指定任务之后'
+          },
+          afterTaskId: {
+            type: 'number',
+            description: '如果position为after，指定在哪个任务之后插入'
+          }
+        },
+        required: ['projectId', 'taskDescription', 'position']
+      }
+    }
+  }
+]
+
+/**
+ * AI 工具类
+ * 使用方式：
+ *   const aiTool = new AITool(stores, client, selectedProjectIds)
+ *   if (aiTool[functionName]) {
+ *     const result = await aiTool.execute(functionName, args, onProgress)
+ *   }
+ */
+export class AITool {
+  constructor(stores, client = null, selectedProjectIds = []) {
+    this.todoStore = stores.todoStore
+    this.projectStore = stores.projectStore
+    this.client = client
+    this.selectedProjectIds = selectedProjectIds
+  }
+
+  /**
+   * 统一执行入口
+   * @param {string} functionName - 函数名
+   * @param {object} args - 参数
+   * @param {function} onProgress - 进度回调（可选）
+   * @returns {Promise<any>} 执行结果
+   */
+  async execute(functionName, args = {}, onProgress = null) {
+    if (!this[functionName]) {
+      throw new Error(`未知的工具函数: ${functionName}`)
+    }
+    return await this[functionName](args, onProgress)
+  }
+
+  /**
+   * 获取今天添加的任务列表
+   */
+  async getTodayTasks() {
+    let todos = this._getFilteredTodos()
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    return todos.filter(task => {
+      const taskDate = new Date(task.createdAt)
+      taskDate.setHours(0, 0, 0, 0)
+      return taskDate.getTime() === today.getTime()
+    })
+  }
+
+  /**
+   * 获取所有任务列表
+   */
+  async getAllTasks(args) {
+    const { includeCompleted = true } = args
+    let todos = this._getFilteredTodos()
+    return includeCompleted ? todos : todos.filter(t => !t.completed)
+  }
+
+  /**
+   * 获取指定项目下的任务
+   */
+  async getTasksByProject(args) {
+    const { projectId } = args
+    const targetProjectId = projectId === 'null' || projectId === null 
+      ? null 
+      : Number(projectId)
+    
+    let todos = this._getFilteredTodos()
+    return todos.filter(t => t.projectId === targetProjectId)
+  }
+
+  /**
+   * 获取所有项目列表
+   */
+  async getProjects() {
+    const projects = this.projectStore.projects || []
+    const todos = this.todoStore.todos || []
+    
+    return projects.map(p => ({
+      id: p.id,
+      name: p.name,
+      color: p.color,
+      taskCount: todos.filter(t => t.projectId === p.id).length,
+      completedCount: todos.filter(t => t.projectId === p.id && t.completed).length
+    }))
+  }
+
+  /**
+   * 搜索包含关键词的任务
+   */
+  async searchTasks(args) {
+    const { keyword } = args
+    const keywordLower = keyword.toLowerCase()
+    let todos = this._getFilteredTodos()
+    
+    return todos.filter(t => 
+      t.text.toLowerCase().includes(keywordLower) ||
+      (t.subtasks && t.subtasks.some(st => st.text.toLowerCase().includes(keywordLower)))
+    )
+  }
+
+  /**
+   * 创建项目并生成任务
+   */
+  async createProjectWithTasks(args, onProgress = null) {
+    const { description, projectName } = args
+    
+    if (!this.client) {
+      throw new Error('AI 客户端未初始化')
+    }
+    
+    // 检测是否是多天计划（用于渐进式创建）
+    const daysMatch = description.match(/(\d+)\s*[天日]/)
+    const totalDays = daysMatch ? parseInt(daysMatch[1]) : 0
+    const isProgressiveMode = totalDays > 1
+    
+    // 检测任务类型
+    const isDailyPlan = /[天日]/.test(description) && totalDays > 0
+    const isTechProject = /开发|接入|实现|集成|部署|配置|SDK|API|demo|项目/.test(description)
+    const isLearningPlan = /学习|掌握|了解|课程/.test(description)
+    
+    if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
+    
+    // 获取今天的日期
+    const today = new Date()
+    const todayStr = today.toISOString().split('T')[0]
+    
+    // 调用 AI 生成项目信息和初始任务
+    const batchSize = 1
+    const promptDays = isProgressiveMode ? Math.min(batchSize, totalDays) : totalDays
+    
+    const taskTypeHint = isDailyPlan ? '这是一个每日计划，需要按天分解任务。' 
+      : isTechProject ? '这是一个技术项目，需要按开发阶段/功能模块分解任务。'
+      : isLearningPlan ? '这是一个学习计划，需要按知识点/章节分解任务。'
+      : '根据项目性质合理分解任务。'
+    
+    const prompt = `根据描述生成项目计划。${isProgressiveMode ? `${totalDays}天计划，现生成前${promptDays}天。` : ''}
+
+日期：${todayStr}(今天) | 描述：${description} | 名称：${projectName} | 类型：${taskTypeHint}${isProgressiveMode ? ` | 总${totalDays}天，本批${promptDays}天` : ''}
+
+返回格式（简写字段节省token）：
+{
+  "p": {"n": "项目名", "c": "#8A9DFB"},
+  "t": [
+    {
+      "tx": "任务标题",
+      "pr": "h/m/l",
+      "dd": "${todayStr}",
+      "s": [
+        {"tx": "子任务", "w": 3, "r": 0}
+      ]
+    }
+  ]
+}
+
+字段说明：p=project, n=name, c=color, t=tasks, tx=text, pr=priority(h/m/l), dd=dueDate, s=subtasks, w=weight(1-5), r=requiresInput(0/1)
+
+要求：
+1. ${isDailyPlan ? `每日计划：任务命名"第N天 - 描述"，${isProgressiveMode ? `生成${promptDays}天` : `生成${totalDays}天`}，日期从${todayStr}连续递增，子任务具体可执行` : isTechProject ? '技术项目：按阶段划分(环境→开发→测试→部署)，任务具体，子任务细化到可执行步骤' : isLearningPlan ? '学习计划：按知识点/章节划分，含理论+实践+总结' : '合理分解任务'}
+2. 任务数${isDailyPlan ? (isProgressiveMode ? promptDays : totalDays) : '5-15'}个，每个3-8个子任务
+3. 优先级：前期m，中期h，后期m
+4. 需记录结果的子任务设r=1（如：测体重、记录配置）
+5. 颜色可选：#8A9DFB/#FF6B6B/#4ECDC4/#95E1D3
+6. 只返回JSON，无其他文字`
+
+    const messages = [
+      {
+        role: 'system',
+        content: '你是一个专业的项目管理助手，擅长将用户的想法转化为结构化、可执行的项目计划。你特别擅长制定每日计划，能够将长期目标拆解为具体的每日任务清单，类似于打卡系统。'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
+    
+    const content = await this.client.chatCompletions(messages, { maxTokens: 8000 })
+    
+    if (onProgress) onProgress('📋 项目计划已生成，正在解析...')
+    
+    // 解析 JSON
+    let projectPlan
+    try {
+      projectPlan = JSON.parse(content.trim())
+    } catch (e) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        projectPlan = JSON.parse(jsonMatch[0])
+      } else {
+        console.error('AI 返回内容:', content)
+        throw new Error('AI 返回的项目计划格式不正确')
+      }
+    }
+    
+    // 验证项目计划结构
+    const projectData = projectPlan.p || projectPlan.project
+    const tasksData = projectPlan.t || projectPlan.tasks
+    
+    if (!projectData || !tasksData || !Array.isArray(tasksData)) {
+      console.error('项目计划结构不完整:', projectPlan)
+      throw new Error('项目计划结构不完整，缺少必要字段')
+    }
+    
+    const finalProjectName = projectData.n || projectData.name || projectName
+    if (onProgress) onProgress(`📁 正在创建项目"${finalProjectName}"...`)
+    
+    // 创建项目
+    const projectColor = projectData.c || projectData.color || '#8A9DFB'
+    const project = {
+      id: generateId(),
+      name: finalProjectName,
+      color: projectColor,
+      createdAt: new Date().toISOString()
+    }
+    
+    this.projectStore.projects.push(project)
+    this.projectStore.currentProjectId = project.id
+    await window.electronAPI.addProject(JSON.parse(JSON.stringify(project)))
+    await window.electronAPI.setCurrentProject(project.id)
+    
+    // 创建第一批任务
+    const createdTasks = []
+    const firstBatchTasks = tasksData
+    
+    for (let i = 0; i < firstBatchTasks.length; i++) {
+      const taskData = firstBatchTasks[i]
+      
+      const dayNumber = i + 1
+      const overallProgress = isProgressiveMode 
+        ? Math.round((dayNumber / totalDays) * 100)
+        : Math.round((dayNumber / firstBatchTasks.length) * 100)
+      
+      if (onProgress) {
+        onProgress(`✅ 正在创建第 ${dayNumber} 天的任务... ${isProgressiveMode ? `(${overallProgress}%)` : ''}`)
+      }
+      
+      const taskText = taskData.tx || taskData.text
+      const taskPriority = taskData.pr || taskData.priority
+      const taskDueDate = taskData.dd || taskData.dueDate
+      const taskSubtasks = taskData.s || taskData.subtasks || []
+      
+      let finalDueDate = taskDueDate
+      if (!finalDueDate) {
+        const dueDate = new Date()
+        dueDate.setDate(dueDate.getDate() + i)
+        finalDueDate = dueDate.toISOString().split('T')[0]
+      }
+      
+      let priority = 'medium'
+      if (taskPriority === 'h' || taskPriority === 'high') priority = 'high'
+      else if (taskPriority === 'l' || taskPriority === 'low') priority = 'low'
+      else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
+      else if (taskPriority) priority = taskPriority
+      
+      const taskId = generateId()
+      const task = {
+        id: taskId,
+        text: taskText,
+        completed: false,
+        priority,
+        projectId: project.id,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        dueDate: finalDueDate,
+        images: [],
+        pinned: false,
+        subtasks: taskSubtasks.map((st, idx) => {
+          const subtaskText = st.tx || st.text
+          const subtaskWeight = st.w || st.weight || 3
+          const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
+          
+          return {
+            id: generateSubId(taskId, idx),
+            text: subtaskText,
+            completed: false,
+            weight: subtaskWeight,
+            requiresInput: subtaskRequiresInput,
+            inputValue: ''
+          }
+        }),
+        progressRecords: []
+      }
+      
+      this.todoStore.todos.push(task)
+      createdTasks.push(task)
+      await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+      
+      if (i < firstBatchTasks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+    }
+    
+    // 如果是渐进模式且还有剩余天数，继续创建
+    if (isProgressiveMode && firstBatchTasks.length < totalDays) {
+      const baseDate = new Date(today)
+      await this._createRemainingDays(project, totalDays, firstBatchTasks.length, description, onProgress, baseDate)
+    }
+    
+    if (onProgress) onProgress(`🎉 项目"${finalProjectName}"创建成功！共创建 ${this.todoStore.todos.filter(t => t.projectId === project.id).length} 个任务 (100%)`)
+    
+    return {
+      success: true,
+      projectId: project.id,
+      projectName: finalProjectName,
+      tasksCreated: createdTasks.length
+    }
+  }
+
+  /**
+   * 更新项目任务
+   */
+  async updateProjectTasks(args, onProgress = null) {
+    const { projectId, feedback } = args
+    
+    if (!this.client) {
+      throw new Error('AI 客户端未初始化')
+    }
+    
+    const project = this.projectStore.projects.find(p => p.id === projectId)
+    if (!project) {
+      throw new Error(`找不到ID为${projectId}的项目`)
+    }
+    
+    const projectTasks = this.todoStore.todos.filter(t => t.projectId === projectId)
+    if (projectTasks.length === 0) {
+      throw new Error(`项目"${project.name}"还没有任务`)
+    }
+    
+    if (onProgress) onProgress(`🤔 正在分析您对"${project.name}"的反馈...`)
+    
+    const tasksInfo = projectTasks.map((t, i) => ({
+      index: i + 1,
+      text: t.text,
+      dueDate: t.dueDate,
+      completed: t.completed,
+      completedAt: t.completedAt,
+      subtasks: t.subtasks.map(st => ({
+        text: st.text,
+        completed: st.completed,
+        weight: st.weight
+      }))
+    }))
+    
+    const prompt = `你正在帮助用户调整项目"${project.name}"的任务计划。
+
+【当前任务列表】：
+${JSON.stringify(tasksInfo, null, 2)}
+
+【用户反馈】：${feedback}
+
+请根据用户的反馈，生成调整后的完整任务列表。返回 JSON 格式：
+{
+  "tasks": [
+    {
+      "text": "任务标题",
+      "priority": "high/medium/low",
+      "dueDate": "YYYY-MM-DD",
+      "completed": false,
+      "subtasks": [
+        {"text": "子任务", "weight": 3, "requiresInput": false, "completed": false}
+      ]
+    }
+  ]
+}
+
+**重要要求**：
+1. **已完成的任务必须保留**：如果任务的 completed 为 true，必须保持其 completed 状态
+2. 已完成任务的子任务完成状态也必须保留
+3. 根据反馈调整未完成的任务（简化、增加、修改等）
+4. 确保任务仍然循序渐进
+5. 日期从第一个任务的日期开始连续
+6. 只返回 JSON，不要其他内容`
+
+    const content = await this.client.chatCompletions([
+      { role: 'system', content: '你是一个专业的项目管理助手，擅长根据用户反馈优化项目计划。' },
+      { role: 'user', content: prompt }
+    ], { maxTokens: 8000 })
+    
+    if (onProgress) onProgress('📋 正在应用调整方案...')
+    
+    let updatedPlan
+    try {
+      updatedPlan = JSON.parse(content.trim())
+    } catch (e) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        updatedPlan = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('AI 返回的调整方案格式不正确')
+      }
+    }
+    
+    if (!updatedPlan.tasks || !Array.isArray(updatedPlan.tasks)) {
+      throw new Error('调整方案结构不完整')
+    }
+    
+    // 删除原有任务
+    this.todoStore.todos = this.todoStore.todos.filter(t => t.projectId !== projectId)
+    
+    // 创建新任务
+    const createdTasks = []
+    
+    for (let i = 0; i < updatedPlan.tasks.length; i++) {
+      const taskData = updatedPlan.tasks[i]
+      const originalTask = projectTasks[i]
+      
+      if (onProgress) {
+        onProgress(`✅ 正在更新任务 ${i + 1}/${updatedPlan.tasks.length}...`)
+      }
+      
+      let finalDueDate = taskData.dueDate
+      if (!finalDueDate) {
+        const dueDate = new Date()
+        dueDate.setDate(dueDate.getDate() + i)
+        finalDueDate = dueDate.toISOString().split('T')[0]
+      }
+      
+      const taskId = originalTask?.id || generateId()
+      const task = {
+        id: taskId,
+        text: taskData.text,
+        completed: taskData.completed || false,
+        priority: taskData.priority || 'medium',
+        projectId: project.id,
+        createdAt: originalTask?.createdAt || new Date().toISOString(),
+        completedAt: taskData.completed && originalTask?.completedAt ? originalTask.completedAt : null,
+        dueDate: finalDueDate,
+        images: originalTask?.images || [],
+        pinned: originalTask?.pinned || false,
+        subtasks: (taskData.subtasks || []).map((st, idx) => {
+          const originalSubtask = originalTask?.subtasks?.[idx]
+          return {
+            id: originalSubtask?.id || generateSubId(taskId, idx),
+            text: st.text,
+            completed: st.completed || false,
+            weight: st.weight || 3,
+            requiresInput: st.requiresInput || false,
+            inputValue: originalSubtask?.inputValue || '',
+            completedAt: st.completed && originalSubtask?.completedAt ? originalSubtask.completedAt : null
+          }
+        }),
+        progressRecords: originalTask?.progressRecords || []
+      }
+      
+      this.todoStore.todos.push(task)
+      createdTasks.push(task)
+      
+      if (originalTask) {
+        await window.electronAPI.updateTodo(task.id, JSON.parse(JSON.stringify(task)))
+      } else {
+        await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+      }
+      
+      if (i < updatedPlan.tasks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+    }
+    
+    // 删除多余的原有任务
+    if (updatedPlan.tasks.length < projectTasks.length) {
+      for (let i = updatedPlan.tasks.length; i < projectTasks.length; i++) {
+        const taskToDelete = projectTasks[i]
+        if (taskToDelete) {
+          await window.electronAPI.deleteTodo(taskToDelete.id)
+        }
+      }
+    }
+    
+    if (onProgress) onProgress(`🎉 项目"${project.name}"已更新！共 ${createdTasks.length} 个任务`)
+    
+    return {
+      success: true,
+      projectId: project.id,
+      projectName: project.name,
+      tasksUpdated: createdTasks.length
+    }
+  }
+
+  /**
+   * 为项目添加新任务
+   */
+  async addProjectTasks(args, onProgress = null) {
+    const { projectId, description, startDay } = args
+    
+    if (!this.client) {
+      throw new Error('AI 客户端未初始化')
+    }
+    
+    const project = this.projectStore.projects.find(p => p.id === projectId)
+    if (!project) {
+      throw new Error(`找不到ID为${projectId}的项目`)
+    }
+    
+    const projectTasks = this.todoStore.todos.filter(t => t.projectId === projectId)
+    const currentTaskCount = projectTasks.length
+    const actualStartDay = startDay || (currentTaskCount + 1)
+    
+    if (onProgress) onProgress(`🤔 正在分析要添加的任务...`)
+    
+    let startDate
+    if (projectTasks.length > 0) {
+      const lastTask = projectTasks.sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))[0]
+      startDate = new Date(lastTask.dueDate)
+      startDate.setDate(startDate.getDate() + 1)
+    } else {
+      startDate = new Date()
+    }
+    const startDateStr = startDate.toISOString().split('T')[0]
+    
+    const daysMatch = description.match(/(\d+)\s*[天日]/)
+    const daysToAdd = daysMatch ? parseInt(daysMatch[1]) : 7
+    
+    const prompt = `你正在为项目"${project.name}"添加新的任务。
+
+【项目信息】：
+- 项目名称：${project.name}
+- 现有任务数：${currentTaskCount}个
+- 新任务起始编号：第${actualStartDay}天
+- 新任务起始日期：${startDateStr}
+
+【添加要求】：${description}
+
+请生成要添加的任务列表。返回 JSON 数组格式：
+[
+  {
+    "text": "第${actualStartDay}天 - 任务标题",
+    "priority": "medium",
+    "dueDate": "${startDateStr}",
+    "subtasks": [
+      {"text": "子任务描述", "weight": 3, "requiresInput": false}
+    ]
+  }
+]
+
+**重要要求**：
+1. 任务编号从第${actualStartDay}天开始
+2. 日期从 ${startDateStr} 开始，每天递增
+3. 任务风格和难度要与项目现有任务保持一致
+4. 子任务要具体可执行
+5. 对需要记录结果的子任务设置 requiresInput: true
+6. 只返回 JSON 数组，不要其他内容`
+
+    const content = await this.client.chatCompletions([
+      { role: 'system', content: '你是一个专业的项目管理助手。' },
+      { role: 'user', content: prompt }
+    ], { maxTokens: 8000 })
+    
+    if (onProgress) onProgress('📋 正在解析新任务...')
+    
+    let newTasks
+    try {
+      newTasks = JSON.parse(content.trim())
+    } catch (e) {
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        newTasks = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('AI 返回的任务列表格式不正确')
+      }
+    }
+    
+    if (!Array.isArray(newTasks)) {
+      throw new Error('任务列表结构不正确')
+    }
+    
+    const addedTasks = []
+    
+    for (let i = 0; i < newTasks.length; i++) {
+      const taskData = newTasks[i]
+      
+      if (onProgress) {
+        onProgress(`✅ 正在添加第 ${actualStartDay + i} 天的任务... (${Math.round(((i + 1) / newTasks.length) * 100)}%)`)
+      }
+      
+      let taskDate = taskData.dueDate
+      if (!taskDate) {
+        const date = new Date(startDate)
+        date.setDate(startDate.getDate() + i)
+        taskDate = date.toISOString().split('T')[0]
+      }
+      
+      const taskId = generateId()
+      const task = {
+        id: taskId,
+        text: taskData.text,
+        completed: false,
+        priority: taskData.priority || 'medium',
+        projectId: project.id,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        dueDate: taskDate,
+        images: [],
+        pinned: false,
+        subtasks: (taskData.subtasks || []).map((st, idx) => ({
+          id: generateSubId(taskId, idx),
+          text: st.text,
+          completed: false,
+          weight: st.weight || 3,
+          requiresInput: st.requiresInput || false,
+          inputValue: ''
+        })),
+        progressRecords: []
+      }
+      
+      this.todoStore.todos.push(task)
+      addedTasks.push(task)
+      await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+      
+      if (i < newTasks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
+    }
+    
+    if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加 ${addedTasks.length} 个新任务！`)
+    
+    return {
+      success: true,
+      projectId: project.id,
+      projectName: project.name,
+      tasksAdded: addedTasks.length,
+      startDay: actualStartDay,
+      endDay: actualStartDay + addedTasks.length - 1
+    }
+  }
+
+  /**
+   * 修改任务的子任务
+   */
+  async updateTaskSubtasks(args, onProgress = null) {
+    const { taskId, taskText, operation, feedback } = args
+    
+    if (!this.client) {
+      throw new Error('AI 客户端未初始化')
+    }
+    
+    const task = this.todoStore.todos.find(t => t.id === taskId)
+    if (!task) {
+      throw new Error(`找不到ID为${taskId}的任务`)
+    }
+    
+    const project = this.projectStore.projects.find(p => p.id === task.projectId)
+    const projectName = project ? project.name : '未分类'
+    
+    if (onProgress) onProgress(`🤔 正在分析对任务"${task.text}"的子任务修改要求...`)
+    
+    const currentSubtasks = (task.subtasks || []).map((st, idx) => ({
+      index: idx + 1,
+      text: st.text,
+      weight: st.weight,
+      completed: st.completed,
+      requiresInput: st.requiresInput
+    }))
+    
+    const operationDesc = {
+      add: '添加新的子任务',
+      delete: '删除指定的子任务',
+      update: '修改现有子任务',
+      replace: '完全替换所有子任务'
+    }
+    
+    const prompt = `你正在帮助用户修改任务的子任务列表。
+
+【任务信息】：
+- 所属项目：${projectName}
+- 任务标题：${task.text}
+- 当前子任务数量：${currentSubtasks.length}个
+
+【当前子任务列表】：
+${JSON.stringify(currentSubtasks, null, 2)}
+
+【操作类型】：${operationDesc[operation]}
+【用户要求】：${feedback}
+
+请根据用户的要求，生成修改后的子任务列表。返回 JSON 数组格式：
+[
+  {
+    "text": "子任务描述（要具体可执行）",
+    "weight": 1-5,
+    "requiresInput": false,
+    "completed": false
+  }
+]
+
+**重要要求**：
+1. **${operation === 'add' ? '在现有子任务基础上添加新子任务' : operation === 'delete' ? '删除用户指定的子任务，保留其他' : operation === 'update' ? '根据要求修改特定子任务，其他保持不变' : '完全重新生成所有子任务'}**
+2. ${operation === 'replace' ? '不需要' : '需要'}保留已完成子任务的完成状态（completed: true）
+3. 子任务要具体可执行，避免含糊描述
+4. 对于需要记录结果的关键步骤，设置 requiresInput: true（如：记录配置信息、填写测试结果等）
+5. 权重（weight）：1=很简单，2=简单，3=中等，4=困难，5=很困难
+6. 只返回 JSON 数组，不要其他内容`
+
+    const content = await this.client.chatCompletions([
+      { role: 'system', content: '你是一个专业的项目管理助手，擅长将任务细化为具体可执行的子任务。' },
+      { role: 'user', content: prompt }
+    ], { maxTokens: 3000 })
+    
+    if (onProgress) onProgress('📋 正在应用子任务修改...')
+    
+    let newSubtasks
+    try {
+      newSubtasks = JSON.parse(content.trim())
+    } catch (e) {
+      const jsonMatch = content.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        newSubtasks = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('AI 返回的子任务列表格式不正确')
+      }
+    }
+    
+    if (!Array.isArray(newSubtasks)) {
+      throw new Error('子任务列表结构不正确')
+    }
+    
+    const oldSubtasksCount = task.subtasks ? task.subtasks.length : 0
+    
+    task.subtasks = newSubtasks.map((st, idx) => {
+      const originalSubtask = task.subtasks?.[idx]
+      
+      return {
+        id: originalSubtask?.id || generateSubId(task.id, idx),
+        text: st.text,
+        completed: st.completed || false,
+        weight: st.weight || 3,
+        requiresInput: st.requiresInput || false,
+        inputValue: originalSubtask?.inputValue || '',
+        completedAt: st.completed && originalSubtask?.completedAt ? originalSubtask.completedAt : null,
+        createdAt: originalSubtask?.createdAt || new Date().toISOString()
+      }
+    })
+    
+    await window.electronAPI.updateTodo(task.id, { subtasks: JSON.parse(JSON.stringify(task.subtasks)) })
+    
+    const changeDesc = operation === 'add' ? `新增 ${newSubtasks.length - oldSubtasksCount} 个子任务`
+      : operation === 'delete' ? `删除 ${oldSubtasksCount - newSubtasks.length} 个子任务`
+      : operation === 'update' ? '已更新子任务'
+      : `已替换为 ${newSubtasks.length} 个新子任务`
+    
+    if (onProgress) onProgress(`🎉 任务"${task.text}"的子任务已更新！${changeDesc}`)
+    
+    return {
+      success: true,
+      taskId: task.id,
+      taskText: task.text,
+      operation,
+      oldSubtasksCount,
+      newSubtasksCount: newSubtasks.length,
+      changeDesc
+    }
+  }
+
+  /**
+   * 添加单个新任务
+   */
+  async addTask(args, onProgress = null) {
+    const { projectId, taskDescription, position, afterTaskId } = args
+    
+    if (!this.client) {
+      throw new Error('AI 客户端未初始化')
+    }
+    
+    const project = this.projectStore.projects.find(p => p.id === projectId)
+    if (!project) {
+      throw new Error(`找不到ID为${projectId}的项目`)
+    }
+    
+    const projectTasks = this.todoStore.todos.filter(t => t.projectId === projectId)
+    
+    if (onProgress) onProgress(`🤔 正在为项目"${project.name}"生成新任务...`)
+    
+    let dueDate
+    if (position === 'beginning' && projectTasks.length > 0) {
+      const firstTask = projectTasks.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0]
+      dueDate = new Date(firstTask.dueDate)
+      dueDate.setDate(dueDate.getDate() - 1)
+    } else if (position === 'after' && afterTaskId) {
+      const afterTask = projectTasks.find(t => t.id === afterTaskId)
+      if (afterTask) {
+        dueDate = new Date(afterTask.dueDate)
+        dueDate.setDate(dueDate.getDate() + 1)
+      } else {
+        dueDate = new Date()
+      }
+    } else {
+      if (projectTasks.length > 0) {
+        const lastTask = projectTasks.sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))[0]
+        dueDate = new Date(lastTask.dueDate)
+        dueDate.setDate(dueDate.getDate() + 1)
+      } else {
+        dueDate = new Date()
+      }
+    }
+    const dueDateStr = dueDate.toISOString().split('T')[0]
+    
+    const projectContext = projectTasks.length > 0 
+      ? `\n【项目现有任务示例】：\n${projectTasks.slice(0, 3).map(t => `- ${t.text}\n  子任务数：${t.subtasks?.length || 0}`).join('\n')}`
+      : ''
+    
+    const prompt = `你正在为项目"${project.name}"添加一个新任务。
+${projectContext}
+
+【新任务要求】：${taskDescription}
+【截止日期】：${dueDateStr}
+【插入位置】：${position === 'beginning' ? '项目开头' : position === 'after' ? '指定任务之后' : '项目结尾'}
+
+请生成这个新任务。返回 JSON 对象格式：
+{
+  "text": "任务标题（要简洁明确）",
+  "priority": "high/medium/low",
+  "dueDate": "${dueDateStr}",
+  "subtasks": [
+    {
+      "text": "子任务描述（要具体可执行）",
+      "weight": 1-5,
+      "requiresInput": false
+    }
+  ]
+}
+
+**重要要求**：
+1. 任务标题要简洁明确，体现任务的核心内容
+2. 子任务要具体可执行，数量建议 3-6 个
+3. 子任务风格要与项目现有任务保持一致
+4. 对于需要记录结果的关键步骤，设置 requiresInput: true
+5. 权重（weight）：1=很简单，2=简单，3=中等，4=困难，5=很困难
+6. 只返回 JSON 对象，不要其他内容`
+
+    const content = await this.client.chatCompletions([
+      { role: 'system', content: '你是一个专业的项目管理助手。' },
+      { role: 'user', content: prompt }
+    ], { maxTokens: 2000 })
+    
+    if (onProgress) onProgress('📋 正在添加新任务...')
+    
+    let taskData
+    try {
+      taskData = JSON.parse(content.trim())
+    } catch (e) {
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        taskData = JSON.parse(jsonMatch[0])
+      } else {
+        throw new Error('AI 返回的任务格式不正确')
+      }
+    }
+    
+    const newTaskId = generateId()
+    const newTask = {
+      id: newTaskId,
+      text: taskData.text,
+      completed: false,
+      priority: taskData.priority || 'medium',
+      projectId: project.id,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+      dueDate: taskData.dueDate || dueDateStr,
+      images: [],
+      pinned: false,
+      subtasks: (taskData.subtasks || []).map((st, idx) => ({
+        id: generateSubId(newTaskId, idx),
+        text: st.text,
+        completed: false,
+        weight: st.weight || 3,
+        requiresInput: st.requiresInput || false,
+        inputValue: '',
+        createdAt: new Date().toISOString()
+      })),
+      progressRecords: []
+    }
+    
+    if (position === 'beginning') {
+      this.todoStore.todos.unshift(newTask)
+    } else if (position === 'after' && afterTaskId) {
+      const afterIndex = this.todoStore.todos.findIndex(t => t.id === afterTaskId)
+      if (afterIndex !== -1) {
+        this.todoStore.todos.splice(afterIndex + 1, 0, newTask)
+      } else {
+        this.todoStore.todos.push(newTask)
+      }
+    } else {
+      this.todoStore.todos.push(newTask)
+    }
+    
+    await window.electronAPI.addTodo(JSON.parse(JSON.stringify(newTask)))
+    
+    if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加新任务！`)
+    
+    return {
+      success: true,
+      taskId: newTask.id,
+      taskText: newTask.text,
+      projectId: project.id,
+      projectName: project.name,
+      subtasksCount: newTask.subtasks.length
+    }
+  }
+
+  /**
+   * 直接编辑子任务
+   */
+  async editSubtask(args, onProgress = null) {
+    const { taskId, subtaskId, updates } = args
+    
+    const task = this.todoStore.todos.find(t => t.id === taskId)
+    if (!task) {
+      throw new Error(`找不到ID为${taskId}的任务`)
+    }
+    
+    const subtaskIndex = task.subtasks?.findIndex(st => st.id === subtaskId)
+    if (subtaskIndex === undefined || subtaskIndex === -1) {
+      throw new Error(`在任务"${task.text}"中找不到ID为${subtaskId}的子任务`)
+    }
+    
+    const subtask = task.subtasks[subtaskIndex]
+    const oldText = subtask.text
+    
+    if (onProgress) onProgress(`✏️ 正在编辑子任务"${oldText}"...`)
+    
+    if (updates.text !== undefined) {
+      subtask.text = updates.text
+    }
+    if (updates.weight !== undefined) {
+      subtask.weight = Math.max(1, Math.min(5, updates.weight))
+    }
+    if (updates.requiresInput !== undefined) {
+      subtask.requiresInput = updates.requiresInput
+    }
+    
+    await window.electronAPI.updateTodo(task.id, { 
+      subtasks: JSON.parse(JSON.stringify(task.subtasks)) 
+    })
+    
+    const changes = []
+    if (updates.text !== undefined) changes.push(`文本: "${oldText}" → "${updates.text}"`)
+    if (updates.weight !== undefined) changes.push(`权重: ${updates.weight}`)
+    if (updates.requiresInput !== undefined) changes.push(`需要输入: ${updates.requiresInput ? '是' : '否'}`)
+    
+    if (onProgress) onProgress(`✅ 子任务已更新！${changes.join(', ')}`)
+    
+    return {
+      success: true,
+      taskId: task.id,
+      taskText: task.text,
+      subtaskId: subtask.id,
+      subtaskText: subtask.text,
+      changes: changes.join(', ')
+    }
+  }
+
+  /**
+   * 删除任务
+   */
+  async deleteTask(args, onProgress = null) {
+    const { taskId, taskText } = args
+    
+    const task = this.todoStore.todos.find(t => t.id === taskId)
+    if (!task) {
+      throw new Error(`找不到ID为${taskId}的任务`)
+    }
+    
+    const taskTitle = task.text
+    const projectId = task.projectId
+    
+    if (onProgress) onProgress(`🗑️ 正在删除任务"${taskTitle}"...`)
+    
+    const index = this.todoStore.todos.findIndex(t => t.id === taskId)
+    if (index !== -1) {
+      this.todoStore.todos.splice(index, 1)
+    }
+    
+    await window.electronAPI.deleteTodo(taskId)
+    
+    if (onProgress) onProgress(`✅ 任务"${taskTitle}"已删除！`)
+    
+    return {
+      success: true,
+      taskId: taskId,
+      taskText: taskTitle,
+      projectId: projectId
+    }
+  }
+
+  /**
+   * 删除子任务
+   */
+  async deleteSubtask(args, onProgress = null) {
+    const { taskId, subtaskId, subtaskText } = args
+    
+    const task = this.todoStore.todos.find(t => t.id === taskId)
+    if (!task) {
+      throw new Error(`找不到ID为${taskId}的任务`)
+    }
+    
+    const subtaskIndex = task.subtasks?.findIndex(st => st.id === subtaskId)
+    if (subtaskIndex === undefined || subtaskIndex === -1) {
+      throw new Error(`在任务"${task.text}"中找不到ID为${subtaskId}的子任务`)
+    }
+    
+    const subtask = task.subtasks[subtaskIndex]
+    const subtaskTitle = subtask.text
+    
+    if (onProgress) onProgress(`🗑️ 正在删除子任务"${subtaskTitle}"...`)
+    
+    task.subtasks.splice(subtaskIndex, 1)
+    
+    await window.electronAPI.updateTodo(task.id, {
+      subtasks: JSON.parse(JSON.stringify(task.subtasks))
+    })
+    
+    if (onProgress) onProgress(`✅ 子任务"${subtaskTitle}"已删除！`)
+    
+    return {
+      success: true,
+      taskId: task.id,
+      taskText: task.text,
+      subtaskId: subtaskId,
+      subtaskText: subtaskTitle,
+      remainingSubtasks: task.subtasks.length
+    }
+  }
+
+  // ==================== 内部辅助方法 ====================
+
+  /**
+   * 获取过滤后的任务列表（根据选中的项目）
+   */
+  _getFilteredTodos() {
+    let todos = this.todoStore.todos || []
+    
+    if (this.selectedProjectIds && this.selectedProjectIds.length > 0) {
+      todos = todos.filter(t => this.selectedProjectIds.includes(t.projectId))
+    }
+    
+    return todos
+  }
+
+  /**
+   * 创建剩余的每日任务（渐进式创建）
+   */
+  async _createRemainingDays(project, totalDays, currentDay, description, onProgress, baseDate) {
+    while (currentDay < totalDays) {
+      const dayNumber = currentDay + 1
+      const overallProgress = Math.round((dayNumber / totalDays) * 100)
+      
+      if (onProgress) onProgress(`📅 正在生成第 ${dayNumber} 天的任务... (${overallProgress}%)`)
+      
+      const taskDate = new Date(baseDate)
+      taskDate.setDate(baseDate.getDate() + currentDay)
+      const taskDateStr = taskDate.toISOString().split('T')[0]
+      
+      const prompt = `为"${project.name}"生成第${dayNumber}天任务(共${totalDays}天)。描述：${description}
+
+返回格式（简写）：
+{"tx": "第${dayNumber}天 - 标题", "pr": "m", "dd": "${taskDateStr}", "s": [{"tx": "子任务", "w": 3, "r": 0}]}
+
+要求：标题"第${dayNumber}天 - XX"，dd=${taskDateStr}，子任务具体可执行，需记录结果的设r=1，只返回JSON`
+
+      try {
+        const content = await this.client.chatCompletions([
+          { role: 'system', content: '你是一个专业的项目管理助手。' },
+          { role: 'user', content: prompt }
+        ], { maxTokens: 1500 })
+        
+        let taskData
+        try {
+          taskData = JSON.parse(content.trim())
+        } catch (e) {
+          const jsonMatch = content.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            taskData = JSON.parse(jsonMatch[0])
+          } else {
+            console.error('AI返回内容:', content)
+            console.error(`第${dayNumber}天任务生成失败，跳过`)
+            currentDay++
+            continue
+          }
+        }
+        
+        const taskText = taskData.tx || taskData.text
+        const taskPriority = taskData.pr || taskData.priority
+        const taskDueDate = taskData.dd || taskData.dueDate
+        const taskSubtasks = taskData.s || taskData.subtasks || []
+        
+        let finalDueDate = taskDueDate
+        if (!finalDueDate || finalDueDate !== taskDateStr) {
+          finalDueDate = taskDateStr
+        }
+        
+        let priority = 'medium'
+        if (taskPriority === 'h' || taskPriority === 'high') priority = 'high'
+        else if (taskPriority === 'l' || taskPriority === 'low') priority = 'low'
+        else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
+        else if (taskPriority) priority = taskPriority
+        
+        const taskId = generateId()
+        const task = {
+          id: taskId,
+          text: taskText,
+          completed: false,
+          priority,
+          projectId: project.id,
+          createdAt: new Date().toISOString(),
+          completedAt: null,
+          dueDate: finalDueDate,
+          images: [],
+          pinned: false,
+          subtasks: taskSubtasks.map((st, idx) => {
+            const subtaskText = st.tx || st.text
+            const subtaskWeight = st.w || st.weight || 3
+            const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
+            
+            return {
+              id: generateSubId(taskId, idx),
+              text: subtaskText,
+              completed: false,
+              weight: subtaskWeight,
+              requiresInput: subtaskRequiresInput,
+              inputValue: ''
+            }
+          }),
+          progressRecords: []
+        }
+        
+        this.todoStore.todos.push(task)
+        await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+        
+        currentDay++
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+      } catch (error) {
+        console.error(`创建第${dayNumber}天任务失败:`, error)
+        currentDay++
+      }
+    }
+  }
+}
+
