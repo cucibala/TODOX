@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -192,18 +192,18 @@ class TodoXDatabase {
    */
   addProject(project) {
     const stmt = this.db.prepare(`
-      INSERT INTO projects (id, name, color, icon, "order", created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+        INSERT INTO projects (id, name, color, icon, "order", created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
     stmt.run(
-      project.id,
-      project.name,
-      project.color || null,
-      project.icon || null,
-      project.order || 0,
+          project.id,
+          project.name,
+          project.color || null,
+          project.icon || null,
+          project.order || 0,
       project.createdAt || project.created_at || new Date().toISOString(),
-      new Date().toISOString()
-    );
+          new Date().toISOString()
+        );
   }
 
   /**
@@ -729,19 +729,47 @@ class TodoXDatabase {
         SELECT * FROM messages WHERE conversation_id = ? ORDER BY "order" ASC
       `).all(conv.id);
       
-      conv.messages = messages.map(msg => ({
+      conv.messages = messages.map(msg => {
+        const message = {
         id: msg.id,
         role: msg.role,
         content: msg.content,
         imagePath: msg.image_path,
         thinking: msg.thinking,
         createdAt: msg.created_at
-      }));
+        };
+        
+        // 解析额外数据
+        if (msg.extra_data) {
+          try {
+            const extraData = JSON.parse(msg.extra_data);
+            Object.assign(message, extraData);
+          } catch (error) {
+            console.error('解析消息额外数据失败:', error);
+          }
+        }
+        
+        return message;
+      });
       
       conv.createdAt = conv.created_at;
       conv.updatedAt = conv.updated_at;
       delete conv.created_at;
       delete conv.updated_at;
+      
+      // 读取 roleId 和 projectIds
+      conv.roleId = conv.role_id || null;
+      if (conv.project_ids) {
+        try {
+          conv.projectIds = JSON.parse(conv.project_ids);
+        } catch (error) {
+          conv.projectIds = [];
+        }
+      } else {
+        conv.projectIds = [];
+      }
+      delete conv.role_id;
+      delete conv.project_ids;
     });
     
     return conversations;
@@ -752,15 +780,17 @@ class TodoXDatabase {
    */
   addConversation(conversation) {
     const stmt = this.db.prepare(`
-      INSERT INTO conversations (id, title, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO conversations (id, title, created_at, updated_at, role_id, project_ids)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
       conversation.id,
       conversation.title,
       conversation.createdAt || conversation.created_at || new Date().toISOString(),
-      conversation.updatedAt || conversation.updated_at || new Date().toISOString()
+      conversation.updatedAt || conversation.updated_at || new Date().toISOString(),
+      conversation.roleId || null,
+      conversation.projectIds && conversation.projectIds.length > 0 ? JSON.stringify(conversation.projectIds) : null
     );
     
     // 保存消息
@@ -781,6 +811,14 @@ class TodoXDatabase {
     if (updates.title !== undefined) {
       fields.push('title = ?');
       values.push(updates.title);
+    }
+    if (updates.roleId !== undefined) {
+      fields.push('role_id = ?');
+      values.push(updates.roleId);
+    }
+    if (updates.projectIds !== undefined) {
+      fields.push('project_ids = ?');
+      values.push(updates.projectIds && updates.projectIds.length > 0 ? JSON.stringify(updates.projectIds) : null);
     }
     
     fields.push('updated_at = ?');
@@ -805,20 +843,31 @@ class TodoXDatabase {
    * 添加消息
    */
   addMessage(conversationId, message, order) {
+    // 准备额外数据（tool_calls, reasoning_content, images等）
+    const extraData = {};
+    if (message.tool_calls) extraData.tool_calls = message.tool_calls;
+    if (message.tool_call_id) extraData.tool_call_id = message.tool_call_id;
+    if (message.name) extraData.name = message.name;
+    if (message.reasoning_content) extraData.reasoning_content = message.reasoning_content;
+    if (message.images) extraData.images = message.images;
+    if (message.timestamp) extraData.timestamp = message.timestamp;
+    if (message.isProgress) extraData.isProgress = message.isProgress;
+    
     const stmt = this.db.prepare(`
-      INSERT INTO messages (id, conversation_id, role, content, image_path, thinking, "order", created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, conversation_id, role, content, image_path, thinking, "order", created_at, extra_data)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
       message.id,
       conversationId,
       message.role,
-      message.content,
+      typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
       message.imagePath || message.image_path || null,
       message.thinking || null,
       order !== undefined ? order : 0,
-      message.createdAt || message.created_at || new Date().toISOString()
+      message.createdAt || message.created_at || new Date().toISOString(),
+      Object.keys(extraData).length > 0 ? JSON.stringify(extraData) : null
     );
   }
 
@@ -866,36 +915,24 @@ class TodoXDatabase {
       this.db.prepare('DELETE FROM messages').run();
       
       const insertConv = this.db.prepare(`
-        INSERT INTO conversations (id, title, created_at, updated_at)
-        VALUES (?, ?, ?, ?)
-      `);
-      
-      const insertMsg = this.db.prepare(`
-        INSERT INTO messages (id, conversation_id, role, content, image_path, thinking, "order", created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, title, created_at, updated_at, role_id, project_ids)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
       
       conversationsData.conversations.forEach(conv => {
         insertConv.run(
           conv.id,
           conv.title,
-          conv.createdAt || conv.created_at || new Date().toISOString(),  // 兼容驼峰和下划线命名
-          conv.updatedAt || conv.updated_at || new Date().toISOString()  // 兼容驼峰和下划线命名
+          conv.createdAt || conv.created_at || new Date().toISOString(),
+          conv.updatedAt || conv.updated_at || new Date().toISOString(),
+          conv.roleId || null,
+          conv.projectIds && conv.projectIds.length > 0 ? JSON.stringify(conv.projectIds) : null
         );
         
-        // 插入消息
+        // 插入消息（使用 addMessage 方法）
         if (conv.messages && conv.messages.length > 0) {
           conv.messages.forEach((msg, index) => {
-            insertMsg.run(
-              msg.id,
-              conv.id,
-              msg.role,
-              msg.content,
-              msg.imagePath || msg.image_path || null,  // 兼容驼峰和下划线命名
-              msg.thinking || null,
-              index,
-              msg.createdAt || msg.created_at || new Date().toISOString()  // 兼容驼峰和下划线命名
-            );
+            this.addMessage(conv.id, msg, index);
           });
         }
       });
@@ -1163,6 +1200,32 @@ class TodoXDatabase {
         
         if (!columnNames.includes('input_value')) {
           this.db.exec('ALTER TABLE subtasks ADD COLUMN input_value TEXT;');
+        }
+      },
+      
+      // 版本 3 - 为消息表添加 extra_data 字段，为会话表添加 role_id 和 project_ids 字段
+      3: function() {
+        // 检查并添加 messages 表的 extra_data 字段
+        const messagesTableInfo = this.db.prepare('PRAGMA table_info(messages)').all();
+        const messagesColumns = messagesTableInfo.map(col => col.name);
+        
+        if (!messagesColumns.includes('extra_data')) {
+          this.db.exec('ALTER TABLE messages ADD COLUMN extra_data TEXT;');
+          console.log('✓ 已为 messages 表添加 extra_data 字段');
+        }
+        
+        // 检查并添加 conversations 表的 role_id 和 project_ids 字段
+        const conversationsTableInfo = this.db.prepare('PRAGMA table_info(conversations)').all();
+        const conversationsColumns = conversationsTableInfo.map(col => col.name);
+        
+        if (!conversationsColumns.includes('role_id')) {
+          this.db.exec('ALTER TABLE conversations ADD COLUMN role_id TEXT;');
+          console.log('✓ 已为 conversations 表添加 role_id 字段');
+        }
+        
+        if (!conversationsColumns.includes('project_ids')) {
+          this.db.exec('ALTER TABLE conversations ADD COLUMN project_ids TEXT;');
+          console.log('✓ 已为 conversations 表添加 project_ids 字段');
         }
       },
       

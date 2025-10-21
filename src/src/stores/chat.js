@@ -566,7 +566,8 @@ export const useChatStore = defineStore('chat', () => {
       
       // 更新数据库
       await electronAPI.updateConversation(currentConv.id, {
-        roleId: roleId
+        roleId: roleId,
+        projectIds: projectIds || []
       })
     }
   }
@@ -640,13 +641,14 @@ export const useChatStore = defineStore('chat', () => {
       const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
       if (!currentConv) return
       
-      // 准备消息数据
+      // 准备消息数据（完整保存所有字段）
       currentConv.messages = messages.value.map(msg => {
         const plainMsg = {
           role: msg.role,
           content: msg.content,
           timestamp: msg.timestamp
         }
+        // 保存函数调用相关字段
         if (msg.tool_calls) {
           plainMsg.tool_calls = JSON.parse(JSON.stringify(msg.tool_calls))
         }
@@ -656,11 +658,17 @@ export const useChatStore = defineStore('chat', () => {
         if (msg.name) {
           plainMsg.name = msg.name
         }
+        // 保存思考内容（推理模型）
         if (msg.reasoning_content) {
           plainMsg.reasoning_content = msg.reasoning_content
         }
+        // 保存图片数据（多模态）
         if (msg.images) {
           plainMsg.images = JSON.parse(JSON.stringify(msg.images))
+        }
+        // 保存进度标记
+        if (msg.isProgress) {
+          plainMsg.isProgress = msg.isProgress
         }
         return plainMsg
       })

@@ -1028,9 +1028,9 @@ async function saveConversations() {
     if (currentConv) {
       currentConv.messages = messages.value.map(msg => {
         const plainMsg = {
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
         }
         // 保存函数调用相关字段
         if (msg.tool_calls) {
@@ -1041,6 +1041,14 @@ async function saveConversations() {
         }
         if (msg.name) {
           plainMsg.name = msg.name
+        }
+        // 保存思考内容
+        if (msg.reasoning_content) {
+          plainMsg.reasoning_content = msg.reasoning_content
+        }
+        // 保存图片数据
+        if (msg.images) {
+          plainMsg.images = JSON.parse(JSON.stringify(msg.images))
         }
         return plainMsg
       })
@@ -1074,6 +1082,14 @@ async function saveConversations() {
         }
         if (msg.name) {
           plainMsg.name = msg.name
+        }
+        // 保存思考内容
+        if (msg.reasoning_content) {
+          plainMsg.reasoning_content = msg.reasoning_content
+        }
+        // 保存图片数据
+        if (msg.images) {
+          plainMsg.images = JSON.parse(JSON.stringify(msg.images))
         }
         return plainMsg
       }),
@@ -1123,7 +1139,15 @@ function resetTextareaHeight() {
 
 // 格式化时间
 function formatTime(timestamp) {
-  const date = new Date(timestamp)
+  if (!timestamp) return ''
+  
+  // 确保时间戳是数字格式
+  const ts = typeof timestamp === 'string' ? parseInt(timestamp) : timestamp
+  if (isNaN(ts)) return ''
+  
+  const date = new Date(ts)
+  if (isNaN(date.getTime())) return ''
+  
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
   return `${hours}:${minutes}`
@@ -1142,8 +1166,16 @@ function toggleReasoning(message) {
 
 // 格式化对话时间
 function formatConversationTime(timestamp) {
+  if (!timestamp) return ''
+  
+  // 确保时间戳是数字格式
+  const ts = typeof timestamp === 'string' ? parseInt(timestamp) : timestamp
+  if (isNaN(ts)) return ''
+  
   const now = new Date()
-  const date = new Date(timestamp)
+  const date = new Date(ts)
+  if (isNaN(date.getTime())) return ''
+  
   const diffMs = now - date
   const diffMins = Math.floor(diffMs / 60000)
   
