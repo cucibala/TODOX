@@ -149,7 +149,7 @@
             v-for="(message, index) in validMessages" 
             :key="index" 
             class="message-item"
-            :class="message.role"
+            :class="[message.role, { 'progress-message': message.isProgress }]"
           >
             <div class="message-avatar">
               <svg v-if="message.role === 'assistant'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -373,7 +373,8 @@ const validMessages = computed(() => {
   return messages.value.filter(msg => {
     if (!msg) return false
     if (msg.role === 'tool') return false
-    if (msg.isProgress) return false
+    // 允许显示进度消息
+    // if (msg.isProgress) return false
     
     // 如果有思考内容，显示
     if (msg.reasoning_content && msg.reasoning_content.trim()) {
@@ -814,8 +815,14 @@ async function sendToAI(isContinuation = false) {
               } finally {
                 // 清除计时器
                 clearInterval(timerInterval)
-                // 移除进度消息
-                messages.value.splice(progressMessageIndex, 1)
+                // 更新为最终状态（不删除，保留完成消息）
+                if (messages.value[progressMessageIndex]) {
+                  // 移除计时信息，只保留最终状态
+                  const finalStatus = currentStatus.split('\n')[0] // 移除 "⏱️ 已等待 X 秒"
+                  messages.value[progressMessageIndex].content = finalStatus
+                  messages.value[progressMessageIndex].isProgress = false // 标记为普通消息（停止动画）
+                  scrollToBottom()
+                }
               }
             }
           }

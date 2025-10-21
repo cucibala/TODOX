@@ -435,7 +435,13 @@ export const useChatStore = defineStore('chat', () => {
                       }
                     } finally {
                       clearInterval(timerInterval)
-                      messages.value.splice(progressMessageIndex, 1)
+                      // 更新为最终状态（不删除，保留完成消息）
+                      if (messages.value[progressMessageIndex]) {
+                        // 移除计时信息，只保留最终状态
+                        const finalStatus = currentStatus.split('\n')[0] // 移除 "⏱️ 已等待 X 秒"
+                        messages.value[progressMessageIndex].content = finalStatus
+                        messages.value[progressMessageIndex].isProgress = false // 标记为普通消息（停止动画）
+                      }
                     }
                   }
                 }

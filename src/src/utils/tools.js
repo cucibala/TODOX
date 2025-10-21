@@ -468,7 +468,9 @@ export async function executeCreateProjectWithTasks(args, stores, deepseekClient
   
   projectStore.projects.push(project)
   projectStore.currentProjectId = project.id
-  await projectStore.saveProjects()
+  // 保存项目到数据库
+  await window.electronAPI.addProject(JSON.parse(JSON.stringify(project)))
+  await window.electronAPI.setCurrentProject(project.id)
   
   // 创建第一批任务
   const createdTasks = []
