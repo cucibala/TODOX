@@ -453,7 +453,8 @@ ${JSON.stringify(currentSubtasks, null, 2)}
       }
     })
     
-    await window.electronAPI.updateTodo(task.id, { subtasks: JSON.parse(JSON.stringify(task.subtasks)) })
+    // 批量替换子任务到数据库（遵循 Electron IPC 传参规则）
+    await window.electronAPI.replaceSubtasks(task.id, JSON.parse(JSON.stringify(task.subtasks)))
     
     const changeDesc = operation === 'add' ? `新增 ${newSubtasks.length - oldSubtasksCount} 个子任务`
       : operation === 'delete' ? `删除 ${oldSubtasksCount - newSubtasks.length} 个子任务`
@@ -1032,9 +1033,12 @@ const allFunctions = [
       subtask.requiresInput = updates.requiresInput
     }
     
-    await window.electronAPI.updateTodo(task.id, { 
-      subtasks: JSON.parse(JSON.stringify(task.subtasks)) 
-    })
+    // 更新单个子任务到数据库（遵循 Electron IPC 传参规则）
+    await window.electronAPI.updateSubtask(subtask.id, JSON.parse(JSON.stringify({
+      text: subtask.text,
+      weight: subtask.weight,
+      requiresInput: subtask.requiresInput
+    })))
     
     const changes = []
     if (updates.text !== undefined) changes.push(`文本: "${oldText}" → "${updates.text}"`)
@@ -1213,12 +1217,8 @@ const allFunctions = [
         }
       }
       
-      // 执行删除
-      const idsSet = new Set(idsToDelete)
-      this.todoStore.todos = this.todoStore.todos.filter(t => !idsSet.has(t.id))
-      
-      // 批量删除（异步并发执行）
-      await Promise.all(idsToDelete.map(id => window.electronAPI.deleteTodo(id)))
+      // 批量删除（异步并发执行，deleteTask 内部会处理 todos 数组的更新）
+      await Promise.all(idsToDelete.map(id => this.todoStore.deleteTask(id)))
       
       if (onProgress) {
         if (deleteCount === 1) {

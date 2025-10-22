@@ -741,6 +741,20 @@ ipcMain.handle('delete-subtask', async (event, subtaskId) => {
   }
 });
 
+// IPC 通信处理 - 批量替换子任务
+ipcMain.handle('replace-subtasks', async (event, todoId, subtasks) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.replaceSubtasks(todoId, subtasks);
+    return { success: true };
+  } catch (error) {
+    console.error('批量替换子任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 添加进度记录
 ipcMain.handle('add-progress', async (event, todoId, record) => {
   try {

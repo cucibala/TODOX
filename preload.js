@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addSubtask: (todoId, subtask) => ipcRenderer.invoke('add-subtask', todoId, subtask),
   updateSubtask: (subtaskId, updates) => ipcRenderer.invoke('update-subtask', subtaskId, updates),
   deleteSubtask: (subtaskId) => ipcRenderer.invoke('delete-subtask', subtaskId),
+  replaceSubtasks: (todoId, subtasks) => ipcRenderer.invoke('replace-subtasks', todoId, subtasks),
   addProgress: (todoId, record) => ipcRenderer.invoke('add-progress', todoId, record),
   updateProgress: (recordId, updates) => ipcRenderer.invoke('update-progress', recordId, updates),
   deleteProgress: (recordId) => ipcRenderer.invoke('delete-progress', recordId),

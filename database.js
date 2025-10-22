@@ -521,6 +521,47 @@ class TodoXDatabase {
   }
 
   /**
+   * 批量替换任务的所有子任务（用于AI修改子任务列表）
+   * 使用事务确保原子性
+   */
+  replaceSubtasks(todoId, subtasks) {
+    const transaction = this.db.transaction(() => {
+      // 1. 删除该任务的所有现有子任务
+      this.db.prepare('DELETE FROM subtasks WHERE todo_id = ?').run(String(todoId));
+      
+      // 2. 插入新的子任务列表
+      if (subtasks && subtasks.length > 0) {
+        const stmt = this.db.prepare(`
+          INSERT INTO subtasks (id, todo_id, text, completed, weight, requires_input, input_value, "order", created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        subtasks.forEach((subtask, index) => {
+          stmt.run(
+            String(subtask.id),
+            String(todoId),
+            subtask.text,
+            subtask.completed ? 1 : 0,
+            subtask.weight || 3,
+            subtask.requiresInput || subtask.requires_input ? 1 : 0,
+            subtask.inputValue || subtask.input_value || null,
+            subtask.order !== undefined ? subtask.order : index,
+            subtask.createdAt || subtask.created_at || new Date().toISOString(),
+            new Date().toISOString()
+          );
+          
+          // 保存子任务图片
+          if (subtask.images && subtask.images.length > 0) {
+            this.saveImages('subtask', String(subtask.id), subtask.images);
+          }
+        });
+      }
+    });
+    
+    transaction();
+  }
+
+  /**
    * 添加进度记录
    */
   addProgressRecord(todoId, record) {
