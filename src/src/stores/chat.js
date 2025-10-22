@@ -351,13 +351,7 @@ export const useChatStore = defineStore('chat', () => {
               const toolMessageIndex = messages.value.length - 1
               
               try {
-                // 检查工具是否存在
-                if (!aiTool[toolCall.function.name]) {
-                  throw new Error(`未知的工具函数: ${toolCall.function.name}`)
-                }
-                
                 let result
-                
                 // 需要进度显示的异步工具
                 const needsProgress = ['createProjectWithTasks', 'updateProjectTasks', 
                   'addProjectTasks', 'updateTaskSubtasks', 'addTask'].includes(toolCall.function.name)
