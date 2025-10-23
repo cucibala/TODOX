@@ -860,31 +860,47 @@ class TodoXDatabase {
   }
 
   /**
-   * 保存会话数据（批量替换，仅用于迁移）
-   * @deprecated 迁移后不再使用
+   * 保存会话数据（增量保存，用于保存当前会话的消息）
+   * 只删除和更新传入的会话，不影响其他会话
    */
   saveConversations(conversationsData) {
     const transaction = this.db.transaction(() => {
-      // 清空现有数据
-      this.db.prepare('DELETE FROM conversations').run();
-      this.db.prepare('DELETE FROM messages').run();
-      
-      const insertConv = this.db.prepare(`
-        INSERT INTO conversations (id, title, created_at, updated_at, role_id, project_ids)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      
       conversationsData.conversations.forEach(conv => {
-        insertConv.run(
-          conv.id,
-          conv.title,
-          conv.createdAt || conv.created_at || new Date().toISOString(),
-          conv.updatedAt || conv.updated_at || new Date().toISOString(),
-          conv.roleId || null,
-          conv.projectIds && conv.projectIds.length > 0 ? JSON.stringify(conv.projectIds) : null
-        );
+        // 检查会话是否已存在
+        const existingConv = this.db.prepare('SELECT id FROM conversations WHERE id = ?').get(conv.id);
         
-        // 插入消息（使用 addMessage 方法）
+        if (existingConv) {
+          // 会话已存在，更新会话信息
+          this.db.prepare(`
+            UPDATE conversations 
+            SET title = ?, updated_at = ?, role_id = ?, project_ids = ?
+            WHERE id = ?
+          `).run(
+            conv.title,
+            conv.updatedAt || conv.updated_at || new Date().toISOString(),
+            conv.roleId || null,
+            conv.projectIds && conv.projectIds.length > 0 ? JSON.stringify(conv.projectIds) : null,
+            conv.id
+          );
+          
+          // 删除该会话的所有旧消息
+          this.db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(conv.id);
+        } else {
+          // 会话不存在，插入新会话
+          this.db.prepare(`
+            INSERT INTO conversations (id, title, created_at, updated_at, role_id, project_ids)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            conv.id,
+            conv.title,
+            conv.createdAt || conv.created_at || new Date().toISOString(),
+            conv.updatedAt || conv.updated_at || new Date().toISOString(),
+            conv.roleId || null,
+            conv.projectIds && conv.projectIds.length > 0 ? JSON.stringify(conv.projectIds) : null
+          );
+        }
+        
+        // 插入新消息（使用 addMessage 方法）
         if (conv.messages && conv.messages.length > 0) {
           conv.messages.forEach((msg, index) => {
             this.addMessage(conv.id, msg, index);
