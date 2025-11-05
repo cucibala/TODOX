@@ -3,19 +3,47 @@
     <!-- 文档列表侧边栏 -->
     <div class="documents-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
-        <h3 v-if="!sidebarCollapsed">文档</h3>
-        <button class="btn-new-document" @click="handleCreateDocument" :title="sidebarCollapsed ? '新建文档' : ''">
+        <div v-if="!sidebarCollapsed" class="header-actions">
+          <button class="btn-new-document" @click="handleCreateDocument" title="新建文档">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>新建</span>
+          </button>
+          
+          <!-- 搜索框 -->
+          <div class="search-box">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索..."
+              class="search-input"
+            />
+            <button 
+              v-if="searchQuery" 
+              class="btn-clear-search"
+              @click="searchQuery = ''"
+              title="清空搜索"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <button v-else class="btn-new-document" @click="handleCreateDocument" title="新建文档">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          <span v-if="!sidebarCollapsed">新建文档</span>
         </button>
       </div>
 
       <div class="documents-list">
         <div
-          v-for="doc in documents"
+          v-for="doc in filteredDocuments"
           :key="doc.id"
           class="document-item"
           :class="{ active: doc.id === currentDocumentId }"
@@ -55,8 +83,10 @@
           </div>
         </div>
 
-        <div v-if="documents.length === 0" class="documents-empty">
-          <p v-if="!sidebarCollapsed">暂无文档</p>
+        <div v-if="filteredDocuments.length === 0" class="documents-empty">
+          <p v-if="!sidebarCollapsed">
+            {{ searchQuery ? '未找到匹配的文档' : '暂无文档' }}
+          </p>
         </div>
       </div>
 
@@ -167,6 +197,20 @@ const { documents, currentDocumentId, currentDocument } = storeToRefs(documentSt
 // 本地状态
 const sidebarCollapsed = ref(false)
 const viewMode = ref('preview') // 'edit' | 'preview' - 默认预览模式
+const searchQuery = ref('') // 搜索关键词
+
+// 过滤后的文档列表
+const filteredDocuments = computed(() => {
+  if (!searchQuery.value.trim()) {
+    return documents.value
+  }
+  
+  const query = searchQuery.value.toLowerCase()
+  return documents.value.filter(doc => {
+    return doc.title.toLowerCase().includes(query) ||
+           (doc.content && doc.content.toLowerCase().includes(query))
+  })
+})
 
 // 配置 marked
 marked.setOptions({
@@ -304,12 +348,12 @@ onMounted(async () => {
 }
 
 .sidebar-header {
-  padding: 16px;
+  padding: 12px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .sidebar-header h3 {
@@ -320,11 +364,17 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .btn-new-document {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 4px;
+  padding: 6px 10px;
   background: var(--primary-color);
   color: white;
   border: none;
@@ -334,6 +384,7 @@ onMounted(async () => {
   font-weight: 500;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .documents-sidebar.collapsed .btn-new-document {
@@ -348,6 +399,72 @@ onMounted(async () => {
 .btn-new-document svg {
   width: 16px;
   height: 16px;
+}
+
+/* 搜索框 */
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 6px;
+  transition: all 0.2s;
+}
+
+.search-box:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.1);
+}
+
+.search-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.btn-clear-search {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.btn-clear-search:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.btn-clear-search svg {
+  width: 10px;
+  height: 10px;
+  color: var(--text-secondary);
 }
 
 .documents-list {
