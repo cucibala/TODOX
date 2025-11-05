@@ -1,5 +1,6 @@
 // AI 工具类 - 封装所有 AI 可调用的工具函数
 import { generateId, generateSubId } from './tools'
+
 /**
  * AI 函数封装类
  * 将函数定义和实现封装在一起
@@ -641,6 +642,20 @@ let addProjectTasks = new AIFunction(
   }
 )
 
+/**
+ * 查看所有任务
+ * 查看指定项目下的任务
+ * 添加项目下的任务
+ * 删除项目下的任务
+ * 更新项目下的任务
+ * 搜索任务
+ * 创建项目
+ * 删除项目
+ * 更新项目
+ * 创建任务
+ * 删除任务
+ * 更新任务
+ */
 const allFunctions = [
   // 1. 获取今天添加的任务列表
   new AIFunction(
@@ -753,223 +768,238 @@ const allFunctions = [
   new AIFunction(
     createTool(
       'createProjectWithTasks',
-      '根据用户描述智能创建项目并生成任务和子任务。适用于制定计划、项目管理等场景，如"减肥计划30天"、"学习Python课程"等',
+      '创建项目名称',
       {
-        description: {
-          type: 'string',
-          description: '项目描述，包括项目目标、时间范围、具体要求等信息'
-        },
         projectName: {
           type: 'string',
           description: '项目名称，如果用户未明确指定，可以从描述中提取'
         }
       },
-      ['description', 'projectName']
+      ['projectName']
     ),
     async function(args, onProgress = null) {
-      const { description, projectName } = args
+      return "创建成功,下一步创建, 调用createTask工具创建具体任务";
+//       const { description, projectName } = args
       
-      if (!this.client) {
-        throw new Error('AI 客户端未初始化')
-      }
+//       if (!this.client) {
+//         throw new Error('AI 客户端未初始化')
+//       }
       
-      // 检测是否是多天计划（用于渐进式创建）
-      const daysMatch = description.match(/(\d+)\s*[天日]/)
-      const totalDays = daysMatch ? parseInt(daysMatch[1]) : 0
-      const isProgressiveMode = totalDays > 1
+//       // 检测是否是多天计划（用于渐进式创建）
+//       const daysMatch = description.match(/(\d+)\s*[天日]/)
+//       const totalDays = daysMatch ? parseInt(daysMatch[1]) : 0
+//       const isProgressiveMode = totalDays > 1
       
-      // 检测任务类型
-      const isDailyPlan = /[天日]/.test(description) && totalDays > 0
-      const isTechProject = /开发|接入|实现|集成|部署|配置|SDK|API|demo|项目/.test(description)
-      const isLearningPlan = /学习|掌握|了解|课程/.test(description)
+//       // 检测任务类型
+//       const isDailyPlan = /[天日]/.test(description) && totalDays > 0
+//       const isTechProject = /开发|接入|实现|集成|部署|配置|SDK|API|demo|项目/.test(description)
+//       const isLearningPlan = /学习|掌握|了解|课程/.test(description)
       
-      if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
+//       if (onProgress) onProgress('🤔 正在分析需求，生成项目计划...')
       
-      // 获取今天的日期
-      const today = new Date()
-      const todayStr = today.toISOString().split('T')[0]
+//       // 获取今天的日期
+//       const today = new Date()
+//       const todayStr = today.toISOString().split('T')[0]
       
-      // 调用 AI 生成项目信息和初始任务
-      const batchSize = 1
-      const promptDays = isProgressiveMode ? Math.min(batchSize, totalDays) : totalDays
+//       // 调用 AI 生成项目信息和初始任务
+//       const batchSize = 1
+//       const promptDays = isProgressiveMode ? Math.min(batchSize, totalDays) : totalDays
       
-      const taskTypeHint = isDailyPlan ? '这是一个每日计划，需要按天分解任务。' 
-        : isTechProject ? '这是一个技术项目，需要按开发阶段/功能模块分解任务。'
-        : isLearningPlan ? '这是一个学习计划，需要按知识点/章节分解任务。'
-        : '根据项目性质合理分解任务。'
+//       const taskTypeHint = isDailyPlan ? '这是一个每日计划，需要按天分解任务。' 
+//         : isTechProject ? '这是一个技术项目，需要按开发阶段/功能模块分解任务。'
+//         : isLearningPlan ? '这是一个学习计划，需要按知识点/章节分解任务。'
+//         : '根据项目性质合理分解任务。'
       
-      const prompt = `根据描述生成项目计划。${isProgressiveMode ? `${totalDays}天计划，现生成前${promptDays}天。` : ''}
+//       const prompt = `根据描述生成项目计划。${isProgressiveMode ? `${totalDays}天计划，现生成前${promptDays}天。` : ''}
 
-日期：${todayStr}(今天) | 描述：${description} | 名称：${projectName} | 类型：${taskTypeHint}${isProgressiveMode ? ` | 总${totalDays}天，本批${promptDays}天` : ''}
+// 日期：${todayStr}(今天) | 描述：${description} | 名称：${projectName} | 类型：${taskTypeHint}${isProgressiveMode ? ` | 总${totalDays}天，本批${promptDays}天` : ''}
 
-返回格式（简写字段节省token）：
-{
-  "p": {"n": "项目名", "c": "#8A9DFB"},
-  "t": [
-    {
-      "tx": "任务标题",
-      "pr": "h/m/l",
-      "dd": "${todayStr}",
-      "s": [
-        {"tx": "子任务", "w": 3, "r": 0}
-      ]
-    }
-  ]
-}
+// 返回格式（简写字段节省token）：
+// {
+//   "p": {"n": "项目名", "c": "#8A9DFB"},
+//   "t": [
+//     {
+//       "tx": "任务标题",
+//       "pr": "h/m/l",
+//       "dd": "${todayStr}",
+//       "s": [
+//         {"tx": "子任务", "w": 3, "r": 0}
+//       ]
+//     }
+//   ]
+// }
 
-字段说明：p=project, n=name, c=color, t=tasks, tx=text, pr=priority(h/m/l), dd=dueDate, s=subtasks, w=weight(1-5), r=requiresInput(0/1)
+// 字段说明：p=project, n=name, c=color, t=tasks, tx=text, pr=priority(h/m/l), dd=dueDate, s=subtasks, w=weight(1-5), r=requiresInput(0/1)
 
-要求：
-1. ${isDailyPlan ? `每日计划：任务命名"第N天 - 描述"，${isProgressiveMode ? `生成${promptDays}天` : `生成${totalDays}天`}，日期从${todayStr}连续递增，子任务具体可执行` : isTechProject ? '技术项目：按阶段划分(环境→开发→测试→部署)，任务具体，子任务细化到可执行步骤' : isLearningPlan ? '学习计划：按知识点/章节划分，含理论+实践+总结' : '合理分解任务'}
-2. 任务数${isDailyPlan ? (isProgressiveMode ? promptDays : totalDays) : '5-15'}个，每个3-8个子任务
-3. 优先级：前期m，中期h，后期m
-4. 需记录结果的子任务设r=1（如：测体重、记录配置）
-5. 颜色可选：#8A9DFB/#FF6B6B/#4ECDC4/#95E1D3
-6. 只返回JSON，无其他文字`
+// 要求：
+// 1. ${isDailyPlan ? `每日计划：任务命名"第N天 - 描述"，${isProgressiveMode ? `生成${promptDays}天` : `生成${totalDays}天`}，日期从${todayStr}连续递增，子任务具体可执行` : isTechProject ? '技术项目：按阶段划分(环境→开发→测试→部署)，任务具体，子任务细化到可执行步骤' : isLearningPlan ? '学习计划：按知识点/章节划分，含理论+实践+总结' : '合理分解任务'}
+// 2. 任务数${isDailyPlan ? (isProgressiveMode ? promptDays : totalDays) : '5-15'}个，每个3-8个子任务
+// 3. 优先级：前期m，中期h，后期m
+// 4. 需记录结果的子任务设r=1（如：测体重、记录配置）
+// 5. 颜色可选：#8A9DFB/#FF6B6B/#4ECDC4/#95E1D3
+// 6. 只返回JSON，无其他文字`
 
-      const messages = [
-        {
-          role: 'system',
-          content: '你是一个专业的项目管理助手，擅长将用户的想法转化为结构化、可执行的项目计划。你特别擅长制定每日计划，能够将长期目标拆解为具体的每日任务清单，类似于打卡系统。'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
+//       const messages = [
+//         {
+//           role: 'system',
+//           content: '你是一个专业的项目管理助手，擅长将用户的想法转化为结构化、可执行的项目计划。你特别擅长制定每日计划，能够将长期目标拆解为具体的每日任务清单，类似于打卡系统。'
+//         },
+//         {
+//           role: 'user',
+//           content: prompt
+//         }
+//       ]
       
-      const content = await this.client.chatCompletions(messages, { maxTokens: 8000 })
+//       const content = await this.client.chatCompletions(messages, { maxTokens: 8000 })
       
-      if (onProgress) onProgress('📋 项目计划已生成，正在解析...')
+//       if (onProgress) onProgress('📋 项目计划已生成，正在解析...')
       
-      // 解析 JSON
-      let projectPlan
-      try {
-        projectPlan = JSON.parse(content.trim())
-      } catch (e) {
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          projectPlan = JSON.parse(jsonMatch[0])
-      } else {
-          console.error('AI 返回内容:', content)
-          throw new Error('AI 返回的项目计划格式不正确')
-        }
-      }
+//       // 解析 JSON
+//       let projectPlan
+//       try {
+//         projectPlan = JSON.parse(content.trim())
+//       } catch (e) {
+//         const jsonMatch = content.match(/\{[\s\S]*\}/)
+//         if (jsonMatch) {
+//           projectPlan = JSON.parse(jsonMatch[0])
+//       } else {
+//           console.error('AI 返回内容:', content)
+//           throw new Error('AI 返回的项目计划格式不正确')
+//         }
+//       }
       
-      // 验证项目计划结构
-      const projectData = projectPlan.p || projectPlan.project
-      const tasksData = projectPlan.t || projectPlan.tasks
+//       // 验证项目计划结构
+//       const projectData = projectPlan.p || projectPlan.project
+//       const tasksData = projectPlan.t || projectPlan.tasks
       
-      if (!projectData || !tasksData || !Array.isArray(tasksData)) {
-        console.error('项目计划结构不完整:', projectPlan)
-        throw new Error('项目计划结构不完整，缺少必要字段')
-      }
+//       if (!projectData || !tasksData || !Array.isArray(tasksData)) {
+//         console.error('项目计划结构不完整:', projectPlan)
+//         throw new Error('项目计划结构不完整，缺少必要字段')
+//       }
       
-      const finalProjectName = projectData.n || projectData.name || projectName
-      if (onProgress) onProgress(`📁 正在创建项目"${finalProjectName}"...`)
+//       const finalProjectName = projectData.n || projectData.name || projectName
+//       if (onProgress) onProgress(`📁 正在创建项目"${finalProjectName}"...`)
       
-      // 创建项目
-      const projectColor = projectData.c || projectData.color || '#8A9DFB'
-      const project = {
-        id: generateId(),
-        name: finalProjectName,
-        color: projectColor,
-        createdAt: new Date().toISOString()
-      }
+//       // 创建项目
+//       const projectColor = projectData.c || projectData.color || '#8A9DFB'
+//       const project = {
+//         id: generateId(),
+//         name: finalProjectName,
+//         color: projectColor,
+//         createdAt: new Date().toISOString()
+//       }
       
-      this.projectStore.projects.push(project)
-      this.projectStore.currentProjectId = project.id
-      await window.electronAPI.addProject(JSON.parse(JSON.stringify(project)))
-      await window.electronAPI.setCurrentProject(project.id)
+//       this.projectStore.projects.push(project)
+//       this.projectStore.currentProjectId = project.id
+//       await window.electronAPI.addProject(JSON.parse(JSON.stringify(project)))
+//       await window.electronAPI.setCurrentProject(project.id)
       
-      // 创建第一批任务
-      const createdTasks = []
-      const firstBatchTasks = tasksData
+//       // 创建第一批任务
+//       const createdTasks = []
+//       const firstBatchTasks = tasksData
       
-      for (let i = 0; i < firstBatchTasks.length; i++) {
-        const taskData = firstBatchTasks[i]
+//       for (let i = 0; i < firstBatchTasks.length; i++) {
+//         const taskData = firstBatchTasks[i]
         
-        const dayNumber = i + 1
-        const overallProgress = isProgressiveMode 
-          ? Math.round((dayNumber / totalDays) * 100)
-          : Math.round((dayNumber / firstBatchTasks.length) * 100)
+//         const dayNumber = i + 1
+//         const overallProgress = isProgressiveMode 
+//           ? Math.round((dayNumber / totalDays) * 100)
+//           : Math.round((dayNumber / firstBatchTasks.length) * 100)
         
-        if (onProgress) {
-          onProgress(`✅ 正在创建第 ${dayNumber} 天的任务... ${isProgressiveMode ? `(${overallProgress}%)` : ''}`)
-        }
+//         if (onProgress) {
+//           onProgress(`✅ 正在创建第 ${dayNumber} 天的任务... ${isProgressiveMode ? `(${overallProgress}%)` : ''}`)
+//         }
         
-        const taskText = taskData.tx || taskData.text
-        const taskPriority = taskData.pr || taskData.priority
-        const taskDueDate = taskData.dd || taskData.dueDate
-        const taskSubtasks = taskData.s || taskData.subtasks || []
+//         const taskText = taskData.tx || taskData.text
+//         const taskPriority = taskData.pr || taskData.priority
+//         const taskDueDate = taskData.dd || taskData.dueDate
+//         const taskSubtasks = taskData.s || taskData.subtasks || []
         
-        let finalDueDate = taskDueDate
-        if (!finalDueDate) {
-          const dueDate = new Date()
-          dueDate.setDate(dueDate.getDate() + i)
-          finalDueDate = dueDate.toISOString().split('T')[0]
-        }
+//         let finalDueDate = taskDueDate
+//         if (!finalDueDate) {
+//           const dueDate = new Date()
+//           dueDate.setDate(dueDate.getDate() + i)
+//           finalDueDate = dueDate.toISOString().split('T')[0]
+//         }
         
-        let priority = 'medium'
-        if (taskPriority === 'h' || taskPriority === 'high') priority = 'high'
-        else if (taskPriority === 'l' || taskPriority === 'low') priority = 'low'
-        else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
-        else if (taskPriority) priority = taskPriority
+//         let priority = 'medium'
+//         if (taskPriority === 'h' || taskPriority === 'high') priority = 'high'
+//         else if (taskPriority === 'l' || taskPriority === 'low') priority = 'low'
+//         else if (taskPriority === 'm' || taskPriority === 'medium') priority = 'medium'
+//         else if (taskPriority) priority = taskPriority
         
-        const taskId = generateId()
-        const task = {
-          id: taskId,
-          text: taskText,
-      completed: false,
-          priority,
-      projectId: project.id,
-      createdAt: new Date().toISOString(),
-      completedAt: null,
-          dueDate: finalDueDate,
-      images: [],
-      pinned: false,
-          subtasks: taskSubtasks.map((st, idx) => {
-            const subtaskText = st.tx || st.text
-            const subtaskWeight = st.w || st.weight || 3
-            const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
+//         const taskId = generateId()
+//         const task = {
+//           id: taskId,
+//           text: taskText,
+//       completed: false,
+//           priority,
+//       projectId: project.id,
+//       createdAt: new Date().toISOString(),
+//       completedAt: null,
+//           dueDate: finalDueDate,
+//       images: [],
+//       pinned: false,
+//           subtasks: taskSubtasks.map((st, idx) => {
+//             const subtaskText = st.tx || st.text
+//             const subtaskWeight = st.w || st.weight || 3
+//             const subtaskRequiresInput = st.r === 1 || st.r === true || st.requiresInput === true
             
-            return {
-              id: generateSubId(taskId, idx),
-              text: subtaskText,
-        completed: false,
-              weight: subtaskWeight,
-              requiresInput: subtaskRequiresInput,
-              inputValue: ''
-            }
-          }),
-      progressRecords: []
-    }
+//             return {
+//               id: generateSubId(taskId, idx),
+//               text: subtaskText,
+//         completed: false,
+//               weight: subtaskWeight,
+//               requiresInput: subtaskRequiresInput,
+//               inputValue: ''
+//             }
+//           }),
+//       progressRecords: []
+//     }
     
-        this.todoStore.todos.push(task)
-        createdTasks.push(task)
-        await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+//         this.todoStore.todos.push(task)
+//         createdTasks.push(task)
+//         await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
         
-        if (i < firstBatchTasks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 10))
-        }
-      }
+//         if (i < firstBatchTasks.length - 1) {
+//           await new Promise(resolve => setTimeout(resolve, 10))
+//         }
+//       }
       
-      // 如果是渐进模式且还有剩余天数，继续创建
-      if (isProgressiveMode && firstBatchTasks.length < totalDays) {
-        const baseDate = new Date(today)
-        await createRemainingDays(this, project, totalDays, firstBatchTasks.length, description, onProgress, baseDate)
-      }
+//       // 如果是渐进模式且还有剩余天数，继续创建
+//       if (isProgressiveMode && firstBatchTasks.length < totalDays) {
+//         const baseDate = new Date(today)
+//         await createRemainingDays(this, project, totalDays, firstBatchTasks.length, description, onProgress, baseDate)
+//       }
       
-      if (onProgress) onProgress(`🎉 项目"${finalProjectName}"创建成功！共创建 ${this.todoStore.todos.filter(t => t.projectId === project.id).length} 个任务 (100%)`)
+//       if (onProgress) onProgress(`🎉 项目"${finalProjectName}"创建成功！共创建 ${this.todoStore.todos.filter(t => t.projectId === project.id).length} 个任务 (100%)`)
     
-    return {
-      success: true,
-      projectId: project.id,
-        projectName: finalProjectName,
-        tasksCreated: createdTasks.length
+//     return {
+//       success: true,
+//       projectId: project.id,
+//         projectName: finalProjectName,
+//         tasksCreated: createdTasks.length
+//       }
+  }),
+  new AIFunction(
+    createTool('createTask',
+      '用于为项目添加具体任务, 任务名称, 任务描述, 任务优先级, 任务截止日期, 任务子任务',
+      {
+        taskName: {
+          type: 'string',
+          description: '任务名称'
+        },
+        taskDescription: {
+          type: 'string',
+          description: '任务描述'
+        },
+      },
+      ['taskName', 'taskDescription', 'taskPriority', 'taskDueDate', 'taskSubtasks']),
+      async function(args) {
+        const { taskName, taskDescription, taskPriority, taskDueDate, taskSubtasks } = args
+        return "创建成功,请在任务列表中查看";
       }
-    }
-  ),
+   ),
   // 9. 直接编辑子任务
   new AIFunction(
     createTool(

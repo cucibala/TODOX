@@ -1399,6 +1399,98 @@ ipcMain.handle('save-conversations', async (event, conversationsData) => {
   }
 });
 
+// ==================== 文档相关 IPC ====================
+
+// IPC 通信处理 - 获取所有文档
+ipcMain.handle('get-documents', async () => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    
+    const documents = db.getDocuments();
+    return { success: true, documents };
+  } catch (error) {
+    console.error('获取文档列表失败:', error);
+    return { success: false, error: error.message, documents: [] };
+  }
+});
+
+// IPC 通信处理 - 添加文档
+ipcMain.handle('add-document', async (event, document) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    
+    db.addDocument(document);
+    return { success: true };
+  } catch (error) {
+    console.error('添加文档失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新文档
+ipcMain.handle('update-document', async (event, documentId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    
+    db.updateDocument(documentId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新文档失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除文档
+ipcMain.handle('delete-document', async (event, documentId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    
+    db.deleteDocument(documentId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除文档失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 获取当前文档 ID
+ipcMain.handle('get-current-document-id', async () => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    
+    const documentId = db.getCurrentDocumentId();
+    return { success: true, documentId };
+  } catch (error) {
+    console.error('获取当前文档ID失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 设置当前文档 ID
+ipcMain.handle('set-current-document-id', async (event, documentId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    
+    db.setCurrentDocumentId(documentId);
+    return { success: true };
+  } catch (error) {
+    console.error('设置当前文档ID失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 添加单个会话
 ipcMain.handle('add-conversation', async (event, conversation) => {
   try {

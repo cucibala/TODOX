@@ -148,6 +148,17 @@ class TodoXDatabase {
       )
     `);
 
+    // 文档表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
     // 数据库版本表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS db_version (
@@ -967,6 +978,80 @@ class TodoXDatabase {
    */
   setCurrentConversationId(conversationId) {
     this.setSetting('current_conversation_id', conversationId ? String(conversationId) : null);
+  }
+
+  /**
+   * 获取当前文档 ID
+   */
+  getCurrentDocumentId() {
+    return this.getSetting('current_document_id');
+  }
+
+  /**
+   * 设置当前文档 ID
+   */
+  setCurrentDocumentId(documentId) {
+    this.setSetting('current_document_id', documentId ? String(documentId) : null);
+  }
+
+  // ==================== 文档相关操作 ====================
+
+  /**
+   * 获取所有文档
+   */
+  getDocuments() {
+    const stmt = this.db.prepare('SELECT * FROM documents ORDER BY updated_at DESC');
+    return stmt.all();
+  }
+
+  /**
+   * 添加单个文档
+   */
+  addDocument(document) {
+    const stmt = this.db.prepare(`
+      INSERT INTO documents (id, title, content, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      String(document.id),
+      document.title || '无标题文档',
+      document.content || '',
+      document.createdAt || document.created_at || new Date().toISOString(),
+      document.updatedAt || document.updated_at || new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新单个文档
+   */
+  updateDocument(documentId, updates) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.title !== undefined) {
+      fields.push('title = ?');
+      values.push(updates.title);
+    }
+    if (updates.content !== undefined) {
+      fields.push('content = ?');
+      values.push(updates.content);
+    }
+    
+    fields.push('updated_at = ?');
+    values.push(updates.updatedAt || new Date().toISOString());
+    values.push(String(documentId));
+    
+    const stmt = this.db.prepare(`
+      UPDATE documents SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除单个文档
+   */
+  deleteDocument(documentId) {
+    this.db.prepare('DELETE FROM documents WHERE id = ?').run(String(documentId));
   }
 
   // ==================== 数据迁移相关 ====================

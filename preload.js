@@ -60,6 +60,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteMessage: (messageId) => ipcRenderer.invoke('delete-message', messageId),
   setCurrentConversation: (conversationId) => ipcRenderer.invoke('set-current-conversation', conversationId),
   
+  // 文档管理
+  getDocuments: () => ipcRenderer.invoke('get-documents'),
+  addDocument: (document) => ipcRenderer.invoke('add-document', document),
+  updateDocument: (documentId, updates) => ipcRenderer.invoke('update-document', documentId, updates),
+  deleteDocument: (documentId) => ipcRenderer.invoke('delete-document', documentId),
+  getCurrentDocumentId: () => ipcRenderer.invoke('get-current-document-id'),
+  setCurrentDocumentId: (documentId) => ipcRenderer.invoke('set-current-document-id', documentId),
+  
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),
   selectDataPath: () => ipcRenderer.invoke('select-data-path'),

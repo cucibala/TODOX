@@ -20,6 +20,9 @@
         <TaskContent />
       </template>
 
+      <!-- 文档页面 -->
+      <DocumentPage v-else-if="currentPage === 'document'" />
+
       <!-- 设置页面 -->
       <SettingsPage v-else-if="currentPage === 'settings'" />
 
@@ -62,11 +65,14 @@
 
     <!-- AI 总结对话框 -->
     <AISummaryDialog />
+
+    <!-- 文档名称对话框 -->
+    <DocumentNameDialog ref="documentNameDialogRef" />
   </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
@@ -85,19 +91,31 @@ import AILoadingDialog from './components/AILoadingDialog.vue'
 import AISummaryDialog from './components/AISummaryDialog.vue'
 import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
+import DocumentPage from './pages/DocumentPage.vue'
+import DocumentNameDialog from './components/DocumentNameDialog.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
 import { useChatStore } from './stores/chat'
+import { useDocumentStore } from './stores/document'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
+const documentStore = useDocumentStore()
 
 const { showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
 
+// 文档名称对话框引用
+const documentNameDialogRef = ref(null)
+
 onMounted(async () => {
+  // 在 store 中设置对话框引用
+  if (documentNameDialogRef.value) {
+    documentStore.setDocumentNameDialog(documentNameDialogRef.value)
+  }
+  
   try {
     // 初始化应用
     await appStore.init()
@@ -107,7 +125,8 @@ onMounted(async () => {
       projectStore.loadProjects(),
       todoStore.loadTodos(),
       chatStore.loadConversations(),
-      chatStore.initAIClients()
+      chatStore.initAIClients(),
+      documentStore.loadDocuments()
     ])
     
     // 智能选择默认 AI 模型（优先豆包）

@@ -23,6 +23,7 @@ export const useAppStore = defineStore('app', () => {
   const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
   const showAISummaryDialog = ref(false)
+  const showDocumentNameDialog = ref(false)
   
   // 全局聊天状态指示器
   const showChatStatusIndicator = ref(false)
@@ -160,6 +161,7 @@ export const useAppStore = defineStore('app', () => {
     showAILoadingDialog,
     showImageViewer,
     showAISummaryDialog,
+    showDocumentNameDialog,
     showChatStatusIndicator,
     chatStatusText,
     currentAIModel,
