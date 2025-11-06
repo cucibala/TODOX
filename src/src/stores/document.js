@@ -10,9 +10,6 @@ export const useDocumentStore = defineStore('document', () => {
   const documents = ref([])
   const currentDocumentId = ref(null)
   const isLoading = ref(false)
-  
-  // 文档名称对话框引用
-  let documentNameDialogRef = null
 
   // 计算属性
   const currentDocument = computed(() => {
@@ -54,27 +51,11 @@ export const useDocumentStore = defineStore('document', () => {
     }
   }
 
-  // 创建新文档（带名称输入）
+  // 创建新文档
   async function createDocument(title = null) {
     try {
-      let documentTitle = title
-      
-      // 如果没有提供标题且有对话框引用，显示对话框
-      if (!documentTitle && documentNameDialogRef) {
-        appStore.showDocumentNameDialog = true
-        const result = await documentNameDialogRef.init('', false)
-        
-        if (!result.confirmed) {
-          return null // 用户取消
-        }
-        
-        documentTitle = result.name
-      }
-      
-      // 如果还是没有标题，使用默认值
-      if (!documentTitle) {
-        documentTitle = `文档 ${new Date().toLocaleDateString()}`
-      }
+      // 生成默认标题
+      const documentTitle = title || `新文档 ${new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`
       
       const newDoc = {
         id: `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -198,26 +179,6 @@ export const useDocumentStore = defineStore('document', () => {
       updateDocument(documentId, { content })
     }, 500)
   }
-  
-  // 设置文档名称对话框引用
-  function setDocumentNameDialog(dialogRef) {
-    documentNameDialogRef = dialogRef
-  }
-  
-  // 重命名文档（显示对话框）
-  async function renameDocument(documentId) {
-    const doc = documents.value.find(d => d.id === documentId)
-    if (!doc || !documentNameDialogRef) return false
-    
-    appStore.showDocumentNameDialog = true
-    const result = await documentNameDialogRef.init(doc.title, true)
-    
-    if (result.confirmed && result.name !== doc.title) {
-      return await updateDocument(documentId, { title: result.name })
-    }
-    
-    return false
-  }
 
   return {
     // 状态
@@ -234,9 +195,7 @@ export const useDocumentStore = defineStore('document', () => {
     updateDocument,
     deleteDocument,
     selectDocument,
-    saveDocumentContent,
-    setDocumentNameDialog,
-    renameDocument
+    saveDocumentContent
   }
 })
 

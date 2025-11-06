@@ -59,28 +59,17 @@
             <div class="document-title">{{ doc.title || '无标题文档' }}</div>
             <div class="document-time">{{ formatTime(doc.updatedAt) }}</div>
           </div>
-          <div class="document-actions" v-if="!sidebarCollapsed">
-            <button 
-              class="btn-rename-document" 
-              @click.stop="handleRenameDocument(doc.id)"
-              title="重命名"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-            <button 
-              class="btn-delete-document" 
-              @click.stop="handleDeleteDocument(doc.id)"
-              title="删除文档"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
+          <button 
+            class="btn-delete-document" 
+            v-if="!sidebarCollapsed"
+            @click.stop="handleDeleteDocument(doc.id)"
+            title="删除文档"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
         </div>
 
         <div v-if="filteredDocuments.length === 0" class="documents-empty">
@@ -148,10 +137,12 @@
         <!-- 编辑模式 -->
         <div v-if="viewMode === 'edit'" class="document-content">
           <textarea
+            ref="textareaRef"
             v-model="currentDocument.content"
             @input="handleContentChange"
+            @paste="handlePaste"
             class="document-textarea"
-            placeholder="支持 Markdown 语法，开始编写..."
+            placeholder="支持 Markdown 语法，开始编写...（支持粘贴图片）"
           ></textarea>
         </div>
 
@@ -160,6 +151,7 @@
           <div 
             class="markdown-body" 
             v-html="renderedMarkdown"
+            @click="handlePreviewClick"
           ></div>
         </div>
       </div>
@@ -182,7 +174,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useDocumentStore } from '../stores/document'
 import { useAppStore } from '../stores/app'
@@ -196,6 +188,9 @@ const { documents, currentDocumentId, currentDocument } = storeToRefs(documentSt
 
 // 本地状态
 const sidebarCollapsed = ref(false)
+
+// textarea 引用
+const textareaRef = ref(null)
 const viewMode = ref('preview') // 'edit' | 'preview' - 默认预览模式
 const searchQuery = ref('') // 搜索关键词
 
@@ -214,19 +209,56 @@ const filteredDocuments = computed(() => {
 
 // 配置 marked
 marked.setOptions({
-  highlight: function(code, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        return hljs.highlight(code, { language: lang }).value
-      } catch (err) {
-        console.error('代码高亮失败:', err)
-      }
-    }
-    return hljs.highlightAuto(code).value
-  },
   breaks: true, // 支持 GFM 换行
   gfm: true, // 启用 GitHub 风格的 Markdown
 })
+
+// 自定义渲染器以确保代码高亮正确应用
+const renderer = new marked.Renderer()
+
+// 自定义链接渲染 - 在新窗口打开
+renderer.link = function({ href, title, text }) {
+  const titleAttr = title ? ` title="${title}"` : ''
+  return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
+}
+
+renderer.code = function({ text, lang }) {
+  // 新版 marked 传递的是对象 { text, lang, escaped }
+  const codeStr = text || ''
+  const language = lang || ''
+  
+  // 转义 HTML 特殊字符的辅助函数
+  const escapeHtml = (str) => {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+  
+  // 如果指定了语言且 highlight.js 支持该语言
+  if (language && hljs.getLanguage(language)) {
+    try {
+      const highlighted = hljs.highlight(codeStr, { language }).value
+      return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`
+    } catch (err) {
+      console.error('代码高亮失败:', err, language)
+      return `<pre><code class="hljs">${escapeHtml(codeStr)}</code></pre>`
+    }
+  }
+  
+  // 否则尝试自动检测
+  try {
+    const result = hljs.highlightAuto(codeStr)
+    return `<pre><code class="hljs ${result.language ? `language-${result.language}` : ''}">${result.value}</code></pre>`
+  } catch (err) {
+    console.error('自动高亮失败:', err)
+    return `<pre><code class="hljs">${escapeHtml(codeStr)}</code></pre>`
+  }
+}
+
+marked.setOptions({ renderer })
 
 // 渲染 Markdown
 const renderedMarkdown = computed(() => {
@@ -245,11 +277,6 @@ const renderedMarkdown = computed(() => {
 // 创建新文档
 async function handleCreateDocument() {
   await documentStore.createDocument()
-}
-
-// 重命名文档
-async function handleRenameDocument(documentId) {
-  await documentStore.renameDocument(documentId)
 }
 
 // 选择文档
@@ -317,13 +344,101 @@ function formatDate(timestamp) {
 }
 
 // 挂载时加载文档
+// 处理预览区域的点击事件（拦截链接点击）
+function handlePreviewClick(event) {
+  // 检查是否点击了链接
+  const target = event.target
+  if (target.tagName === 'A' && target.href) {
+    event.preventDefault()
+    // 在系统默认浏览器中打开链接
+    window.electronAPI.openExternal(target.href)
+  }
+}
+
+// 处理粘贴事件（支持粘贴图片）
+async function handlePaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  // 查找图片项
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault()
+      
+      // 获取图片文件
+      const file = item.getAsFile()
+      if (!file) continue
+
+      try {
+        // 显示加载提示
+        appStore.toast('正在保存图片...')
+        
+        // 将图片转换为 base64
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+          try {
+            const base64Data = e.target.result
+            
+            // 保存图片到本地
+            const result = await window.electronAPI.saveImageFromClipboard(base64Data)
+            
+            if (result.success && result.fileName) {
+              // 获取光标位置
+              const textarea = textareaRef.value
+              const cursorPos = textarea.selectionStart
+              const currentContent = currentDocument.value.content || ''
+              
+              // 插入图片 Markdown 语法
+              const imageMarkdown = `![图片](todox-image://${result.fileName})`
+              const newContent = 
+                currentContent.slice(0, cursorPos) + 
+                imageMarkdown + 
+                currentContent.slice(cursorPos)
+              
+              // 更新内容
+              currentDocument.value.content = newContent
+              handleContentChange()
+              
+              // 设置新的光标位置（图片 Markdown 之后）
+              await nextTick()
+              const newCursorPos = cursorPos + imageMarkdown.length
+              textarea.setSelectionRange(newCursorPos, newCursorPos)
+              textarea.focus()
+              
+              appStore.toast('图片已插入')
+            } else {
+              appStore.toast('保存图片失败')
+            }
+          } catch (error) {
+            console.error('保存图片异常:', error)
+            appStore.toast('保存图片异常')
+          }
+        }
+        
+        reader.readAsDataURL(file)
+      } catch (error) {
+        console.error('处理图片失败:', error)
+        appStore.toast('处理图片失败')
+      }
+      
+      break
+    }
+  }
+}
+
 onMounted(async () => {
   // 文档数据已在 App.vue 中加载
 })
 </script>
 
+<style>
+/* 全局导入 highlight.js 样式（不能用 scoped） */
+@import 'highlight.js/styles/github.css';
+</style>
+
 <style scoped>
-@import 'highlight.js/styles/github-dark.css';
 
 .document-page {
   display: flex;
@@ -530,18 +645,6 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
-.document-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.document-item:hover .document-actions {
-  opacity: 1;
-}
-
-.btn-rename-document,
 .btn-delete-document {
   flex-shrink: 0;
   width: 24px;
@@ -553,17 +656,12 @@ onMounted(async () => {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  opacity: 0;
   transition: all 0.2s;
 }
 
-.btn-rename-document:hover {
-  background: rgba(108, 92, 231, 0.1);
-}
-
-.btn-rename-document svg {
-  width: 14px;
-  height: 14px;
-  color: var(--primary-color);
+.document-item:hover .btn-delete-document {
+  opacity: 1;
 }
 
 .btn-delete-document:hover {
@@ -819,27 +917,42 @@ onMounted(async () => {
   margin: 12px 0;
 }
 
+/* 行内代码 */
 .markdown-body :deep(code) {
   padding: 2px 6px;
   font-size: 13px;
-  background: var(--bg-secondary);
+  background: rgba(175, 184, 193, 0.2);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: #24292e;
 }
 
+/* 代码块容器 */
 .markdown-body :deep(pre) {
   margin: 16px 0;
   padding: 16px;
-  background: #0d1117;
+  background: #f6f8fa;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow-x: auto;
 }
 
+/* 代码块内的代码 - 不覆盖颜色，让 highlight.js 接管 */
 .markdown-body :deep(pre code) {
   padding: 0;
   background: transparent;
+  border: none;
   font-size: 14px;
   line-height: 1.6;
+  /* 不设置 color，让 highlight.js 的语法高亮生效 */
+}
+
+/* 确保 highlight.js 的类能正常工作 */
+.markdown-body :deep(pre code.hljs) {
+  display: block;
+  overflow-x: auto;
+  padding: 0;
 }
 
 .markdown-body :deep(table) {

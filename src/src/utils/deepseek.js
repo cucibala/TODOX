@@ -12,16 +12,20 @@ export class DeepSeekClient {
   /**
    * 调用 Chat Completions API（流式）
    * @param {Array} messages - 消息列表
-   * @param {Object} options - 选项对象 { tools, onContent, onToolCalls }
+   * @param {Object} options - 选项对象 { tools, onContent, onToolCalls, enableReasoningMode }
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { tools = [], onContent, onToolCalls, onReasoning, enableTools = false } = options
+    const { tools = [], onContent, onToolCalls, onReasoning, enableTools = false, enableReasoningMode = false } = options
     console.log('chatCompletionsStream', messages, tools)
+    
+    // 根据思考模式选择模型
+    const model = enableReasoningMode ? 'deepseek-reasoner' : 'deepseek-chat'
+    console.log(`使用模型: ${model}`)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
     const requestBody = {
-      model: 'deepseek-chat',
+      model: model,
       messages,
       temperature: 0.7,
       max_tokens: 2000,

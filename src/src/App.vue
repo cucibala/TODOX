@@ -65,9 +65,6 @@
 
     <!-- AI 总结对话框 -->
     <AISummaryDialog />
-
-    <!-- 文档名称对话框 -->
-    <DocumentNameDialog ref="documentNameDialogRef" />
   </div>
 </template>
 
@@ -92,7 +89,6 @@ import AISummaryDialog from './components/AISummaryDialog.vue'
 import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
 import DocumentPage from './pages/DocumentPage.vue'
-import DocumentNameDialog from './components/DocumentNameDialog.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
@@ -107,15 +103,7 @@ const documentStore = useDocumentStore()
 
 const { showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
 
-// 文档名称对话框引用
-const documentNameDialogRef = ref(null)
-
 onMounted(async () => {
-  // 在 store 中设置对话框引用
-  if (documentNameDialogRef.value) {
-    documentStore.setDocumentNameDialog(documentNameDialogRef.value)
-  }
-  
   try {
     // 初始化应用
     await appStore.init()

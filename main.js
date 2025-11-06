@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const TodoXDatabase = require('./database');
@@ -392,16 +392,12 @@ function createWindow() {
     const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
     mainWindow.loadFile(vueDistPath);
   }
-
-  // 窗口加载完成后显示（添加短暂延迟，等待初始数据加载）
+  
+  // 窗口加载完成后显示（等待内容渲染完成，避免白屏闪烁）
   mainWindow.once('ready-to-show', () => {
-    // 延迟显示窗口，给 Vue 应用更多时间初始化
-    setTimeout(() => {
-      mainWindow.show();
-      
-      // 发送初始状态
-      mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
-    }, 100); // 100ms 延迟，减少闪烁
+    mainWindow.show();
+    // 发送初始状态
+    mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
   });
 
 
@@ -500,6 +496,13 @@ app.whenReady().then(() => {
     callback({ path: filePath })
   })
   
+  // 注册自定义协议，用于加载本地图片文件
+  protocol.registerFileProtocol('todox-image', (request, callback) => {
+    const fileName = request.url.replace('todox-image://', '')
+    const filePath = path.join(getImagesPath(), fileName)
+    callback({ path: filePath })
+  })
+  
   // 先加载设置（包括自定义数据路径）
   loadSettings();
   
@@ -554,6 +557,23 @@ ipcMain.on('toggle-always-on-top', () => {
   mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
   saveAlwaysOnTop();
   updateTrayMenu(); // 只更新托盘菜单，不重新创建托盘
+});
+
+// 在系统默认浏览器中打开外部链接
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    // 验证 URL 格式
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      await shell.openExternal(url)
+      return { success: true }
+    } else {
+      console.error('无效的 URL:', url)
+      return { success: false, error: '无效的 URL' }
+    }
+  } catch (error) {
+    console.error('打开外部链接失败:', error)
+    return { success: false, error: error.message }
+  }
 });
 
 // IPC 通信处理 - 读取项目数据

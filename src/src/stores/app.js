@@ -23,7 +23,6 @@ export const useAppStore = defineStore('app', () => {
   const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
   const showAISummaryDialog = ref(false)
-  const showDocumentNameDialog = ref(false)
   
   // 全局聊天状态指示器
   const showChatStatusIndicator = ref(false)
@@ -31,6 +30,9 @@ export const useAppStore = defineStore('app', () => {
   
   // AI 模型选择（默认值会在初始化时自动设置）
   const currentAIModel = ref('deepseek') // 'deepseek' | 'doubao'
+  
+  // 思考模式（是否使用推理模型）
+  const enableReasoningMode = ref(false) // 默认关闭
   
   // 确认对话框配置
   const confirmMessage = ref('')
@@ -161,10 +163,10 @@ export const useAppStore = defineStore('app', () => {
     showAILoadingDialog,
     showImageViewer,
     showAISummaryDialog,
-    showDocumentNameDialog,
     showChatStatusIndicator,
     chatStatusText,
     currentAIModel,
+    enableReasoningMode,
     confirmMessage,
     viewerImageSrc,
     aiSummaryContent,

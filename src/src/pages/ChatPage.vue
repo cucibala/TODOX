@@ -84,6 +84,22 @@
               <span>{{ appStore.currentAIModel === 'deepseek' ? 'DeepSeek' : '豆包' }}</span>
             </button>
           </div>
+          
+          <!-- 思考模式开关 -->
+          <div class="reasoning-toggle">
+            <button 
+              class="btn-reasoning-toggle" 
+              :class="{ active: appStore.enableReasoningMode }"
+              @click="handleToggleReasoning"
+              :title="appStore.enableReasoningMode ? '思考模式：开启' : '思考模式：关闭'"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                <path d="M12 6v6l4 2"/>
+              </svg>
+              <span>{{ appStore.enableReasoningMode ? '思考中' : '普通' }}</span>
+            </button>
+          </div>
         </div>
         
         <!-- 项目详情下拉（仅项目助手角色显示且已有消息） -->
@@ -563,6 +579,19 @@ function handleToggleModel() {
   const newModel = appStore.currentAIModel === 'deepseek' ? 'doubao' : 'deepseek'
   appStore.currentAIModel = newModel
   appStore.toast(`已切换到 ${newModel === 'deepseek' ? 'DeepSeek' : '豆包'} 模型`)
+  
+  // 保存到本地存储
+  localStorage.setItem('todox_ai_model', newModel)
+}
+
+// 切换思考模式
+function handleToggleReasoning() {
+  appStore.enableReasoningMode = !appStore.enableReasoningMode
+  const status = appStore.enableReasoningMode ? '开启' : '关闭'
+  appStore.toast(`思考模式已${status}`)
+  
+  // 保存到本地存储
+  localStorage.setItem('todox_reasoning_mode', appStore.enableReasoningMode ? 'true' : 'false')
 }
 
 // 触发图片上传
@@ -991,6 +1020,13 @@ function handleClickOutside(event) {
 
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
+  
+  // 从本地存储恢复思考模式设置
+  const savedReasoningMode = localStorage.getItem('todox_reasoning_mode')
+  if (savedReasoningMode !== null) {
+    appStore.enableReasoningMode = savedReasoningMode === 'true'
+  }
+  
   // 初始滚动到底部
   nextTick(() => scrollToBottom())
 })
@@ -1008,5 +1044,42 @@ watch(currentConversationId, () => {
 
 <style scoped>
 @import '../assets/styles/chat.css';
+
+/* 思考模式开关样式 */
+.reasoning-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.btn-reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-reasoning-toggle:hover {
+  background: var(--hover-bg);
+  border-color: var(--primary-color);
+}
+
+.btn-reasoning-toggle.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+}
+
+.btn-reasoning-toggle svg {
+  width: 16px;
+  height: 16px;
+}
 </style>
 

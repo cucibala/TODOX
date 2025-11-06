@@ -85,6 +85,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowClose: () => ipcRenderer.send('window-close'),
   toggleAlwaysOnTop: () => ipcRenderer.send('toggle-always-on-top'),
   
+  // 外部链接
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  
   // 监听模式变化
   onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop))
 });

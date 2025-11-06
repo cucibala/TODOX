@@ -14,16 +14,12 @@ export class DoubaoClient {
   /**
    * 调用 Chat Completions API（流式）
    * @param {Array} messages - 消息列表
-   * @param {Object} options - 选项对象 { model, tools, onContent, onToolCalls }
+   * @param {Object} options - 选项对象 { model, tools, onContent, onToolCalls, enableReasoningMode }
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning, enableTools = false } = options
-    // if(!onReasoning) {
-    //   onReasoning = (text) => {
-    //     console.log('豆包 chatCompletionsStream', text)
-    //   }
-    // } 
+    const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning, enableTools = false, enableReasoningMode = false } = options
+    console.log(`豆包思考模式: ${enableReasoningMode ? '开启' : '关闭'}`)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
     const requestBody = {
@@ -32,12 +28,15 @@ export class DoubaoClient {
       stream: true
     }
     
-    // 如果角色启用了工具（项目助手），设置推理模式为最小
-    // 这样可以避免格式限制（允许空 assistant 占位消息）
-    // 如果是通用助手（enableTools=false），保持默认推理模式，可以看到完整思考过程
-    if (enableTools) {
+    // 根据用户设置的思考模式配置 reasoning_effort
+    if (enableReasoningMode) {
+      // 开启思考模式：使用高级推理
+      requestBody.reasoning_effort = 'high'
+    } else if (enableTools) {
+      // 关闭思考模式且有工具：使用最小推理（避免格式限制）
       requestBody.reasoning_effort = 'minimal'
     }
+    // 如果关闭思考模式且无工具：不设置 reasoning_effort，使用默认值
     
     // 只有当 tools 数组非空时才添加到请求中
     if (tools && tools.length > 0) {
