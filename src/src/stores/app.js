@@ -7,11 +7,16 @@ export const useAppStore = defineStore('app', () => {
   const showLockScreen = ref(false)
   const currentPage = ref('home') // 'home' | 'settings' | 'chat'
   const isAppReady = ref(false) // 应用是否初始化完成
-  
+
+  // 自动锁定
+  const AUTO_LOCK_TIMEOUT = 15 * 60 * 1000 // 15分钟（毫秒）
+  let autoLockTimer = null
+  let lastActivityTime = Date.now()
+
   // Toast
   const toastMessage = ref('')
   const showToast = ref(false)
-  
+
   // 对话框
   const showSubtaskDialog = ref(false)
   const showConfirmDialog = ref(false)
@@ -23,35 +28,35 @@ export const useAppStore = defineStore('app', () => {
   const showAILoadingDialog = ref(false)
   const showImageViewer = ref(false)
   const showAISummaryDialog = ref(false)
-  
+
   // 全局聊天状态指示器
   const showChatStatusIndicator = ref(false)
   const chatStatusText = ref('')
-  
+
   // AI 模型选择（默认值会在初始化时自动设置）
   const currentAIModel = ref('deepseek') // 'deepseek' | 'doubao'
-  
+
   // 思考模式（是否使用推理模型）
   const enableReasoningMode = ref(false) // 默认关闭
-  
+
   // 确认对话框配置
   const confirmMessage = ref('')
   const confirmResolve = ref(null)
-  
+
   // 图片查看器
   const viewerImageSrc = ref('')
-  
+
   // AI 总结内容
   const aiSummaryContent = ref('')
-  
+
   // 获取 electronAPI
   const electronAPI = window.electronAPI
-  
+
   // 初始化
   async function init() {
     // 初始化由 main.js 完成
   }
-  
+
   // 检查启动时密码保护
   async function checkPasswordOnStartup() {
     const result = await electronAPI.hasPassword()
@@ -59,7 +64,7 @@ export const useAppStore = defineStore('app', () => {
       showLockScreen.value = true
     }
   }
-  
+
   // 监听模式变化
   function listenModeChanges() {
     // 监听置顶状态变化
@@ -67,19 +72,19 @@ export const useAppStore = defineStore('app', () => {
       isAlwaysOnTop.value = onTop
     })
   }
-  
+
   // Toast 提示
   function toast(message, duration = 3000) {
     toastMessage.value = message
     showToast.value = true
-    
+
     if (duration > 0) {
       setTimeout(() => {
         showToast.value = false
       }, duration)
     }
   }
-  
+
   // 确认对话框
   function confirm(message) {
     return new Promise((resolve) => {
@@ -88,7 +93,7 @@ export const useAppStore = defineStore('app', () => {
       showConfirmDialog.value = true
     })
   }
-  
+
   function confirmDialogResult(result) {
     showConfirmDialog.value = false
     if (confirmResolve.value) {
@@ -96,30 +101,30 @@ export const useAppStore = defineStore('app', () => {
       confirmResolve.value = null
     }
   }
-  
+
   // 图片查看器
   function viewImage(src) {
     viewerImageSrc.value = src
     showImageViewer.value = true
   }
-  
+
   function closeImageViewer() {
     showImageViewer.value = false
   }
-  
+
   // 窗口控制
   function minimizeWindow() {
     electronAPI.windowMinimize()
   }
-  
+
   function closeWindow() {
     electronAPI.windowClose()
   }
-  
+
   function toggleAlwaysOnTop() {
     electronAPI.toggleAlwaysOnTop()
   }
-  
+
   // 锁定/解锁
   async function lockApp() {
     const result = await electronAPI.hasPassword()
@@ -129,22 +134,63 @@ export const useAppStore = defineStore('app', () => {
     }
     showLockScreen.value = true
   }
-  
+
   async function unlockApp(password) {
     if (!password) {
       return { success: false, error: '请输入密码' }
     }
-    
+
     const result = await electronAPI.verifyPassword(password)
     if (result.success) {
       showLockScreen.value = false
       toast('解锁成功')
+      // 解锁后重启自动锁定计时器
+      resetActivityTimer()
       return { success: true }
     } else {
       return { success: false, error: '密码错误，请重试' }
     }
   }
-  
+
+  // 自动锁定计时器管理
+  function startAutoLockTimer() {
+    // 只有在设置了密码的情况下才启用自动锁定
+    electronAPI.hasPassword().then(result => {
+      if (result.hasPassword) {
+        resetActivityTimer()
+      }
+    })
+  }
+
+  function stopAutoLockTimer() {
+    if (autoLockTimer) {
+      clearTimeout(autoLockTimer)
+      autoLockTimer = null
+    }
+  }
+
+  function resetActivityTimer() {
+    lastActivityTime = Date.now()
+
+    // 清除现有计时器
+    if (autoLockTimer) {
+      clearTimeout(autoLockTimer)
+    }
+
+    // 设置新的计时器
+    autoLockTimer = setTimeout(() => {
+      // 检查是否已经锁定
+      if (!showLockScreen.value) {
+        electronAPI.hasPassword().then(result => {
+          if (result.hasPassword) {
+            showLockScreen.value = true
+            toast('应用已自动锁定')
+          }
+        })
+      }
+    }, AUTO_LOCK_TIMEOUT)
+  }
+
   return {
     // 状态
     isAlwaysOnTop,
@@ -170,7 +216,7 @@ export const useAppStore = defineStore('app', () => {
     confirmMessage,
     viewerImageSrc,
     aiSummaryContent,
-    
+
     // 方法
     init,
     checkPasswordOnStartup,
@@ -184,7 +230,10 @@ export const useAppStore = defineStore('app', () => {
     closeWindow,
     toggleAlwaysOnTop,
     lockApp,
-    unlockApp
+    unlockApp,
+    startAutoLockTimer,
+    stopAutoLockTimer,
+    resetActivityTimer
   }
 })
 

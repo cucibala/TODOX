@@ -62,13 +62,13 @@ export const useTodoStore = defineStore('todo', () => {
         return aCompleted ? 1 : -1
       }
       
-      // 3. 按截止日期排序（倒序：最近的截止日期在前）
+      // 3. 按截止日期排序（倒序：晚到期的在前）
       const aHasDueDate = a.dueDate && a.dueDate !== null
       const bHasDueDate = b.dueDate && b.dueDate !== null
       
       if (aHasDueDate && bHasDueDate) {
-        // 都有截止日期，按日期倒序（早的在前）
-        return new Date(a.dueDate) - new Date(b.dueDate)
+        // 都有截止日期，按日期倒序（晚到期的在前）
+        return new Date(b.dueDate) - new Date(a.dueDate)
       } else if (aHasDueDate && !bHasDueDate) {
         // a 有截止日期，b 没有，a 排在前面
         return -1

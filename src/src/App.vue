@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { storeToRefs } from 'pinia'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
@@ -102,6 +102,14 @@ const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 
 const { showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
+
+// 活动监听器（用于自动锁定）
+function handleUserActivity() {
+  // 只有在未锁定状态下才重置计时器
+  if (!showLockScreen.value) {
+    appStore.resetActivityTimer()
+  }
+}
 
 onMounted(async () => {
   try {
@@ -138,12 +146,30 @@ onMounted(async () => {
     // 监听窗口模式变化
     appStore.listenModeChanges()
     
+    // 启动自动锁定计时器
+    appStore.startAutoLockTimer()
+    
+    // 添加全局活动监听器（鼠标移动、键盘、点击）
+    window.addEventListener('mousemove', handleUserActivity)
+    window.addEventListener('keydown', handleUserActivity)
+    window.addEventListener('click', handleUserActivity)
+    
     // 标记应用已准备就绪
     appStore.isAppReady = true
   } catch (error) {
     console.error('应用初始化失败:', error)
     appStore.isAppReady = true // 即使出错也显示界面
   }
+})
+
+onBeforeUnmount(() => {
+  // 清理活动监听器
+  window.removeEventListener('mousemove', handleUserActivity)
+  window.removeEventListener('keydown', handleUserActivity)
+  window.removeEventListener('click', handleUserActivity)
+  
+  // 停止自动锁定计时器
+  appStore.stopAutoLockTimer()
 })
 </script>
 
@@ -193,4 +219,3 @@ body {
   }
 }
 </style>
-
