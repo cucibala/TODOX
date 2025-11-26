@@ -27,16 +27,15 @@ export class DoubaoClient {
       messages,
       stream: true
     }
-    
+
     // 根据用户设置的思考模式配置 reasoning_effort
     if (enableReasoningMode) {
       // 开启思考模式：使用高级推理
       requestBody.reasoning_effort = 'high'
-    } else if (enableTools) {
-      // 关闭思考模式且有工具：使用最小推理（避免格式限制）
+    } else {
+      // 关闭思考模式：始终使用最小推理，快速响应
       requestBody.reasoning_effort = 'minimal'
     }
-    // 如果关闭思考模式且无工具：不设置 reasoning_effort，使用默认值
     
     // 只有当 tools 数组非空时才添加到请求中
     if (tools && tools.length > 0) {
@@ -136,19 +135,22 @@ export class DoubaoClient {
    */
   async chatCompletions(messages, options = {}) {
     const { model = this.defaultModel, maxTokens = 2000 } = options
-    
+
+    const requestBody = {
+      model,
+      messages,
+      max_tokens: maxTokens,
+      stream: false,
+      reasoning_effort: 'minimal'  // 禁用思考模式，快速响应
+    }
+
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        stream: false
-      })
+      body: JSON.stringify(requestBody)
     })
 
     if (!response.ok) {

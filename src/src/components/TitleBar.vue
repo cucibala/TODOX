@@ -36,16 +36,16 @@
             <polyline points="10 9 9 9 8 9"></polyline>
           </svg>
         </button>
-        <button 
-          class="titlebar-nav-btn" 
+        <button
+          class="titlebar-nav-btn"
           :class="{ active: currentPage === 'chat' }"
-          @click="goToChat" 
+          @click="goToChat"
           :title="showChatStatusIndicator ? chatStatusText : 'AI 助手'"
         >
-          <svg 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
             stroke-width="2"
             :class="{ 'spinning': showChatStatusIndicator }"
           >
@@ -54,10 +54,23 @@
             <line x1="12" y1="22.08" x2="12" y2="12"></line>
           </svg>
         </button>
-        <button 
-          class="titlebar-nav-btn" 
+        <button
+          class="titlebar-nav-btn"
+          :class="{ active: currentPage === 'emotion' }"
+          @click="goToEmotion"
+          title="情感分析"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+            <line x1="9" y1="9" x2="9.01" y2="9"></line>
+            <line x1="15" y1="9" x2="15.01" y2="9"></line>
+          </svg>
+        </button>
+        <button
+          class="titlebar-nav-btn"
           :class="{ active: currentPage === 'settings' }"
-          @click="goToSettings" 
+          @click="goToSettings"
           title="设置"
         >
           <img :src="SettingIcon" class="nav-icon" alt="设置" />
@@ -118,6 +131,11 @@ function goToDocument() {
 // 导航到聊天
 function goToChat() {
   appStore.currentPage = 'chat'
+}
+
+// 导航到情感分析
+function goToEmotion() {
+  appStore.currentPage = 'emotion'
 }
 
 // 导航到设置

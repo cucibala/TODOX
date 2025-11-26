@@ -705,14 +705,16 @@ export const useChatStore = defineStore('chat', () => {
     streamingMessageIndex,
     userInput,
     deepseekClient,
+    doubaoClient,
     recentProjectId,
-    
+
     // 计算属性
     currentConversation,
     currentConversationTitle,
     currentRoleId,
     selectedProjectIds,
-    
+    currentClient,
+
     // 方法
     initAIClients,
     checkApiKey,

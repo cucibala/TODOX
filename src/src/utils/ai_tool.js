@@ -64,12 +64,25 @@ async function createRemainingDays(context, project, totalDays, currentDay, desc
     taskDate.setDate(baseDate.getDate() + currentDay)
     const taskDateStr = taskDate.toISOString().split('T')[0]
     
-    const prompt = `为"${project.name}"生成第${dayNumber}天任务(共${totalDays}天)。描述：${description}
+    const prompt = `你正在为项目"${project.name}"生成渐进式任务计划。
 
-返回格式（简写）：
-{"tx": "第${dayNumber}天 - 标题", "pr": "m", "dd": "${taskDateStr}", "s": [{"tx": "子任务", "w": 3, "r": 0}]}
+【项目上下文】
+- 项目名称：${project.name}
+- 项目描述：${description}
+- 当前任务：第 ${dayNumber} 天 / 共 ${totalDays} 天
+- 任务日期：${taskDateStr}
+- 整体进度：${overallProgress}%
 
-要求：标题"第${dayNumber}天 - XX"，dd=${taskDateStr}，子任务具体可执行，需记录结果的设r=1，只返回JSON`
+【任务要求】
+1. 任务标题格式：第${dayNumber}天 - [具体内容描述]
+2. 子任务要求：3-6个，具体可执行，循序渐进
+3. 难度设置：权重分布合理(简单1-2，中等3，困难4-5)
+4. 记录节点：关键成果需要记录的子任务设置r=1(如：记录学习笔记、保存配置信息)
+
+【返回格式】严格JSON，无其他文字：
+{"tx": "第${dayNumber}天 - 标题", "pr": "m", "dd": "${taskDateStr}", "s": [{"tx": "具体可执行的子任务", "w": 3, "r": 0}]}
+
+字段说明：tx=任务文本, pr=优先级(h/m/l), dd=截止日期, s=子任务数组, w=权重(1-5), r=需要记录(0/1)`
 
     try {
       const content = await context.client.chatCompletions([
@@ -226,33 +239,39 @@ let addTask = new AIFunction(
       : ''
     
     const prompt = `你正在为项目"${project.name}"添加一个新任务。
-${projectContext}
 
-【新任务要求】：${taskDescription}
-【截止日期】：${dueDateStr}
-【插入位置】：${position === 'beginning' ? '项目开头' : position === 'after' ? '指定任务之后' : '项目结尾'}
+【项目上下文】
+- 项目名称：${project.name}
+- 现有任务示例：${projectContext}
 
-请生成这个新任务。返回 JSON 对象格式：
+【新任务信息】
+- 任务描述：${taskDescription}
+- 截止日期：${dueDateStr}
+- 插入位置：${position === 'beginning' ? '项目开头（优先级较高）' : position === 'after' ? '指定任务之后（衔接前置任务）' : '项目结尾（后续任务）'}
+
+【任务生成要求】
+1. **标题设计**：简洁明确，体现任务核心价值，10-20字为宜
+2. **子任务拆解**：3-6个具体可执行的步骤，遵循SMART原则（具体、可衡量、可实现）
+3. **风格一致性**：参考现有任务的描述方式和粒度，保持项目整体统一
+4. **权重分配**：合理分布难度
+   - 1-2：简单操作，5-15分钟
+   - 3：标准任务，15-30分钟
+   - 4-5：复杂任务，30分钟以上
+5. **记录节点**：关键步骤需设置 requiresInput: true（如：配置结果、测试数据、学习总结）
+6. **优先级判断**：
+   - high: 紧急/阻塞性任务
+   - medium: 常规任务
+   - low: 优化/非核心任务
+
+【返回格式】严格JSON，无其他文字：
 {
-"text": "任务标题（要简洁明确）",
-      "priority": "high/medium/low",
-"dueDate": "${dueDateStr}",
-      "subtasks": [
-  {
-    "text": "子任务描述（要具体可执行）",
-    "weight": 1-5,
-    "requiresInput": false
-    }
+  "text": "任务标题",
+  "priority": "medium",
+  "dueDate": "${dueDateStr}",
+  "subtasks": [
+    {"text": "具体子任务描述", "weight": 3, "requiresInput": false}
   ]
-}
-
-**重要要求**：
-1. 任务标题要简洁明确，体现任务的核心内容
-2. 子任务要具体可执行，数量建议 3-6 个
-3. 子任务风格要与项目现有任务保持一致
-4. 对于需要记录结果的关键步骤，设置 requiresInput: true
-5. 权重（weight）：1=很简单，2=简单，3=中等，4=困难，5=很困难
-6. 只返回 JSON 对象，不要其他内容`
+}`
 
     const content = await this.client.chatCompletions([
       { role: 'system', content: '你是一个专业的项目管理助手。' },
@@ -383,36 +402,49 @@ let updateTaskSubtasks = new AIFunction(
       replace: '完全替换所有子任务'
     }
     
-    const prompt = `你正在帮助用户修改任务的子任务列表。
+    const prompt = `你正在帮助用户修改任务的子任务列表，需要准确理解用户意图并执行相应操作。
 
-【任务信息】：
+【任务上下文】
 - 所属项目：${projectName}
 - 任务标题：${task.text}
-- 当前子任务数量：${currentSubtasks.length}个
+- 当前子任务数量：${currentSubtasks.length} 个
+- 已完成子任务：${currentSubtasks.filter(st => st.completed).length} 个
 
-【当前子任务列表】：
-${JSON.stringify(currentSubtasks, null, 2)}
+【当前子任务详情】
+${currentSubtasks.map((st, idx) =>
+  `${idx + 1}. ${st.text} ${st.completed ? '✅' : '⭕'} [权重:${st.weight}] ${st.requiresInput ? '[需记录]' : ''}`
+).join('\n')}
 
-【操作类型】：${operationDesc[operation]}
-【用户要求】：${feedback}
+【操作信息】
+- 操作类型：${operationDesc[operation]}
+- 用户要求：${feedback}
 
-请根据用户的要求，生成修改后的子任务列表。返回 JSON 数组格式：
+【操作指南】
+${operation === 'add'
+  ? '➕ 添加模式：在现有子任务基础上添加新子任务，保持原有子任务不变，新增子任务应与现有任务衔接自然'
+  : operation === 'delete'
+  ? '🗑️ 删除模式：精确识别并删除用户指定的子任务（通过序号/描述/关键词匹配），保留其他子任务'
+  : operation === 'update'
+  ? '✏️ 更新模式：精确修改用户指定的子任务，其他子任务保持原样，已完成状态必须保留'
+  : '🔄 替换模式：完全重新设计子任务列表，无需保留原有内容，可以优化结构和顺序'}
+
+【子任务设计标准】
+1. **具体性**：每个子任务都是明确的、单一的行动步骤
+2. **可执行性**：描述清晰，执行者能立即理解并开始操作
+3. **合理性**：逻辑顺序正确，前置依赖明确
+4. **完整性**：覆盖任务的所有关键环节
+5. **权重准确**：
+   - 1-2：简单快速（5-15分钟），如：查阅文档、创建文件
+   - 3：标准任务（15-30分钟），如：编写代码、配置环境
+   - 4-5：复杂耗时（30分钟+），如：系统调试、综合测试
+6. **记录设置**：需要保存结果、填写数据、记录笔记的步骤设置 requiresInput: true
+
+【返回格式】严格JSON数组，无其他文字：
 [
-{
-  "text": "子任务描述（要具体可执行）",
-  "weight": 1-5,
-  "requiresInput": false,
-  "completed": false
-}
+  {"text": "具体可执行的子任务描述", "weight": 3, "requiresInput": false, "completed": false}
 ]
 
-**重要要求**：
-1. **${operation === 'add' ? '在现有子任务基础上添加新子任务' : operation === 'delete' ? '删除用户指定的子任务，保留其他' : operation === 'update' ? '根据要求修改特定子任务，其他保持不变' : '完全重新生成所有子任务'}**
-2. ${operation === 'replace' ? '不需要' : '需要'}保留已完成子任务的完成状态（completed: true）
-3. 子任务要具体可执行，避免含糊描述
-4. 对于需要记录结果的关键步骤，设置 requiresInput: true（如：记录配置信息、填写测试结果等）
-5. 权重（weight）：1=很简单，2=简单，3=中等，4=困难，5=很困难
-6. 只返回 JSON 数组，不要其他内容`
+${operation !== 'replace' ? '⚠️ 重要：必须保留已完成子任务的 completed: true 状态！' : ''}`
 
     const content = await this.client.chatCompletions([
       { role: 'system', content: '你是一个专业的项目管理助手，擅长将任务细化为具体可执行的子任务。' },
@@ -528,35 +560,53 @@ let addProjectTasks = new AIFunction(
     const daysMatch = description.match(/(\d+)\s*[天日]/)
     const daysToAdd = daysMatch ? parseInt(daysMatch[1]) : 7
     
-    const prompt = `你正在为项目"${project.name}"添加新的任务。
+    const prompt = `你正在为项目"${project.name}"批量添加新任务，需要确保任务的连贯性和合理性。
 
-【项目信息】：
+【项目基础信息】
 - 项目名称：${project.name}
-- 现有任务数：${currentTaskCount}个
-- 新任务起始编号：第${actualStartDay}天
+- 现有任务总数：${currentTaskCount} 个
+- 新任务起始编号：第 ${actualStartDay} 天
 - 新任务起始日期：${startDateStr}
+${projectTasks.length > 0 ? `- 最后一个任务：${projectTasks[projectTasks.length - 1]?.text}` : ''}
 
-【添加要求】：${description}
+【新增任务需求】
+${description}
 
-请生成要添加的任务列表。返回 JSON 数组格式：
+【任务生成规范】
+1. **编号规则**：从第${actualStartDay}天开始，连续递增
+2. **日期规则**：从${startDateStr}开始，每个任务日期+1天
+3. **一致性要求**：
+   - 延续项目现有任务的风格和难度曲线
+   - 保持描述语言和粒度的统一性
+   - 与前置任务形成合理衔接
+4. **任务设计原则**：
+   - 标题格式：第N天 - [具体内容]（简洁明了，10-20字）
+   - 子任务数量：3-6个，覆盖任务的核心步骤
+   - 难度分布：合理递进，避免突变
+   - 优先级分配：
+     * high: 关键里程碑、阻塞性任务
+     * medium: 常规推进任务（大部分）
+     * low: 辅助优化任务
+5. **子任务标准**：
+   - 具体可执行，有明确的操作对象和目标
+   - 权重合理：1-2(简单) 3(中等) 4-5(复杂)
+   - 需要记录成果的步骤设置 requiresInput: true
+6. **整体质量**：
+   - 任务间逻辑连贯，前后衔接自然
+   - 覆盖需求的所有关键环节
+   - 避免重复或冗余内容
+
+【返回格式】严格JSON数组，无其他文字：
 [
   {
     "text": "第${actualStartDay}天 - 任务标题",
     "priority": "medium",
     "dueDate": "${startDateStr}",
     "subtasks": [
-      {"text": "子任务描述", "weight": 3, "requiresInput": false}
+      {"text": "具体子任务", "weight": 3, "requiresInput": false}
     ]
   }
-]
-
-**重要要求**：
-1. 任务编号从第${actualStartDay}天开始
-2. 日期从 ${startDateStr} 开始，每天递增
-3. 任务风格和难度要与项目现有任务保持一致
-4. 子任务要具体可执行
-5. 对需要记录结果的子任务设置 requiresInput: true
-6. 只返回 JSON 数组，不要其他内容`
+]`
 
     const content = await this.client.chatCompletions([
       { role: 'system', content: '你是一个专业的项目管理助手。' },

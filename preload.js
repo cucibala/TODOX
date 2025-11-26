@@ -67,7 +67,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteDocument: (documentId) => ipcRenderer.invoke('delete-document', documentId),
   getCurrentDocumentId: () => ipcRenderer.invoke('get-current-document-id'),
   setCurrentDocumentId: (documentId) => ipcRenderer.invoke('set-current-document-id', documentId),
-  
+
+  // 情感分析 - 人物管理
+  getPersons: () => ipcRenderer.invoke('get-persons'),
+  getPerson: (personId) => ipcRenderer.invoke('get-person', personId),
+  addPerson: (person) => ipcRenderer.invoke('add-person', person),
+  updatePerson: (personId, updates) => ipcRenderer.invoke('update-person', personId, updates),
+  deletePerson: (personId) => ipcRenderer.invoke('delete-person', personId),
+
+  // 情感分析 - 聊天记录
+  getChatRecords: (personId, limit) => ipcRenderer.invoke('get-chat-records', personId, limit),
+  addChatRecord: (record) => ipcRenderer.invoke('add-chat-record', record),
+  addChatRecords: (records) => ipcRenderer.invoke('add-chat-records', records),
+  deleteChatRecord: (recordId) => ipcRenderer.invoke('delete-chat-record', recordId),
+  clearChatRecords: (personId) => ipcRenderer.invoke('clear-chat-records', personId),
+
+  // 情感分析 - 日记管理
+  getDiaries: (personId, limit) => ipcRenderer.invoke('get-diaries', personId, limit),
+  addDiary: (diary) => ipcRenderer.invoke('add-diary', diary),
+  updateDiary: (diaryId, updates) => ipcRenderer.invoke('update-diary', diaryId, updates),
+  deleteDiary: (diaryId) => ipcRenderer.invoke('delete-diary', diaryId),
+
   // 数据路径管理
   getDataPath: () => ipcRenderer.invoke('get-data-path'),
   selectDataPath: () => ipcRenderer.invoke('select-data-path'),

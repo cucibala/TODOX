@@ -1684,3 +1684,190 @@ ipcMain.handle('import-project', async () => {
   }
 });
 
+// ==================== 情感分析 IPC 处理器 ====================
+
+// 人物管理
+ipcMain.handle('get-persons', async () => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const persons = db.getPersons();
+    return { success: true, persons };
+  } catch (error) {
+    console.error('获取人物列表失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-person', async (event, personId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const person = db.getPerson(personId);
+    return { success: true, person };
+  } catch (error) {
+    console.error('获取人物失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('add-person', async (event, person) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addPerson(person);
+    return { success: true };
+  } catch (error) {
+    console.error('添加人物失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-person', async (event, personId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updatePerson(personId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新人物失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-person', async (event, personId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deletePerson(personId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除人物失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 聊天记录管理
+ipcMain.handle('get-chat-records', async (event, personId, limit = 1000) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const records = db.getChatRecords(personId, limit);
+    return { success: true, records };
+  } catch (error) {
+    console.error('获取聊天记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('add-chat-record', async (event, record) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addChatRecord(record);
+    return { success: true };
+  } catch (error) {
+    console.error('添加聊天记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('add-chat-records', async (event, records) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addChatRecords(records);
+    return { success: true };
+  } catch (error) {
+    console.error('批量添加聊天记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-chat-record', async (event, recordId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteChatRecord(recordId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除聊天记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('clear-chat-records', async (event, personId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.clearChatRecords(personId);
+    return { success: true };
+  } catch (error) {
+    console.error('清空聊天记录失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// 日记管理
+ipcMain.handle('get-diaries', async (event, personId, limit = 100) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const diaries = db.getDiaries(personId, limit);
+    return { success: true, diaries };
+  } catch (error) {
+    console.error('获取日记失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('add-diary', async (event, diary) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addDiary(diary);
+    return { success: true };
+  } catch (error) {
+    console.error('添加日记失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-diary', async (event, diaryId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateDiary(diaryId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新日记失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-diary', async (event, diaryId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteDiary(diaryId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除日记失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+

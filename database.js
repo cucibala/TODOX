@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -168,6 +168,46 @@ class TodoXDatabase {
       )
     `);
 
+    // 人物画像表（情感分析）
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS persons (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        avatar TEXT,
+        profile TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // 聊天记录表（情感分析）
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS chat_records (
+        id TEXT PRIMARY KEY,
+        person_id TEXT NOT NULL,
+        sender TEXT NOT NULL,
+        content TEXT NOT NULL,
+        emotion TEXT,
+        timestamp TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 日记记录表（情感分析）
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS diaries (
+        id TEXT PRIMARY KEY,
+        person_id TEXT,
+        title TEXT,
+        content TEXT NOT NULL,
+        emotion TEXT,
+        tags TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
     // 创建索引
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_todos_project ON todos(project_id);
@@ -175,6 +215,8 @@ class TodoXDatabase {
       CREATE INDEX IF NOT EXISTS idx_progress_todo ON progress_records(todo_id);
       CREATE INDEX IF NOT EXISTS idx_images_entity ON images(entity_type, entity_id);
       CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_records_person ON chat_records(person_id);
+      CREATE INDEX IF NOT EXISTS idx_diaries_person ON diaries(person_id);
     `);
   }
 
@@ -1284,10 +1326,17 @@ class TodoXDatabase {
           console.log('✓ 已为 conversations 表添加 project_ids 字段');
         }
       },
-      
+
+      // 版本 4 - 添加情感分析相关表
+      4: function() {
+        // 这些表已经在 createTables() 中定义，如果表不存在会自动创建
+        // 如果表已存在，CREATE TABLE IF NOT EXISTS 会跳过
+        console.log('✓ 情感分析相关表已准备就绪');
+      },
+
       // 未来的迁移函数在这里添加...
     };
-    
+
     return migrations[version];
   }
 
@@ -1302,6 +1351,268 @@ class TodoXDatabase {
       console.error('获取版本历史失败:', error);
       return [];
     }
+  }
+
+  // ==================== 人物画像相关操作 ====================
+
+  /**
+   * 获取所有人物
+   */
+  getPersons() {
+    const stmt = this.db.prepare('SELECT * FROM persons ORDER BY updated_at DESC');
+    const persons = stmt.all();
+    return persons.map(p => ({
+      ...p,
+      profile: p.profile ? JSON.parse(p.profile) : null,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at
+    }));
+  }
+
+  /**
+   * 根据ID获取人物
+   */
+  getPerson(personId) {
+    const stmt = this.db.prepare('SELECT * FROM persons WHERE id = ?');
+    const person = stmt.get(String(personId));
+    if (!person) return null;
+
+    return {
+      ...person,
+      profile: person.profile ? JSON.parse(person.profile) : null,
+      createdAt: person.created_at,
+      updatedAt: person.updated_at
+    };
+  }
+
+  /**
+   * 添加人物
+   */
+  addPerson(person) {
+    const stmt = this.db.prepare(`
+      INSERT INTO persons (id, name, avatar, profile, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      String(person.id),
+      person.name,
+      person.avatar || null,
+      person.profile ? JSON.stringify(person.profile) : null,
+      person.createdAt || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新人物
+   */
+  updatePerson(personId, updates) {
+    const fields = [];
+    const values = [];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.avatar !== undefined) {
+      fields.push('avatar = ?');
+      values.push(updates.avatar);
+    }
+    if (updates.profile !== undefined) {
+      fields.push('profile = ?');
+      values.push(JSON.stringify(updates.profile));
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(String(personId));
+
+    const stmt = this.db.prepare(`
+      UPDATE persons SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除人物（级联删除聊天记录）
+   */
+  deletePerson(personId) {
+    this.db.prepare('DELETE FROM persons WHERE id = ?').run(String(personId));
+  }
+
+  // ==================== 聊天记录相关操作 ====================
+
+  /**
+   * 获取指定人物的聊天记录
+   */
+  getChatRecords(personId, limit = 1000) {
+    const stmt = this.db.prepare(`
+      SELECT * FROM chat_records
+      WHERE person_id = ?
+      ORDER BY timestamp DESC
+      LIMIT ?
+    `);
+    const records = stmt.all(String(personId), limit);
+    return records.map(r => ({
+      id: r.id,
+      personId: r.person_id,
+      sender: r.sender,
+      content: r.content,
+      emotion: r.emotion,
+      timestamp: r.timestamp,
+      createdAt: r.created_at
+    }));
+  }
+
+  /**
+   * 添加聊天记录
+   */
+  addChatRecord(record) {
+    const stmt = this.db.prepare(`
+      INSERT INTO chat_records (id, person_id, sender, content, emotion, timestamp, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      String(record.id),
+      String(record.personId),
+      record.sender,
+      record.content,
+      record.emotion || null,
+      record.timestamp || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 批量添加聊天记录
+   */
+  addChatRecords(records) {
+    const transaction = this.db.transaction(() => {
+      records.forEach(record => {
+        this.addChatRecord(record);
+      });
+    });
+    transaction();
+  }
+
+  /**
+   * 删除聊天记录
+   */
+  deleteChatRecord(recordId) {
+    this.db.prepare('DELETE FROM chat_records WHERE id = ?').run(String(recordId));
+  }
+
+  /**
+   * 清空指定人物的所有聊天记录
+   */
+  clearChatRecords(personId) {
+    this.db.prepare('DELETE FROM chat_records WHERE person_id = ?').run(String(personId));
+  }
+
+  // ==================== 日记相关操作 ====================
+
+  /**
+   * 获取所有日记
+   */
+  getDiaries(personId = null, limit = 100) {
+    let stmt;
+    let diaries;
+
+    if (personId) {
+      stmt = this.db.prepare(`
+        SELECT * FROM diaries
+        WHERE person_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+      `);
+      diaries = stmt.all(String(personId), limit);
+    } else {
+      stmt = this.db.prepare(`
+        SELECT * FROM diaries
+        ORDER BY created_at DESC
+        LIMIT ?
+      `);
+      diaries = stmt.all(limit);
+    }
+
+    return diaries.map(d => ({
+      id: d.id,
+      personId: d.person_id,
+      title: d.title,
+      content: d.content,
+      emotion: d.emotion,
+      tags: d.tags ? JSON.parse(d.tags) : [],
+      createdAt: d.created_at,
+      updatedAt: d.updated_at
+    }));
+  }
+
+  /**
+   * 添加日记
+   */
+  addDiary(diary) {
+    const stmt = this.db.prepare(`
+      INSERT INTO diaries (id, person_id, title, content, emotion, tags, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      String(diary.id),
+      diary.personId ? String(diary.personId) : null,
+      diary.title || null,
+      diary.content,
+      diary.emotion || null,
+      diary.tags ? JSON.stringify(diary.tags) : null,
+      diary.createdAt || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新日记
+   */
+  updateDiary(diaryId, updates) {
+    const fields = [];
+    const values = [];
+
+    if (updates.title !== undefined) {
+      fields.push('title = ?');
+      values.push(updates.title);
+    }
+    if (updates.content !== undefined) {
+      fields.push('content = ?');
+      values.push(updates.content);
+    }
+    if (updates.emotion !== undefined) {
+      fields.push('emotion = ?');
+      values.push(updates.emotion);
+    }
+    if (updates.tags !== undefined) {
+      fields.push('tags = ?');
+      values.push(JSON.stringify(updates.tags));
+    }
+    if (updates.personId !== undefined) {
+      fields.push('person_id = ?');
+      values.push(updates.personId ? String(updates.personId) : null);
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(String(diaryId));
+
+    const stmt = this.db.prepare(`
+      UPDATE diaries SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除日记
+   */
+  deleteDiary(diaryId) {
+    this.db.prepare('DELETE FROM diaries WHERE id = ?').run(String(diaryId));
   }
 }
 

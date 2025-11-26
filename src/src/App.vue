@@ -28,6 +28,9 @@
 
       <!-- 聊天页面 -->
       <ChatPage v-else-if="currentPage === 'chat'" />
+
+      <!-- 情感分析页面 -->
+      <EmotionPage v-else-if="currentPage === 'emotion'" />
     </main>
 
     <!-- 锁定界面 -->
@@ -89,11 +92,13 @@ import AISummaryDialog from './components/AISummaryDialog.vue'
 import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
 import DocumentPage from './pages/DocumentPage.vue'
+import EmotionPage from './pages/EmotionPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
 import { useChatStore } from './stores/chat'
 import { useDocumentStore } from './stores/document'
+import { useEmotionStore } from './stores/emotion'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
