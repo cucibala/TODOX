@@ -1,6 +1,6 @@
 {
   "name": "todox",
-  "version": "3.10.0",
+  "version": "3.11.0",
   "description": "一个现代化的桌面任务清单应用 - 支持项目管理、进度追踪、多图片附件、粘贴图片、桌面背景模式、窗口置顶、迷你模式、系统托盘",
   "main": "main.js",
   "scripts": {
@@ -74,6 +74,6 @@
     }
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1"
+    "better-sqlite3": "^12.4.6"
   }
 }

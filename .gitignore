@@ -18,3 +18,4 @@ release/
 dist-vue/*
 test/
 .env
+.claude
