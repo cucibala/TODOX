@@ -206,6 +206,21 @@
         <p>点击左侧按钮创建文档或文件夹</p>
       </div>
     </div>
+
+    <!-- AI 助手面板 -->
+    <DocumentAIPanel
+      :is-collapsed="aiPanelCollapsed"
+      :has-content="!!currentDocument?.content"
+      :is-processing="aiProcessing"
+      :processing-message="aiProcessingMessage"
+      :result="aiResult"
+      @toggle="aiPanelCollapsed = !aiPanelCollapsed"
+      @action="handleAIAction"
+      @ask-question="handleAskQuestion"
+      @copy-result="handleCopyResult"
+      @insert-result="handleInsertResult"
+      @replace-result="handleReplaceResult"
+    />
   </div>
 </template>
 
@@ -217,9 +232,14 @@ import { useAppStore } from '../stores/app'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DocumentTreeItem from '../components/DocumentTreeItem.vue'
+import DocumentAIPanel from '../components/DocumentAIPanel.vue'
+import { DocumentAITool } from '../utils/document_ai_tool'
+import { DeepSeekClient } from '../utils/deepseek'
+import { DoubaoClient } from '../utils/doubao'
 
 const documentStore = useDocumentStore()
 const appStore = useAppStore()
+const electronAPI = window.electronAPI
 
 const { documents, currentDocumentId, currentDocument, documentTree, expandedFolders } = storeToRefs(documentStore)
 
@@ -230,6 +250,14 @@ const viewMode = ref('preview')
 const searchQuery = ref('')
 const draggingItem = ref(null)
 const isDraggingOverRoot = ref(false)
+
+// AI 助手状态
+const aiPanelCollapsed = ref(true)
+const aiProcessing = ref(false)
+const aiProcessingMessage = ref('')
+const aiResult = ref('')
+const aiClient = ref(null)
+const aiTool = ref(null)
 
 // 过滤后的文档列表（用于搜索）
 const filteredDocuments = computed(() => {
@@ -530,8 +558,207 @@ async function handlePaste(event) {
   }
 }
 
+// 初始化 AI 客户端
+async function initAIClient() {
+  try {
+    if (appStore.currentAIModel === 'doubao') {
+      const result = await electronAPI.getDoubaoKey()
+      if (result.success && result.key) {
+        const endpoint = result.endpoint || 'https://ark.cn-beijing.volces.com/api/v3'
+        const model = result.model || 'doubao-seed-1-6-251015'
+        aiClient.value = new DoubaoClient(result.key, endpoint, model)
+        aiTool.value = new DocumentAITool(aiClient.value)
+      }
+    } else {
+      const result = await electronAPI.getDeepSeekKey()
+      if (result.success && result.key) {
+        aiClient.value = new DeepSeekClient(result.key)
+        aiTool.value = new DocumentAITool(aiClient.value)
+      }
+    }
+  } catch (error) {
+    console.error('初始化 AI 客户端失败:', error)
+  }
+}
+
+// AI 操作处理
+async function handleAIAction(action) {
+  if (!currentDocument.value?.content) {
+    appStore.toast('文档内容为空')
+    return
+  }
+
+  if (!aiTool.value) {
+    appStore.toast('请先配置 AI API 密钥')
+    appStore.showApiKeyDialog = true
+    return
+  }
+
+  aiProcessing.value = true
+  aiResult.value = ''
+
+  try {
+    const content = currentDocument.value.content
+    let result = ''
+
+    switch (action) {
+      case 'polish':
+        result = await aiTool.value.polishDocument(
+          content,
+          '',
+          (msg) => { aiProcessingMessage.value = msg }
+        )
+        break
+
+      case 'summarize':
+        result = await aiTool.value.summarizeDocument(
+          content,
+          500,
+          (msg) => { aiProcessingMessage.value = msg }
+        )
+        break
+
+      case 'expand':
+        result = await aiTool.value.expandDocument(
+          content,
+          '',
+          (msg) => { aiProcessingMessage.value = msg }
+        )
+        break
+
+      case 'outline':
+        result = await aiTool.value.generateOutline(
+          content,
+          (msg) => { aiProcessingMessage.value = msg }
+        )
+        break
+
+      case 'translate':
+        result = await aiTool.value.translateDocument(
+          content,
+          '英文',
+          (msg) => { aiProcessingMessage.value = msg }
+        )
+        break
+
+      case 'continue':
+        result = await aiTool.value.continueWriting(
+          content,
+          '',
+          (msg) => { aiProcessingMessage.value = msg }
+        )
+        break
+
+      default:
+        appStore.toast('未知操作')
+        return
+    }
+
+    aiResult.value = result
+    aiPanelCollapsed.value = false
+    appStore.toast('处理完成')
+  } catch (error) {
+    console.error('AI 处理失败:', error)
+    appStore.toast(error.message || 'AI 处理失败')
+  } finally {
+    aiProcessing.value = false
+    aiProcessingMessage.value = ''
+  }
+}
+
+// AI 问答处理
+async function handleAskQuestion(question) {
+  if (!currentDocument.value?.content) {
+    appStore.toast('文档内容为空')
+    return
+  }
+
+  if (!aiTool.value) {
+    appStore.toast('请先配置 AI API 密钥')
+    appStore.showApiKeyDialog = true
+    return
+  }
+
+  aiProcessing.value = true
+  aiResult.value = ''
+
+  try {
+    const result = await aiTool.value.askQuestion(
+      currentDocument.value.content,
+      question,
+      (msg) => { aiProcessingMessage.value = msg }
+    )
+
+    aiResult.value = result
+    appStore.toast('回答完成')
+  } catch (error) {
+    console.error('AI 问答失败:', error)
+    appStore.toast(error.message || 'AI 问答失败')
+  } finally {
+    aiProcessing.value = false
+    aiProcessingMessage.value = ''
+  }
+}
+
+// 复制 AI 结果
+async function handleCopyResult() {
+  try {
+    await navigator.clipboard.writeText(aiResult.value)
+    appStore.toast('已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+    appStore.toast('复制失败')
+  }
+}
+
+// 插入 AI 结果到文档
+function handleInsertResult() {
+  if (!currentDocument.value) return
+
+  const textarea = textareaRef.value
+  if (!textarea) return
+
+  const cursorPos = textarea.selectionStart
+  const currentContent = currentDocument.value.content || ''
+
+  const newContent =
+    currentContent.slice(0, cursorPos) +
+    '\n\n' +
+    aiResult.value +
+    '\n\n' +
+    currentContent.slice(cursorPos)
+
+  currentDocument.value.content = newContent
+  handleContentChange()
+
+  nextTick(() => {
+    const newCursorPos = cursorPos + aiResult.value.length + 4
+    textarea.setSelectionRange(newCursorPos, newCursorPos)
+    textarea.focus()
+  })
+
+  appStore.toast('已插入到文档')
+  aiResult.value = ''
+}
+
+// 替换文档内容为 AI 结果
+async function handleReplaceResult() {
+  const confirmed = await appStore.confirm('确定要用 AI 结果替换整个文档内容吗？')
+  if (!confirmed) return
+
+  if (!currentDocument.value) return
+
+  currentDocument.value.content = aiResult.value
+  handleContentChange()
+
+  appStore.toast('已替换文档内容')
+  aiResult.value = ''
+}
+
 onMounted(async () => {
   // 文档数据已在 App.vue 中加载
+  // 初始化 AI 客户端
+  await initAIClient()
 })
 </script>
 
