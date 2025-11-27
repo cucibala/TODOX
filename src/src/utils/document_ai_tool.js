@@ -359,13 +359,16 @@ export class DocumentAITool {
       throw new Error('没有包含内容的文档可供检索')
     }
 
-    // 为文档建立索引（序号 -> 文档映射，包含真实 ID）
+    // 为文档建立索引（序号 -> 文档映射，包含真实 ID、标题等信息）
     const docMap = new Map()
-    const documentMap = {} // 用于返回给前端的映射 { 序号: 真实文档ID }
+    const documentMap = {} // 用于返回给前端的映射 { 序号: { id, title } }
     docsWithContent.forEach((doc, index) => {
       const seqId = index + 1
       docMap.set(seqId, doc)
-      documentMap[seqId] = doc.id // 映射序号到真实文档 ID
+      documentMap[seqId] = {
+        id: doc.id,
+        title: doc.title || '无标题'
+      }
     })
 
     // 构建文档摘要列表（只包含标题和简短预览）
@@ -474,7 +477,12 @@ export class DocumentAITool {
 
 - 一定要提取多个关键词变体进行搜索，确保不遗漏
 - 优先使用 search_keywords，它能快速定位信息
-- 信息可能分散在不同文档中（如"密码记录"、"账号记录"等）`
+- 信息可能分散在不同文档中（如"密码记录"、"账号记录"等）
+
+## 回答格式要求
+
+- 引用来源时，必须使用【文档 X】格式（X 是数字编号），例如：根据【文档 1】...
+- 不要使用文档标题作为引用，只使用【文档 X】格式，这样用户可以点击跳转到对应文档`
 
     const userPrompt = `我有以下文档：
 
@@ -598,13 +606,14 @@ ${documentIndex}
 
 回答要求：
 - 直接回答问题，不要过多解释
-- 标明信息来源（哪个文档）
+- 引用来源时，必须使用【文档 X】格式（X 是数字编号），例如：根据【文档 1】的内容...
+- 不要使用文档标题作为引用，只使用【文档 X】格式，这样用户可以点击跳转
 - 如果涉及账号密码等敏感信息，直接展示（用户本人在查询自己的信息）
 - 如果没有找到相关信息，明确告知用户
 - 使用 Markdown 格式使回答更易读`
 
     messages[0] = { role: 'system', content: finalSystemPrompt }
-    messages.push({ role: 'user', content: '请根据以上收集到的信息，回答我最初的问题。' })
+    messages.push({ role: 'user', content: '请根据以上收集到的信息，回答我最初的问题。注意：引用来源时必须使用【文档 X】格式（X是数字），不要使用文档标题。' })
 
     let result = ''
     await this.aiClient.chatCompletionsStream(messages, {

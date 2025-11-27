@@ -134,39 +134,31 @@
             placeholder="文档标题"
             maxlength="100"
           />
-          <div class="document-meta">
-            <span class="meta-item">
-              创建于 {{ formatDate(currentDocument.createdAt) }}
-            </span>
-            <span class="meta-item">
-              更新于 {{ formatDate(currentDocument.updatedAt) }}
-            </span>
-            <div class="document-mode-toggle">
-              <button
-                class="mode-btn"
-                :class="{ active: viewMode === 'edit' }"
-                @click="viewMode = 'edit'"
-                title="编辑模式"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-                <span>编辑</span>
-              </button>
-              <button
-                class="mode-btn"
-                :class="{ active: viewMode === 'preview' }"
-                @click="viewMode = 'preview'"
-                title="预览模式"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-                <span>预览</span>
-              </button>
-            </div>
+          <div class="document-mode-toggle">
+            <button
+              class="mode-btn"
+              :class="{ active: viewMode === 'edit' }"
+              @click="viewMode = 'edit'"
+              title="编辑模式"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              <span>编辑</span>
+            </button>
+            <button
+              class="mode-btn"
+              :class="{ active: viewMode === 'preview' }"
+              @click="viewMode = 'preview'"
+              title="预览模式"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span>预览</span>
+            </button>
           </div>
         </div>
 
@@ -336,7 +328,7 @@
         </div>
 
         <!-- 预览模式 -->
-        <div v-else class="document-preview">
+        <div v-else class="document-preview" ref="previewRef">
           <div
             class="markdown-body"
             v-html="renderedMarkdown"
@@ -377,7 +369,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useDocumentStore } from '../stores/document'
 import { useAppStore } from '../stores/app'
@@ -398,10 +390,12 @@ const { documents, currentDocumentId, currentDocument, documentTree, expandedFol
 // 本地状态
 const sidebarCollapsed = ref(false)
 const textareaRef = ref(null)
+const previewRef = ref(null)
 const viewMode = ref('preview')
 const searchQuery = ref('')
 const draggingItem = ref(null)
 const isDraggingOverRoot = ref(false)
+const isNavigatingToDocument = ref(false) // 标记是否正在跳转到文档
 
 // AI 助手状态（编辑区内嵌）
 const aiProcessing = ref(false)
@@ -917,12 +911,61 @@ async function handleCopySearchResult() {
   }
 }
 
-// 跳转到检索到的文档
-function handleNavigateDocument(seqId) {
-  const realDocId = searchDocumentMap.value[seqId]
-  if (realDocId) {
-    documentStore.selectDocument(realDocId)
-    appStore.toast('已跳转到文档')
+// 跳转到检索到的文档，并定位到匹配位置
+async function handleNavigateDocument(seqId, searchKeyword = '') {
+  const docInfo = searchDocumentMap.value[seqId]
+  if (docInfo && docInfo.id) {
+    // 标记正在跳转到文档，防止滚动同步逻辑干扰
+    isNavigatingToDocument.value = true
+
+    // 先选择文档
+    documentStore.selectDocument(docInfo.id)
+
+    // 切换到编辑模式以便定位
+    viewMode.value = 'edit'
+
+    // 等待 DOM 更新后定位到匹配位置
+    await nextTick()
+
+    if (searchKeyword && textareaRef.value) {
+      const content = currentDocument.value?.content || ''
+      // 从搜索问题中提取关键词进行定位
+      const keywords = searchKeyword.split(/\s+/).filter(k => k.length >= 2)
+
+      // 在文档中查找第一个匹配的关键词位置
+      let matchPos = -1
+      let matchKeyword = ''
+      for (const keyword of keywords) {
+        const pos = content.toLowerCase().indexOf(keyword.toLowerCase())
+        if (pos !== -1) {
+          matchPos = pos
+          matchKeyword = keyword
+          break
+        }
+      }
+
+      if (matchPos !== -1) {
+        const textarea = textareaRef.value
+        textarea.focus()
+        textarea.setSelectionRange(matchPos, matchPos + matchKeyword.length)
+
+        // 使用正确的方式计算滚动位置：根据匹配位置之前的换行符数量计算行号
+        const textBeforeMatch = content.substring(0, matchPos)
+        const lineNumber = (textBeforeMatch.match(/\n/g) || []).length
+
+        // 获取 textarea 的实际行高
+        const computedStyle = window.getComputedStyle(textarea)
+        const lineHeight = parseFloat(computedStyle.lineHeight) || 27 // 默认行高
+
+        // 计算滚动位置，让匹配位置显示在可视区域中间
+        const targetScrollTop = Math.max(0, lineNumber * lineHeight - textarea.clientHeight / 3)
+        textarea.scrollTop = targetScrollTop
+      }
+    }
+
+    // 重置标记
+    isNavigatingToDocument.value = false
+    appStore.toast(`已跳转到文档: ${docInfo.title}`)
   } else {
     appStore.toast('文档不存在')
   }
@@ -983,6 +1026,44 @@ async function handleReplaceResult() {
   aiResult.value = ''
 }
 
+// 监听模式切换，同步滚动位置
+watch(viewMode, async (newMode, oldMode) => {
+  // 如果是跳转到文档触发的模式切换，不进行滚动同步
+  if (isNavigatingToDocument.value) return
+
+  if (!currentDocument.value?.content) return
+
+  await nextTick()
+
+  // 从编辑模式切换到预览模式
+  if (oldMode === 'edit' && newMode === 'preview' && textareaRef.value && previewRef.value) {
+    const textarea = textareaRef.value
+    const preview = previewRef.value
+
+    // 计算编辑模式的滚动百分比
+    const scrollPercentage = textarea.scrollTop / (textarea.scrollHeight - textarea.clientHeight)
+
+    // 应用到预览模式
+    if (preview.scrollHeight > preview.clientHeight) {
+      preview.scrollTop = scrollPercentage * (preview.scrollHeight - preview.clientHeight)
+    }
+  }
+
+  // 从预览模式切换到编辑模式
+  if (oldMode === 'preview' && newMode === 'edit' && textareaRef.value && previewRef.value) {
+    const textarea = textareaRef.value
+    const preview = previewRef.value
+
+    // 计算预览模式的滚动百分比
+    const scrollPercentage = preview.scrollTop / (preview.scrollHeight - preview.clientHeight)
+
+    // 应用到编辑模式
+    if (textarea.scrollHeight > textarea.clientHeight) {
+      textarea.scrollTop = scrollPercentage * (textarea.scrollHeight - textarea.clientHeight)
+    }
+  }
+})
+
 onMounted(async () => {
   // 文档数据已在 App.vue 中加载
   // 初始化 AI 客户端
@@ -1020,6 +1101,7 @@ onMounted(async () => {
 }
 
 .sidebar-header {
+  height: 72px;
   padding: 12px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -1261,46 +1343,38 @@ onMounted(async () => {
 }
 
 .document-header {
-  padding: 24px 32px;
+  height: 72px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
 .document-title-input {
-  width: 100%;
-  font-size: 24px;
+  flex: 1;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
   background: transparent;
   border: none;
   outline: none;
-  padding: 8px 0;
-  margin-bottom: 12px;
+  padding: 8px 12px;
 }
 
 .document-title-input::placeholder {
   color: var(--text-tertiary);
 }
 
-.document-meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.meta-item {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
 .document-mode-toggle {
   display: flex;
   gap: 4px;
-  margin-left: auto;
   background: var(--bg-primary);
   border-radius: 8px;
   padding: 4px;
+  flex-shrink: 0;
 }
 
 .mode-btn {

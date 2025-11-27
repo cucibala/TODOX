@@ -17,3 +17,4 @@ release/
 *.rpm
 dist-vue/*
 test/
+.env

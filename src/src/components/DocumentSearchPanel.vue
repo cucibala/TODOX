@@ -125,21 +125,22 @@ const emit = defineEmits([
 
 const searchQuestion = ref('')
 
-// 自定义 marked renderer 来处理文档链接
-const renderer = new marked.Renderer()
-renderer.text = function(token) {
-  const text = token.text || token
-  // 匹配【文档 X】的模式，转换为可点击链接
-  return text.replace(/【文档\s*(\d+)】/g, '<a href="#" class="doc-link" data-doc-id="$1">【文档 $1】</a>')
-}
-
-marked.setOptions({ renderer })
-
-// 渲染结果（Markdown）
+// 渲染结果（Markdown），并将【文档 X】转换为可点击链接（显示实际文档名称）
 const renderedResult = computed(() => {
   if (!props.result) return ''
   try {
-    return marked.parse(props.result)
+    // 先用 marked 渲染 Markdown
+    let html = marked.parse(props.result)
+    // 然后替换【文档 X】为可点击链接，显示实际文档名称
+    html = html.replace(/【文档\s*(\d+)】/g, (match, docId) => {
+      const docInfo = props.documentMap[docId]
+      if (docInfo) {
+        const title = docInfo.title || '无标题'
+        return `<a href="#" class="doc-link" data-doc-id="${docId}" title="点击跳转到文档">📄 ${title}</a>`
+      }
+      return match
+    })
+    return html
   } catch (error) {
     console.error('Markdown 渲染失败:', error)
     return props.result
@@ -161,7 +162,8 @@ function handleResultClick(event) {
     event.preventDefault()
     const docId = parseInt(target.dataset.docId)
     if (docId) {
-      emit('navigate-document', docId)
+      // 传递文档ID和搜索问题（用于定位）
+      emit('navigate-document', docId, searchQuestion.value)
     }
   }
 }
@@ -183,6 +185,7 @@ function handleResultClick(event) {
 }
 
 .panel-header {
+  height: 72px;
   padding: 16px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
