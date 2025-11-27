@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -1039,25 +1039,45 @@ class TodoXDatabase {
   // ==================== 文档相关操作 ====================
 
   /**
-   * 获取所有文档
+   * 获取所有文档（包括文件夹）
    */
   getDocuments() {
-    const stmt = this.db.prepare('SELECT * FROM documents ORDER BY updated_at DESC');
-    return stmt.all();
+    const stmt = this.db.prepare('SELECT * FROM documents ORDER BY order_index ASC, updated_at DESC');
+    const docs = stmt.all();
+    return docs.map(doc => ({
+      id: doc.id,
+      title: doc.title,
+      content: doc.content,
+      parentId: doc.parent_id,
+      type: doc.type || 'document',
+      orderIndex: doc.order_index || 0,
+      createdAt: doc.created_at,
+      updatedAt: doc.updated_at
+    }));
   }
 
   /**
-   * 添加单个文档
+   * 添加单个文档或文件夹
    */
   addDocument(document) {
+    // 获取同级目录下最大的 order_index
+    const maxOrderStmt = this.db.prepare(
+      'SELECT MAX(order_index) as maxOrder FROM documents WHERE parent_id IS ?'
+    );
+    const maxOrderResult = maxOrderStmt.get(document.parentId || null);
+    const nextOrder = (maxOrderResult?.maxOrder ?? -1) + 1;
+
     const stmt = this.db.prepare(`
-      INSERT INTO documents (id, title, content, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO documents (id, title, content, parent_id, type, order_index, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       String(document.id),
-      document.title || '无标题文档',
+      document.title || (document.type === 'folder' ? '新建文件夹' : '无标题文档'),
       document.content || '',
+      document.parentId || null,
+      document.type || 'document',
+      document.orderIndex ?? nextOrder,
       document.createdAt || document.created_at || new Date().toISOString(),
       document.updatedAt || document.updated_at || new Date().toISOString()
     );
@@ -1069,7 +1089,7 @@ class TodoXDatabase {
   updateDocument(documentId, updates) {
     const fields = [];
     const values = [];
-    
+
     if (updates.title !== undefined) {
       fields.push('title = ?');
       values.push(updates.title);
@@ -1078,11 +1098,23 @@ class TodoXDatabase {
       fields.push('content = ?');
       values.push(updates.content);
     }
-    
+    if (updates.parentId !== undefined) {
+      fields.push('parent_id = ?');
+      values.push(updates.parentId);
+    }
+    if (updates.type !== undefined) {
+      fields.push('type = ?');
+      values.push(updates.type);
+    }
+    if (updates.orderIndex !== undefined) {
+      fields.push('order_index = ?');
+      values.push(updates.orderIndex);
+    }
+
     fields.push('updated_at = ?');
     values.push(updates.updatedAt || new Date().toISOString());
     values.push(String(documentId));
-    
+
     const stmt = this.db.prepare(`
       UPDATE documents SET ${fields.join(', ')} WHERE id = ?
     `);
@@ -1090,10 +1122,102 @@ class TodoXDatabase {
   }
 
   /**
-   * 删除单个文档
+   * 删除单个文档（如果是文件夹，递归删除子项）
    */
   deleteDocument(documentId) {
+    // 递归删除子项
+    const deleteChildren = (parentId) => {
+      const children = this.db.prepare('SELECT id, type FROM documents WHERE parent_id = ?').all(parentId);
+      for (const child of children) {
+        if (child.type === 'folder') {
+          deleteChildren(child.id);
+        }
+        this.db.prepare('DELETE FROM documents WHERE id = ?').run(child.id);
+      }
+    };
+
+    // 先删除子项
+    deleteChildren(String(documentId));
+    // 再删除本身
     this.db.prepare('DELETE FROM documents WHERE id = ?').run(String(documentId));
+  }
+
+  /**
+   * 移动文档或文件夹到新位置
+   * @param {string} documentId - 要移动的文档ID
+   * @param {string|null} newParentId - 新的父目录ID（null表示移动到根级）
+   * @param {number} newOrderIndex - 新的排序索引
+   */
+  moveDocument(documentId, newParentId, newOrderIndex) {
+    const transaction = this.db.transaction(() => {
+      // 获取当前文档信息
+      const doc = this.db.prepare('SELECT * FROM documents WHERE id = ?').get(String(documentId));
+      if (!doc) return;
+
+      const oldParentId = doc.parent_id;
+      const oldOrderIndex = doc.order_index;
+
+      // 如果父目录没变，只是调整顺序
+      if (oldParentId === newParentId) {
+        if (newOrderIndex > oldOrderIndex) {
+          // 向下移动：将中间的项向上移
+          this.db.prepare(`
+            UPDATE documents
+            SET order_index = order_index - 1
+            WHERE parent_id IS ? AND order_index > ? AND order_index <= ?
+          `).run(newParentId, oldOrderIndex, newOrderIndex);
+        } else if (newOrderIndex < oldOrderIndex) {
+          // 向上移动：将中间的项向下移
+          this.db.prepare(`
+            UPDATE documents
+            SET order_index = order_index + 1
+            WHERE parent_id IS ? AND order_index >= ? AND order_index < ?
+          `).run(newParentId, newOrderIndex, oldOrderIndex);
+        }
+      } else {
+        // 父目录改变
+        // 1. 原父目录中后续项的 order_index 减 1
+        this.db.prepare(`
+          UPDATE documents
+          SET order_index = order_index - 1
+          WHERE parent_id IS ? AND order_index > ?
+        `).run(oldParentId, oldOrderIndex);
+
+        // 2. 新父目录中目标位置及之后的项 order_index 加 1
+        this.db.prepare(`
+          UPDATE documents
+          SET order_index = order_index + 1
+          WHERE parent_id IS ? AND order_index >= ?
+        `).run(newParentId, newOrderIndex);
+      }
+
+      // 更新当前文档的位置
+      this.db.prepare(`
+        UPDATE documents
+        SET parent_id = ?, order_index = ?, updated_at = ?
+        WHERE id = ?
+      `).run(newParentId, newOrderIndex, new Date().toISOString(), String(documentId));
+    });
+
+    transaction();
+  }
+
+  /**
+   * 获取文件夹的所有子孙文档ID（用于检测循环引用）
+   */
+  getDescendantIds(folderId) {
+    const ids = [];
+    const collectDescendants = (parentId) => {
+      const children = this.db.prepare('SELECT id, type FROM documents WHERE parent_id = ?').all(parentId);
+      for (const child of children) {
+        ids.push(child.id);
+        if (child.type === 'folder') {
+          collectDescendants(child.id);
+        }
+      }
+    };
+    collectDescendants(String(folderId));
+    return ids;
   }
 
   // ==================== 数据迁移相关 ====================
@@ -1332,6 +1456,40 @@ class TodoXDatabase {
         // 这些表已经在 createTables() 中定义，如果表不存在会自动创建
         // 如果表已存在，CREATE TABLE IF NOT EXISTS 会跳过
         console.log('✓ 情感分析相关表已准备就绪');
+      },
+
+      // 版本 5 - 为文档表添加多级目录支持字段
+      5: function() {
+        const tableInfo = this.db.prepare('PRAGMA table_info(documents)').all();
+        const columnNames = tableInfo.map(col => col.name);
+
+        // 添加 parent_id 字段（父目录ID，null表示根级）
+        if (!columnNames.includes('parent_id')) {
+          this.db.exec('ALTER TABLE documents ADD COLUMN parent_id TEXT;');
+          console.log('✓ 已为 documents 表添加 parent_id 字段');
+        }
+
+        // 添加 type 字段（folder/document）
+        if (!columnNames.includes('type')) {
+          this.db.exec("ALTER TABLE documents ADD COLUMN type TEXT DEFAULT 'document';");
+          console.log('✓ 已为 documents 表添加 type 字段');
+        }
+
+        // 添加 order_index 字段（排序索引）
+        if (!columnNames.includes('order_index')) {
+          this.db.exec('ALTER TABLE documents ADD COLUMN order_index INTEGER DEFAULT 0;');
+          console.log('✓ 已为 documents 表添加 order_index 字段');
+        }
+
+        // 为现有文档设置默认 order_index
+        const docs = this.db.prepare('SELECT id FROM documents WHERE order_index = 0 OR order_index IS NULL').all();
+        if (docs.length > 0) {
+          const updateStmt = this.db.prepare('UPDATE documents SET order_index = ? WHERE id = ?');
+          docs.forEach((doc, index) => {
+            updateStmt.run(index, doc.id);
+          });
+          console.log(`✓ 已为 ${docs.length} 个现有文档设置排序索引`);
+        }
       },
 
       // 未来的迁移函数在这里添加...

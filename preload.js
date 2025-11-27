@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteDocument: (documentId) => ipcRenderer.invoke('delete-document', documentId),
   getCurrentDocumentId: () => ipcRenderer.invoke('get-current-document-id'),
   setCurrentDocumentId: (documentId) => ipcRenderer.invoke('set-current-document-id', documentId),
+  moveDocument: (documentId, newParentId, newOrderIndex) => ipcRenderer.invoke('move-document', documentId, newParentId, newOrderIndex),
+  getDescendantIds: (folderId) => ipcRenderer.invoke('get-descendant-ids', folderId),
 
   // 情感分析 - 人物管理
   getPersons: () => ipcRenderer.invoke('get-persons'),

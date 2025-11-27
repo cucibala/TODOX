@@ -1502,12 +1502,42 @@ ipcMain.handle('set-current-document-id', async (event, documentId) => {
     if (!db) {
       throw new Error('数据库未初始化');
     }
-    
+
     db.setCurrentDocumentId(documentId);
     return { success: true };
   } catch (error) {
     console.error('设置当前文档ID失败:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 移动文档
+ipcMain.handle('move-document', async (event, documentId, newParentId, newOrderIndex) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
+    db.moveDocument(documentId, newParentId, newOrderIndex);
+    return { success: true };
+  } catch (error) {
+    console.error('移动文档失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 获取文件夹的所有子孙ID
+ipcMain.handle('get-descendant-ids', async (event, folderId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
+    const ids = db.getDescendantIds(folderId);
+    return { success: true, ids };
+  } catch (error) {
+    console.error('获取子孙ID失败:', error);
+    return { success: false, error: error.message, ids: [] };
   }
 });
 

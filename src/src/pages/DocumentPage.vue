@@ -4,14 +4,24 @@
     <div class="documents-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <div v-if="!sidebarCollapsed" class="header-actions">
-          <button class="btn-new-document" @click="handleCreateDocument" title="新建文档">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span>新建</span>
-          </button>
-          
+          <div class="btn-group">
+            <button class="btn-new-document" @click="handleCreateDocument" title="新建文档">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+            </button>
+            <button class="btn-new-folder" @click="handleCreateFolder" title="新建文件夹">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                <line x1="12" y1="11" x2="12" y2="17"></line>
+                <line x1="9" y1="14" x2="15" y2="14"></line>
+              </svg>
+            </button>
+          </div>
+
           <!-- 搜索框 -->
           <div class="search-box">
             <input
@@ -20,8 +30,8 @@
               placeholder="搜索..."
               class="search-input"
             />
-            <button 
-              v-if="searchQuery" 
+            <button
+              v-if="searchQuery"
               class="btn-clear-search"
               @click="searchQuery = ''"
               title="清空搜索"
@@ -33,50 +43,76 @@
             </button>
           </div>
         </div>
-        <button v-else class="btn-new-document" @click="handleCreateDocument" title="新建文档">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
-      </div>
-
-      <div class="documents-list">
-        <div
-          v-for="doc in filteredDocuments"
-          :key="doc.id"
-          class="document-item"
-          :class="{ active: doc.id === currentDocumentId }"
-          @click="handleSelectDocument(doc.id)"
-        >
-          <div class="document-icon">
+        <div v-else class="btn-group-collapsed">
+          <button class="btn-new-document" @click="handleCreateDocument" title="新建文档">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-          </div>
-          <div class="document-info" v-if="!sidebarCollapsed">
-            <div class="document-title">{{ doc.title || '无标题文档' }}</div>
-            <div class="document-time">{{ formatTime(doc.updatedAt) }}</div>
-          </div>
-          <button 
-            class="btn-delete-document" 
-            v-if="!sidebarCollapsed"
-            @click.stop="handleDeleteDocument(doc.id)"
-            title="删除文档"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
           </button>
         </div>
+      </div>
 
-        <div v-if="filteredDocuments.length === 0" class="documents-empty">
-          <p v-if="!sidebarCollapsed">
-            {{ searchQuery ? '未找到匹配的文档' : '暂无文档' }}
-          </p>
-        </div>
+      <div
+        class="documents-list"
+        @dragover.prevent="handleRootDragOver"
+        @drop="handleRootDrop"
+        @dragleave="handleRootDragLeave"
+        :class="{ 'drag-over-root': isDraggingOverRoot }"
+      >
+        <!-- 搜索结果视图 -->
+        <template v-if="searchQuery">
+          <div
+            v-for="doc in filteredDocuments"
+            :key="doc.id"
+            class="document-item"
+            :class="{ active: doc.id === currentDocumentId }"
+            @click="handleSelectDocument(doc.id)"
+          >
+            <div class="document-icon">
+              <svg v-if="doc.type === 'folder'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+              </svg>
+            </div>
+            <div class="document-info" v-if="!sidebarCollapsed">
+              <div class="document-title">{{ doc.title || '无标题' }}</div>
+              <div class="document-time">{{ formatTime(doc.updatedAt) }}</div>
+            </div>
+          </div>
+          <div v-if="filteredDocuments.length === 0" class="documents-empty">
+            <p v-if="!sidebarCollapsed">未找到匹配的文档</p>
+          </div>
+        </template>
+
+        <!-- 树形视图 -->
+        <template v-else>
+          <DocumentTreeItem
+            v-for="item in documentTree"
+            :key="item.id"
+            :item="item"
+            :level="0"
+            :sidebar-collapsed="sidebarCollapsed"
+            :current-document-id="currentDocumentId"
+            :expanded-folders="expandedFolders"
+            :dragging-item="draggingItem"
+            @select="handleSelectDocument"
+            @delete="handleDeleteDocument"
+            @create-document="handleCreateDocumentInFolder"
+            @create-folder="handleCreateFolderInFolder"
+            @rename="handleRename"
+            @drag-start="handleDragStart"
+            @drag-end="handleDragEnd"
+            @drop="handleDrop"
+          />
+
+          <div v-if="documentTree.length === 0" class="documents-empty">
+            <p v-if="!sidebarCollapsed">暂无文档</p>
+          </div>
+        </template>
       </div>
 
       <button class="btn-toggle-sidebar" @click="sidebarCollapsed = !sidebarCollapsed" title="收起/展开">
@@ -91,7 +127,7 @@
       <div v-if="currentDocument" class="document-editor">
         <!-- 文档标题编辑 -->
         <div class="document-header">
-          <input 
+          <input
             v-model="currentDocument.title"
             @input="handleTitleChange"
             class="document-title-input"
@@ -106,8 +142,8 @@
               更新于 {{ formatDate(currentDocument.updatedAt) }}
             </span>
             <div class="document-mode-toggle">
-              <button 
-                class="mode-btn" 
+              <button
+                class="mode-btn"
                 :class="{ active: viewMode === 'edit' }"
                 @click="viewMode = 'edit'"
                 title="编辑模式"
@@ -118,8 +154,8 @@
                 </svg>
                 <span>编辑</span>
               </button>
-              <button 
-                class="mode-btn" 
+              <button
+                class="mode-btn"
                 :class="{ active: viewMode === 'preview' }"
                 @click="viewMode = 'preview'"
                 title="预览模式"
@@ -148,8 +184,8 @@
 
         <!-- 预览模式 -->
         <div v-else class="document-preview">
-          <div 
-            class="markdown-body" 
+          <div
+            class="markdown-body"
             v-html="renderedMarkdown"
             @click="handlePreviewClick"
           ></div>
@@ -167,67 +203,65 @@
           </svg>
         </div>
         <h3>开始创建你的文档</h3>
-        <p>点击左侧「新建文档」按钮创建第一个文档</p>
+        <p>点击左侧按钮创建文档或文件夹</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useDocumentStore } from '../stores/document'
 import { useAppStore } from '../stores/app'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
+import DocumentTreeItem from '../components/DocumentTreeItem.vue'
 
 const documentStore = useDocumentStore()
 const appStore = useAppStore()
 
-const { documents, currentDocumentId, currentDocument } = storeToRefs(documentStore)
+const { documents, currentDocumentId, currentDocument, documentTree, expandedFolders } = storeToRefs(documentStore)
 
 // 本地状态
 const sidebarCollapsed = ref(false)
-
-// textarea 引用
 const textareaRef = ref(null)
-const viewMode = ref('preview') // 'edit' | 'preview' - 默认预览模式
-const searchQuery = ref('') // 搜索关键词
+const viewMode = ref('preview')
+const searchQuery = ref('')
+const draggingItem = ref(null)
+const isDraggingOverRoot = ref(false)
 
-// 过滤后的文档列表
+// 过滤后的文档列表（用于搜索）
 const filteredDocuments = computed(() => {
   if (!searchQuery.value.trim()) {
-    return documents.value
+    return []
   }
-  
+
   const query = searchQuery.value.toLowerCase()
   return documents.value.filter(doc => {
-    return doc.title.toLowerCase().includes(query) ||
+    return doc.title?.toLowerCase().includes(query) ||
            (doc.content && doc.content.toLowerCase().includes(query))
   })
 })
 
 // 配置 marked
 marked.setOptions({
-  breaks: true, // 支持 GFM 换行
-  gfm: true, // 启用 GitHub 风格的 Markdown
+  breaks: true,
+  gfm: true,
 })
 
-// 自定义渲染器以确保代码高亮正确应用
+// 自定义渲染器
 const renderer = new marked.Renderer()
 
-// 自定义链接渲染 - 在新窗口打开
 renderer.link = function({ href, title, text }) {
   const titleAttr = title ? ` title="${title}"` : ''
   return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`
 }
 
 renderer.code = function({ text, lang }) {
-  // 新版 marked 传递的是对象 { text, lang, escaped }
   const codeStr = text || ''
   const language = lang || ''
-  
-  // 转义 HTML 特殊字符的辅助函数
+
   const escapeHtml = (str) => {
     return str
       .replace(/&/g, '&amp;')
@@ -236,8 +270,7 @@ renderer.code = function({ text, lang }) {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;')
   }
-  
-  // 如果指定了语言且 highlight.js 支持该语言
+
   if (language && hljs.getLanguage(language)) {
     try {
       const highlighted = hljs.highlight(codeStr, { language }).value
@@ -247,8 +280,7 @@ renderer.code = function({ text, lang }) {
       return `<pre><code class="hljs">${escapeHtml(codeStr)}</code></pre>`
     }
   }
-  
-  // 否则尝试自动检测
+
   try {
     const result = hljs.highlightAuto(codeStr)
     return `<pre><code class="hljs ${result.language ? `language-${result.language}` : ''}">${result.value}</code></pre>`
@@ -265,7 +297,7 @@ const renderedMarkdown = computed(() => {
   if (!currentDocument.value?.content) {
     return '<div class="empty-preview">暂无内容，切换到编辑模式开始编写...</div>'
   }
-  
+
   try {
     return marked.parse(currentDocument.value.content)
   } catch (error) {
@@ -274,9 +306,24 @@ const renderedMarkdown = computed(() => {
   }
 })
 
-// 创建新文档
+// 创建新文档（根目录）
 async function handleCreateDocument() {
   await documentStore.createDocument()
+}
+
+// 创建新文件夹（根目录）
+async function handleCreateFolder() {
+  await documentStore.createFolder()
+}
+
+// 在指定文件夹中创建文档
+async function handleCreateDocumentInFolder(folderId) {
+  await documentStore.createDocument(null, folderId)
+}
+
+// 在指定文件夹中创建文件夹
+async function handleCreateFolderInFolder(folderId) {
+  await documentStore.createFolder(null, folderId)
 }
 
 // 选择文档
@@ -289,6 +336,11 @@ async function handleDeleteDocument(documentId) {
   await documentStore.deleteDocument(documentId)
 }
 
+// 重命名
+async function handleRename({ id, title }) {
+  await documentStore.updateDocument(id, { title })
+}
+
 // 标题改变
 function handleTitleChange() {
   if (currentDocument.value) {
@@ -298,7 +350,7 @@ function handleTitleChange() {
   }
 }
 
-// 内容改变（使用防抖保存）
+// 内容改变
 function handleContentChange() {
   if (currentDocument.value) {
     documentStore.saveDocumentContent(
@@ -308,31 +360,94 @@ function handleContentChange() {
   }
 }
 
+// 拖拽开始
+function handleDragStart(item) {
+  draggingItem.value = item
+}
+
+// 拖拽结束
+function handleDragEnd() {
+  draggingItem.value = null
+  isDraggingOverRoot.value = false
+}
+
+// 拖放到指定位置
+async function handleDrop({ targetId, position }) {
+  if (!draggingItem.value) return
+  if (draggingItem.value.id === targetId) return
+
+  const target = documents.value.find(d => d.id === targetId)
+  if (!target) return
+
+  let newParentId = null
+  let newOrderIndex = 0
+
+  if (position === 'inside' && target.type === 'folder') {
+    // 移动到文件夹内
+    newParentId = targetId
+    const children = documentStore.getChildrenByParentId(targetId)
+    newOrderIndex = children.length
+  } else if (position === 'before') {
+    // 移动到目标之前
+    newParentId = target.parentId
+    newOrderIndex = target.orderIndex
+  } else if (position === 'after') {
+    // 移动到目标之后
+    newParentId = target.parentId
+    newOrderIndex = target.orderIndex + 1
+  }
+
+  await documentStore.moveDocument(draggingItem.value.id, newParentId, newOrderIndex)
+  draggingItem.value = null
+}
+
+// 根目录拖放处理
+function handleRootDragOver(event) {
+  if (!draggingItem.value) return
+  event.preventDefault()
+  isDraggingOverRoot.value = true
+}
+
+function handleRootDragLeave() {
+  isDraggingOverRoot.value = false
+}
+
+async function handleRootDrop() {
+  if (!draggingItem.value) return
+
+  // 移动到根目录末尾
+  const rootItems = documentStore.getChildrenByParentId(null)
+  await documentStore.moveDocument(draggingItem.value.id, null, rootItems.length)
+
+  draggingItem.value = null
+  isDraggingOverRoot.value = false
+}
+
 // 格式化时间
 function formatTime(timestamp) {
   if (!timestamp) return ''
-  
+
   const date = new Date(timestamp)
   const now = new Date()
   const diffMs = now - date
   const diffMins = Math.floor(diffMs / 60000)
-  
+
   if (diffMins < 1) return '刚刚'
   if (diffMins < 60) return `${diffMins}分钟前`
-  
+
   const diffHours = Math.floor(diffMins / 60)
   if (diffHours < 24) return `${diffHours}小时前`
-  
+
   const diffDays = Math.floor(diffHours / 24)
   if (diffDays < 7) return `${diffDays}天前`
-  
+
   return date.toLocaleDateString()
 }
 
 // 格式化完整日期
 function formatDate(timestamp) {
   if (!timestamp) return ''
-  
+
   const date = new Date(timestamp)
   return date.toLocaleString('zh-CN', {
     year: 'numeric',
@@ -343,70 +458,57 @@ function formatDate(timestamp) {
   })
 }
 
-// 挂载时加载文档
-// 处理预览区域的点击事件（拦截链接点击）
+// 处理预览区域的点击事件
 function handlePreviewClick(event) {
-  // 检查是否点击了链接
   const target = event.target
   if (target.tagName === 'A' && target.href) {
     event.preventDefault()
-    // 在系统默认浏览器中打开链接
     window.electronAPI.openExternal(target.href)
   }
 }
 
-// 处理粘贴事件（支持粘贴图片）
+// 处理粘贴事件
 async function handlePaste(event) {
   const items = event.clipboardData?.items
   if (!items) return
 
-  // 查找图片项
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    
+
     if (item.type.indexOf('image') !== -1) {
       event.preventDefault()
-      
-      // 获取图片文件
+
       const file = item.getAsFile()
       if (!file) continue
 
       try {
-        // 显示加载提示
         appStore.toast('正在保存图片...')
-        
-        // 将图片转换为 base64
+
         const reader = new FileReader()
         reader.onload = async (e) => {
           try {
             const base64Data = e.target.result
-            
-            // 保存图片到本地
             const result = await window.electronAPI.saveImageFromClipboard(base64Data)
-            
+
             if (result.success && result.fileName) {
-              // 获取光标位置
               const textarea = textareaRef.value
               const cursorPos = textarea.selectionStart
               const currentContent = currentDocument.value.content || ''
-              
-              // 插入图片 Markdown 语法
+
               const imageMarkdown = `![图片](todox-image://${result.fileName})`
-              const newContent = 
-                currentContent.slice(0, cursorPos) + 
-                imageMarkdown + 
+              const newContent =
+                currentContent.slice(0, cursorPos) +
+                imageMarkdown +
                 currentContent.slice(cursorPos)
-              
-              // 更新内容
+
               currentDocument.value.content = newContent
               handleContentChange()
-              
-              // 设置新的光标位置（图片 Markdown 之后）
+
               await nextTick()
               const newCursorPos = cursorPos + imageMarkdown.length
               textarea.setSelectionRange(newCursorPos, newCursorPos)
               textarea.focus()
-              
+
               appStore.toast('图片已插入')
             } else {
               appStore.toast('保存图片失败')
@@ -416,13 +518,13 @@ async function handlePaste(event) {
             appStore.toast('保存图片异常')
           }
         }
-        
+
         reader.readAsDataURL(file)
       } catch (error) {
         console.error('处理图片失败:', error)
         appStore.toast('处理图片失败')
       }
-      
+
       break
     }
   }
@@ -434,7 +536,7 @@ onMounted(async () => {
 </script>
 
 <style>
-/* 全局导入 highlight.js 样式（不能用 scoped） */
+/* 全局导入 highlight.js 样式 */
 @import 'highlight.js/styles/github.css';
 </style>
 
@@ -471,49 +573,57 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.sidebar-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-  white-space: nowrap;
-}
-
 .header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.btn-new-document {
+.btn-group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-group-collapsed {
+  display: flex;
+  justify-content: center;
+}
+
+.btn-new-document,
+.btn-new-folder {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   background: var(--primary-color);
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
   transition: all 0.2s;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.documents-sidebar.collapsed .btn-new-document {
-  padding: 8px;
-}
-
-.btn-new-document:hover {
+.btn-new-document:hover,
+.btn-new-folder:hover {
   background: var(--primary-hover);
   transform: translateY(-1px);
 }
 
-.btn-new-document svg {
-  width: 16px;
-  height: 16px;
+.btn-new-folder {
+  background: var(--bg-tertiary, #e5e7eb);
+  color: var(--text-primary);
+}
+
+.btn-new-folder:hover {
+  background: var(--hover-bg);
+}
+
+.btn-new-document svg,
+.btn-new-folder svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* 搜索框 */
@@ -533,13 +643,6 @@ onMounted(async () => {
 .search-box:focus-within {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.1);
-}
-
-.search-icon {
-  width: 14px;
-  height: 14px;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
 }
 
 .search-input {
@@ -586,17 +689,22 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  min-height: 100px;
+}
+
+.documents-list.drag-over-root {
+  background: rgba(108, 92, 231, 0.05);
 }
 
 .document-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   position: relative;
 }
 
@@ -610,8 +718,8 @@ onMounted(async () => {
 
 .document-icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -620,8 +728,8 @@ onMounted(async () => {
 }
 
 .document-icon svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   color: var(--primary-color);
 }
 
@@ -643,35 +751,6 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
-}
-
-.btn-delete-document {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  opacity: 0;
-  transition: all 0.2s;
-}
-
-.document-item:hover .btn-delete-document {
-  opacity: 1;
-}
-
-.btn-delete-document:hover {
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.btn-delete-document svg {
-  width: 14px;
-  height: 14px;
-  color: var(--danger-color);
 }
 
 .documents-empty {
@@ -917,7 +996,6 @@ onMounted(async () => {
   margin: 12px 0;
 }
 
-/* 行内代码 */
 .markdown-body :deep(code) {
   padding: 2px 6px;
   font-size: 13px;
@@ -928,7 +1006,6 @@ onMounted(async () => {
   color: #24292e;
 }
 
-/* 代码块容器 */
 .markdown-body :deep(pre) {
   margin: 16px 0;
   padding: 16px;
@@ -938,17 +1015,14 @@ onMounted(async () => {
   overflow-x: auto;
 }
 
-/* 代码块内的代码 - 不覆盖颜色，让 highlight.js 接管 */
 .markdown-body :deep(pre code) {
   padding: 0;
   background: transparent;
   border: none;
   font-size: 14px;
   line-height: 1.6;
-  /* 不设置 color，让 highlight.js 的语法高亮生效 */
 }
 
-/* 确保 highlight.js 的类能正常工作 */
 .markdown-body :deep(pre code.hljs) {
   display: block;
   overflow-x: auto;
@@ -1077,4 +1151,3 @@ onMounted(async () => {
   background: var(--text-tertiary);
 }
 </style>
-
