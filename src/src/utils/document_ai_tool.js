@@ -282,6 +282,342 @@ export class DocumentAITool {
   }
 
   /**
+   * 在文档内容中搜索关键词
+   * @param {Array} docsWithContent - 文档列表
+   * @param {Array} keywords - 关键词数组
+   * @param {number} contextLength - 上下文长度（前后各多少字符）
+   * @returns {Array} 搜索结果
+   */
+  _searchKeywordsInDocs(docsWithContent, keywords, contextLength = 100) {
+    const results = []
+
+    for (let i = 0; i < docsWithContent.length; i++) {
+      const doc = docsWithContent[i]
+      const docId = i + 1
+      const content = doc.content || ''
+      const contentLower = content.toLowerCase()
+
+      const matches = []
+
+      for (const keyword of keywords) {
+        const keywordLower = keyword.toLowerCase()
+        let pos = 0
+
+        while ((pos = contentLower.indexOf(keywordLower, pos)) !== -1) {
+          // 提取上下文
+          const start = Math.max(0, pos - contextLength)
+          const end = Math.min(content.length, pos + keyword.length + contextLength)
+          const context = content.substring(start, end)
+
+          matches.push({
+            keyword,
+            position: pos,
+            context: (start > 0 ? '...' : '') + context + (end < content.length ? '...' : '')
+          })
+
+          pos += keyword.length
+        }
+      }
+
+      if (matches.length > 0) {
+        results.push({
+          docId,
+          title: doc.title || '无标题',
+          matchCount: matches.length,
+          matches: matches.slice(0, 5) // 每个文档最多返回5个匹配
+        })
+      }
+    }
+
+    return results
+  }
+
+  /**
+   * 跨文档智能检索（增强版：支持关键词搜索和上下文读取）
+   * @param {Array} documents - 所有文档列表
+   * @param {string} question - 用户问题
+   * @param {function} onProgress - 进度回调
+   * @returns {Promise<{result: string, documentMap: Object}>} 检索结果和文档映射
+   */
+  async searchDocuments(documents, question, onProgress) {
+    if (!documents || documents.length === 0) {
+      throw new Error('没有可检索的文档')
+    }
+
+    if (!question || !question.trim()) {
+      throw new Error('问题不能为空')
+    }
+
+    if (onProgress) onProgress('正在准备文档索引...')
+
+    // 过滤出有内容的文档（排除文件夹）
+    const docsWithContent = documents.filter(
+      doc => doc.type !== 'folder' && doc.content && doc.content.trim()
+    )
+
+    if (docsWithContent.length === 0) {
+      throw new Error('没有包含内容的文档可供检索')
+    }
+
+    // 为文档建立索引（序号 -> 文档映射，包含真实 ID）
+    const docMap = new Map()
+    const documentMap = {} // 用于返回给前端的映射 { 序号: 真实文档ID }
+    docsWithContent.forEach((doc, index) => {
+      const seqId = index + 1
+      docMap.set(seqId, doc)
+      documentMap[seqId] = doc.id // 映射序号到真实文档 ID
+    })
+
+    // 构建文档摘要列表（只包含标题和简短预览）
+    const documentIndex = docsWithContent.map((doc, index) => {
+      const preview = (doc.content || '').substring(0, 150).replace(/\n/g, ' ')
+      return `${index + 1}. 【${doc.title || '无标题'}】预览: ${preview}${doc.content.length > 150 ? '...' : ''}`
+    }).join('\n')
+
+    // 定义工具（增强版）
+    const tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'search_keywords',
+          description: '在所有文档中搜索关键词，返回包含这些关键词的文档列表及匹配上下文。适合用于精确查找特定词汇出现的位置。',
+          parameters: {
+            type: 'object',
+            properties: {
+              keywords: {
+                type: 'array',
+                items: { type: 'string' },
+                description: '要搜索的关键词列表，例如 ["aliyun", "子账号", "密码"]。支持中英文混合，不区分大小写。'
+              }
+            },
+            required: ['keywords']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'read_documents',
+          description: '读取指定文档的完整内容。当需要查看文档全文时使用。',
+          parameters: {
+            type: 'object',
+            properties: {
+              document_ids: {
+                type: 'array',
+                items: { type: 'number' },
+                description: '要读取的文档编号列表，例如 [1, 3, 5]'
+              },
+              reason: {
+                type: 'string',
+                description: '简要说明为什么选择这些文档'
+              }
+            },
+            required: ['document_ids', 'reason']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'read_context',
+          description: '读取文档中关键词出现位置的扩展上下文（前后各200字符）。比读取整个文档更高效，适合只需要查看特定片段的情况。',
+          parameters: {
+            type: 'object',
+            properties: {
+              document_id: {
+                type: 'number',
+                description: '文档编号'
+              },
+              keyword: {
+                type: 'string',
+                description: '要定位的关键词'
+              },
+              context_length: {
+                type: 'number',
+                description: '上下文长度（前后各多少字符），默认200'
+              }
+            },
+            required: ['document_id', 'keyword']
+          }
+        }
+      }
+    ]
+
+    const systemPrompt = `你是一个智能文档检索助手。用户有多个文档，你需要帮助用户在这些文档中查找信息。
+
+## 可用工具
+
+1. **search_keywords**: 在所有文档中搜索关键词
+   - 返回包含关键词的文档列表和匹配上下文
+   - 适合精确查找特定词汇
+
+2. **read_documents**: 读取文档完整内容
+   - 当需要查看全文时使用
+
+3. **read_context**: 读取关键词周围的上下文
+   - 比读取全文更高效
+   - 适合只需要查看特定片段
+
+## 推荐工作流程
+
+1. **分析用户问题**，提取关键词（包括同义词、缩写、中英文等变体）
+   - 例如："我的 aliyun 子账号" → 关键词: ["aliyun", "阿里云", "子账号", "子账户", "账号", "密码"]
+
+2. **使用 search_keywords** 搜索这些关键词，找出相关文档
+
+3. **根据搜索结果**：
+   - 如果搜索结果的上下文已足够回答问题，直接回答
+   - 如果需要更多上下文，使用 read_context 获取扩展上下文
+   - 如果需要完整理解文档，使用 read_documents 读取全文
+
+## 注意事项
+
+- 一定要提取多个关键词变体进行搜索，确保不遗漏
+- 优先使用 search_keywords，它能快速定位信息
+- 信息可能分散在不同文档中（如"密码记录"、"账号记录"等）`
+
+    const userPrompt = `我有以下文档：
+
+${documentIndex}
+
+我的问题是：${question}
+
+请使用工具检索相关信息，然后回答我的问题。`
+
+    if (onProgress) onProgress(`正在分析 ${docsWithContent.length} 个文档索引...`)
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ]
+
+    // 工具调用循环（支持多轮工具调用）
+    let maxIterations = 5
+    let iteration = 0
+
+    while (iteration < maxIterations) {
+      iteration++
+
+      const response = await this.aiClient.chatCompletions(messages, { tools })
+      const assistantMessage = response.choices[0].message
+      messages.push(assistantMessage)
+
+      // 检查是否有工具调用
+      if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+        // 没有工具调用，返回最终答案
+        return { result: assistantMessage.content || '未能找到相关信息', documentMap }
+      }
+
+      // 处理工具调用
+      for (const toolCall of assistantMessage.tool_calls) {
+        const toolName = toolCall.function.name
+        const args = JSON.parse(toolCall.function.arguments)
+        let toolResult = ''
+
+        if (toolName === 'search_keywords') {
+          const keywords = args.keywords || []
+          if (onProgress) onProgress(`正在搜索关键词: ${keywords.join(', ')}...`)
+
+          const searchResults = this._searchKeywordsInDocs(docsWithContent, keywords, 100)
+
+          if (searchResults.length === 0) {
+            toolResult = `未找到包含这些关键词的文档: ${keywords.join(', ')}`
+          } else {
+            toolResult = `找到 ${searchResults.length} 个文档包含相关关键词：\n\n`
+            for (const result of searchResults) {
+              toolResult += `【文档 ${result.docId}】${result.title} (${result.matchCount} 处匹配)\n`
+              for (const match of result.matches) {
+                toolResult += `  - "${match.keyword}" 出现位置的上下文: ${match.context}\n`
+              }
+              toolResult += '\n'
+            }
+          }
+        } else if (toolName === 'read_documents') {
+          const documentIds = args.document_ids || []
+          if (onProgress) onProgress(`正在读取 ${documentIds.length} 个文档...`)
+
+          const selectedDocs = documentIds
+            .map(id => docMap.get(id))
+            .filter(doc => doc)
+
+          toolResult = selectedDocs.map((doc, idx) => {
+            const originalId = documentIds[idx]
+            return `【文档 ${originalId}】标题: ${doc.title || '无标题'}\n内容:\n${doc.content}\n---`
+          }).join('\n\n')
+
+          if (!toolResult) toolResult = '未找到指定文档'
+        } else if (toolName === 'read_context') {
+          const docId = args.document_id
+          const keyword = args.keyword
+          const contextLength = args.context_length || 200
+
+          if (onProgress) onProgress(`正在读取文档 ${docId} 中 "${keyword}" 的上下文...`)
+
+          const doc = docMap.get(docId)
+          if (!doc) {
+            toolResult = `文档 ${docId} 不存在`
+          } else {
+            const content = doc.content || ''
+            const contentLower = content.toLowerCase()
+            const keywordLower = keyword.toLowerCase()
+            const contexts = []
+            let pos = 0
+
+            while ((pos = contentLower.indexOf(keywordLower, pos)) !== -1) {
+              const start = Math.max(0, pos - contextLength)
+              const end = Math.min(content.length, pos + keyword.length + contextLength)
+              const context = content.substring(start, end)
+              contexts.push((start > 0 ? '...' : '') + context + (end < content.length ? '...' : ''))
+              pos += keyword.length
+            }
+
+            if (contexts.length === 0) {
+              toolResult = `在文档 ${docId}【${doc.title}】中未找到 "${keyword}"`
+            } else {
+              toolResult = `文档 ${docId}【${doc.title}】中 "${keyword}" 的上下文 (${contexts.length} 处):\n\n`
+              contexts.slice(0, 5).forEach((ctx, i) => {
+                toolResult += `${i + 1}. ${ctx}\n\n`
+              })
+            }
+          }
+        }
+
+        // 添加工具响应
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: toolResult
+        })
+      }
+    }
+
+    // 达到最大迭代次数，强制生成答案
+    if (onProgress) onProgress('正在生成最终答案...')
+
+    const finalSystemPrompt = `请根据已收集到的信息回答用户的问题。
+
+回答要求：
+- 直接回答问题，不要过多解释
+- 标明信息来源（哪个文档）
+- 如果涉及账号密码等敏感信息，直接展示（用户本人在查询自己的信息）
+- 如果没有找到相关信息，明确告知用户
+- 使用 Markdown 格式使回答更易读`
+
+    messages[0] = { role: 'system', content: finalSystemPrompt }
+    messages.push({ role: 'user', content: '请根据以上收集到的信息，回答我最初的问题。' })
+
+    let result = ''
+    await this.aiClient.chatCompletionsStream(messages, {
+      onContent: (chunk) => {
+        result += chunk
+        if (onProgress) onProgress(`正在生成答案... (${result.length} 字符)`)
+      }
+    })
+
+    return { result, documentMap }
+  }
+
+  /**
    * 续写文档
    * @param {string} content - 已有内容
    * @param {string} instruction - 续写指令（可选）

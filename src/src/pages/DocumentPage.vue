@@ -172,6 +172,159 @@
 
         <!-- 编辑模式 -->
         <div v-if="viewMode === 'edit'" class="document-content">
+          <!-- AI 工具栏 -->
+          <div class="ai-toolbar">
+            <div class="ai-toolbar-label">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+              <span>AI 助手</span>
+            </div>
+            <div class="ai-toolbar-actions">
+              <button
+                class="ai-tool-btn"
+                @click="handleAIAction('polish')"
+                :disabled="!currentDocument?.content || aiProcessing"
+                title="润色"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span>润色</span>
+              </button>
+              <button
+                class="ai-tool-btn"
+                @click="handleAIAction('summarize')"
+                :disabled="!currentDocument?.content || aiProcessing"
+                title="总结"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+                <span>总结</span>
+              </button>
+              <button
+                class="ai-tool-btn"
+                @click="handleAIAction('expand')"
+                :disabled="!currentDocument?.content || aiProcessing"
+                title="扩写"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <polyline points="9 21 3 21 3 15"></polyline>
+                  <line x1="21" y1="3" x2="14" y2="10"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+                <span>扩写</span>
+              </button>
+              <button
+                class="ai-tool-btn"
+                @click="handleAIAction('outline')"
+                :disabled="!currentDocument?.content || aiProcessing"
+                title="大纲"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                <span>大纲</span>
+              </button>
+              <button
+                class="ai-tool-btn"
+                @click="handleAIAction('translate')"
+                :disabled="!currentDocument?.content || aiProcessing"
+                title="翻译"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M5 8h14M5 8a6 6 0 1 1 6 6m-6-6a6 6 0 1 0 6 6m0 0l4 4m0 0l4-4m-4 4V10"></path>
+                </svg>
+                <span>翻译</span>
+              </button>
+              <button
+                class="ai-tool-btn"
+                @click="handleAIAction('continue')"
+                :disabled="!currentDocument?.content || aiProcessing"
+                title="续写"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+                <span>续写</span>
+              </button>
+              <div class="ai-toolbar-divider"></div>
+              <div class="ai-qa-inline">
+                <input
+                  v-model="inlineQuestion"
+                  type="text"
+                  class="ai-qa-input"
+                  placeholder="向 AI 提问..."
+                  :disabled="!currentDocument?.content || aiProcessing"
+                  @keydown.enter="handleAskQuestion(inlineQuestion); inlineQuestion = ''"
+                />
+                <button
+                  class="ai-qa-btn"
+                  @click="handleAskQuestion(inlineQuestion); inlineQuestion = ''"
+                  :disabled="!currentDocument?.content || !inlineQuestion.trim() || aiProcessing"
+                  title="提问"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI 处理状态和结果 -->
+          <div class="ai-inline-result" v-if="aiProcessing || aiResult">
+            <div class="ai-result-header">
+              <span v-if="aiProcessing" class="ai-processing">
+                <span class="ai-spinner"></span>
+                {{ aiProcessingMessage }}
+              </span>
+              <span v-else class="ai-result-title">AI 结果</span>
+              <div class="ai-result-actions" v-if="aiResult && !aiProcessing">
+                <button class="ai-result-btn" @click="handleCopyResult" title="复制">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+                <button class="ai-result-btn" @click="handleInsertResult" title="插入">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+                <button class="ai-result-btn" @click="handleReplaceResult" title="替换">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <polyline points="23 20 23 14 17 14"></polyline>
+                    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path>
+                  </svg>
+                </button>
+                <button class="ai-result-btn" @click="aiResult = ''" title="关闭">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="ai-result-content" v-if="aiResult && !aiProcessing" v-html="renderedAIResult"></div>
+          </div>
+
           <textarea
             ref="textareaRef"
             v-model="currentDocument.content"
@@ -207,19 +360,18 @@
       </div>
     </div>
 
-    <!-- AI 助手面板 -->
-    <DocumentAIPanel
-      :is-collapsed="aiPanelCollapsed"
-      :has-content="!!currentDocument?.content"
-      :is-processing="aiProcessing"
-      :processing-message="aiProcessingMessage"
-      :result="aiResult"
-      @toggle="aiPanelCollapsed = !aiPanelCollapsed"
-      @action="handleAIAction"
-      @ask-question="handleAskQuestion"
-      @copy-result="handleCopyResult"
-      @insert-result="handleInsertResult"
-      @replace-result="handleReplaceResult"
+    <!-- 智能检索面板 -->
+    <DocumentSearchPanel
+      :is-collapsed="searchPanelCollapsed"
+      :is-processing="searchProcessing"
+      :processing-message="searchProcessingMessage"
+      :result="searchResult"
+      :document-map="searchDocumentMap"
+      @toggle="searchPanelCollapsed = !searchPanelCollapsed"
+      @search="handleSearchDocuments"
+      @copy-result="handleCopySearchResult"
+      @clear-result="searchResult = ''"
+      @navigate-document="handleNavigateDocument"
     />
   </div>
 </template>
@@ -232,7 +384,7 @@ import { useAppStore } from '../stores/app'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DocumentTreeItem from '../components/DocumentTreeItem.vue'
-import DocumentAIPanel from '../components/DocumentAIPanel.vue'
+import DocumentSearchPanel from '../components/DocumentSearchPanel.vue'
 import { DocumentAITool } from '../utils/document_ai_tool'
 import { DeepSeekClient } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
@@ -251,13 +403,20 @@ const searchQuery = ref('')
 const draggingItem = ref(null)
 const isDraggingOverRoot = ref(false)
 
-// AI 助手状态
-const aiPanelCollapsed = ref(true)
+// AI 助手状态（编辑区内嵌）
 const aiProcessing = ref(false)
 const aiProcessingMessage = ref('')
 const aiResult = ref('')
 const aiClient = ref(null)
 const aiTool = ref(null)
+const inlineQuestion = ref('')
+
+// 智能检索面板状态
+const searchPanelCollapsed = ref(false)
+const searchProcessing = ref(false)
+const searchProcessingMessage = ref('')
+const searchResult = ref('')
+const searchDocumentMap = ref({})
 
 // 过滤后的文档列表（用于搜索）
 const filteredDocuments = computed(() => {
@@ -331,6 +490,17 @@ const renderedMarkdown = computed(() => {
   } catch (error) {
     console.error('Markdown 渲染失败:', error)
     return '<div class="error-preview">渲染失败，请检查 Markdown 语法</div>'
+  }
+})
+
+// 渲染 AI 结果
+const renderedAIResult = computed(() => {
+  if (!aiResult.value) return ''
+  try {
+    return marked.parse(aiResult.value)
+  } catch (error) {
+    console.error('AI 结果渲染失败:', error)
+    return aiResult.value
   }
 })
 
@@ -697,6 +867,64 @@ async function handleAskQuestion(question) {
   } finally {
     aiProcessing.value = false
     aiProcessingMessage.value = ''
+  }
+}
+
+// 智能文档检索处理
+async function handleSearchDocuments(question) {
+  if (!aiTool.value) {
+    appStore.toast('请先配置 AI API 密钥')
+    appStore.showApiKeyDialog = true
+    return
+  }
+
+  if (documents.value.length === 0) {
+    appStore.toast('暂无文档可供检索')
+    return
+  }
+
+  searchProcessing.value = true
+  searchResult.value = ''
+  searchDocumentMap.value = {}
+
+  try {
+    const { result, documentMap } = await aiTool.value.searchDocuments(
+      documents.value,
+      question,
+      (msg) => { searchProcessingMessage.value = msg }
+    )
+
+    searchResult.value = result
+    searchDocumentMap.value = documentMap
+    appStore.toast('检索完成')
+  } catch (error) {
+    console.error('文档检索失败:', error)
+    appStore.toast(error.message || '文档检索失败')
+  } finally {
+    searchProcessing.value = false
+    searchProcessingMessage.value = ''
+  }
+}
+
+// 复制检索结果
+async function handleCopySearchResult() {
+  try {
+    await navigator.clipboard.writeText(searchResult.value)
+    appStore.toast('已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+    appStore.toast('复制失败')
+  }
+}
+
+// 跳转到检索到的文档
+function handleNavigateDocument(seqId) {
+  const realDocId = searchDocumentMap.value[seqId]
+  if (realDocId) {
+    documentStore.selectDocument(realDocId)
+    appStore.toast('已跳转到文档')
+  } else {
+    appStore.toast('文档不存在')
   }
 }
 
@@ -1108,12 +1336,245 @@ onMounted(async () => {
 .document-content {
   flex: 1;
   overflow: hidden;
-  padding: 24px 32px;
+  padding: 16px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* AI 工具栏样式 */
+.ai-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.ai-toolbar-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+.ai-toolbar-label svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ai-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.ai-tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ai-tool-btn:hover:not(:disabled) {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: rgba(108, 92, 231, 0.05);
+}
+
+.ai-tool-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-tool-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ai-toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border-color);
+  margin: 0 8px;
+}
+
+.ai-qa-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.ai-qa-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  outline: none;
+}
+
+.ai-qa-input:focus {
+  border-color: var(--primary-color);
+}
+
+.ai-qa-input:disabled {
+  opacity: 0.5;
+}
+
+.ai-qa-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.ai-qa-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.ai-qa-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ai-qa-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* AI 结果内嵌区域 */
+.ai-inline-result {
+  background: var(--bg-secondary);
+  border: 1px solid var(--primary-color);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, rgba(108, 92, 231, 0.1) 0%, rgba(108, 92, 231, 0.05) 100%);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ai-processing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.ai-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai-result-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.ai-result-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ai-result-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ai-result-btn:hover {
+  background: var(--hover-bg);
+}
+
+.ai-result-btn svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-secondary);
+}
+
+.ai-result-content {
+  padding: 12px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.ai-result-content :deep(p) {
+  margin: 6px 0;
+}
+
+.ai-result-content :deep(ul),
+.ai-result-content :deep(ol) {
+  margin: 6px 0;
+  padding-left: 1.5em;
+}
+
+.ai-result-content :deep(code) {
+  padding: 2px 4px;
+  background: rgba(175, 184, 193, 0.2);
+  border-radius: 3px;
+  font-size: 12px;
 }
 
 .document-textarea {
+  flex: 1;
   width: 100%;
-  height: 100%;
   font-size: 15px;
   line-height: 1.8;
   color: var(--text-primary);

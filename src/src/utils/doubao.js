@@ -130,11 +130,11 @@ export class DoubaoClient {
   /**
    * 调用 Chat Completions API（非流式）
    * @param {Array} messages - 消息列表
-   * @param {object} options - 选项
-   * @returns {Promise<string>} AI 回复内容
+   * @param {object} options - 选项 { model, maxTokens, tools }
+   * @returns {Promise<object>} 完整的 API 响应对象
    */
   async chatCompletions(messages, options = {}) {
-    const { model = this.defaultModel, maxTokens = 2000 } = options
+    const { model = this.defaultModel, maxTokens = 2000, tools = [] } = options
 
     const requestBody = {
       model,
@@ -142,6 +142,11 @@ export class DoubaoClient {
       max_tokens: maxTokens,
       stream: false,
       reasoning_effort: 'minimal'  // 禁用思考模式，快速响应
+    }
+
+    // 只有当 tools 数组非空时才添加到请求中
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools
     }
 
     const response = await fetch(`${this.baseURL}/chat/completions`, {
@@ -159,7 +164,7 @@ export class DoubaoClient {
     }
 
     const data = await response.json()
-    return data.choices[0]?.message?.content || ''
+    return data
   }
 
   /**
@@ -194,7 +199,8 @@ export class DoubaoClient {
     ]
 
     try {
-      const content = await this.chatCompletions(messages, { model, maxTokens: 1500 })
+      const response = await this.chatCompletions(messages, { model, maxTokens: 1500 })
+      const content = response.choices[0]?.message?.content || ''
       
       // 尝试解析 JSON
       let subtasks = []
@@ -245,7 +251,7 @@ export class DoubaoClient {
       }))
     }
     
-    return await this.chatCompletions([
+    const response = await this.chatCompletions([
       {
         role: 'system',
         content: '你是一个专业的任务管理助手，擅长分析用户的任务完成情况，并提供简洁、有洞察力的总结。请用中文回复。'
@@ -255,6 +261,7 @@ export class DoubaoClient {
         content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
       }
     ], { model, maxTokens: 500 })
+    return response.choices[0]?.message?.content || ''
   }
 }
 

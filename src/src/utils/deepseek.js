@@ -126,23 +126,32 @@ export class DeepSeekClient {
   /**
    * 调用 Chat Completions API（非流式）
    * @param {Array} messages - 消息列表
-   * @param {object} options - 选项
-   * @returns {Promise<string>} AI 回复内容
+   * @param {object} options - 选项 { temperature, maxTokens, tools }
+   * @returns {Promise<object>} 完整的 API 响应对象
    */
   async chatCompletions(messages, options = {}) {
+    const { temperature = 0.7, maxTokens = 2000, tools = [] } = options
+
+    const requestBody = {
+      model: 'deepseek-chat',
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      stream: false
+    }
+
+    // 只有当 tools 数组非空时才添加到请求中
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools
+    }
+
     const response = await fetch(`${this.baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages,
-        temperature: options.temperature || 0.7,
-        max_tokens: options.maxTokens || 2000,
-        stream: false
-      })
+      body: JSON.stringify(requestBody)
     })
 
     if (!response.ok) {
@@ -153,7 +162,7 @@ export class DeepSeekClient {
     }
 
     const data = await response.json()
-    return data.choices[0].message.content
+    return data
   }
 }
 
@@ -165,8 +174,8 @@ export class DeepSeekClient {
  */
 export async function aiBreakdownTask(taskText, apiKey) {
   const client = new DeepSeekClient(apiKey)
-  
-  const content = await client.chatCompletions([
+
+  const response = await client.chatCompletions([
     {
       role: 'system',
       content: '你是一个专业的任务管理助手，擅长将复杂任务拆解为可执行的子任务。对于需要记录结果的子任务（如测量、检查、记录数据等），请标记为需要输入，用户完成时必须输入结果。请以 JSON 数组格式返回子任务列表。'
@@ -176,6 +185,7 @@ export async function aiBreakdownTask(taskText, apiKey) {
       content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 对于需要记录结果的子任务（如测量体重、检查数据、记录进度等），设置 requiresInput: true\n5. 只返回 JSON 数组，不要其他解释\n\n返回格式：\n[\n  {"text":"子任务1","weight":3},\n  {"text":"检查体重","weight":5,"requiresInput":true}\n]`
     }
   ], { maxTokens: 800 })
+  const content = response.choices[0].message.content
   
   // 提取 JSON 数组
   let subtasks
@@ -231,7 +241,7 @@ export async function generateDailySummary(tasks, apiKey) {
     }))
   }
   
-  return await client.chatCompletions([
+  const response = await client.chatCompletions([
     {
       role: 'system',
       content: '你是一个专业的任务管理助手，擅长分析用户的任务完成情况，并提供简洁、有洞察力的总结。请用中文回复。'
@@ -241,5 +251,6 @@ export async function generateDailySummary(tasks, apiKey) {
       content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
     }
   ], { maxTokens: 500 })
+  return response.choices[0].message.content
 }
 
