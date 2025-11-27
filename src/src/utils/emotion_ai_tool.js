@@ -547,6 +547,139 @@ ${chatText}
         records: records.slice(0, 5) // 只返回前5条作为预览
       }
     }
+  ),
+
+  // 5. 事件场景回复建议
+  new AIFunction(
+    createTool(
+      'generateEventSuggestions',
+      '针对特定事件场景（如生日、道歉、安慰等）生成个性化回复建议',
+      {
+        personId: {
+          type: 'string',
+          description: '人物ID'
+        },
+        eventType: {
+          type: 'string',
+          description: '事件类型，如：生日祝福、道歉、安慰、感谢、约会邀请、工作汇报等'
+        },
+        eventContext: {
+          type: 'string',
+          description: '事件背景说明（可选），提供更多上下文信息'
+        }
+      },
+      ['personId', 'eventType']
+    ),
+    async function(args, onProgress = null) {
+      const { personId, eventType, eventContext = '' } = args
+
+      if (!this.client) {
+        throw new Error('AI 客户端未初始化')
+      }
+
+      const person = this.emotionStore.persons.find(p => p.id === personId)
+      if (!person) {
+        throw new Error(`找不到ID为${personId}的人物`)
+      }
+
+      if (onProgress) onProgress(`🎯 正在分析场景：${eventType}...`)
+
+      // 构建提示词
+      const profileSummary = person.profile
+        ? `
+【对方画像】
+- 性格特征：${person.profile.personality?.traits?.join('、') || '未知'}
+- 说话风格：${person.profile.talkStyle?.tone || '未知'}
+- 情感模式：${person.profile.emotions?.patterns || '未知'}
+- 敏感领域：${person.profile.sensitiveAreas?.join('、') || '无特别敏感点'}
+- 沟通建议：${person.profile.recommendations?.doList?.slice(0, 3).join('；') || '自然沟通即可'}
+`
+        : '\n【对方画像】暂无详细画像，请根据一般原则生成建议'
+
+      const prompt = `你是一位专业的情感沟通顾问。请针对"${eventType}"这个场景，为用户生成几条适合对方的个性化回复建议。
+
+对方姓名：${person.name}
+${profileSummary}
+
+【场景说明】
+事件类型：${eventType}
+${eventContext ? `背景信息：${eventContext}` : ''}
+
+【任务要求】
+1. 根据对方的性格和说话风格，生成3-4条差异化的回复建议
+2. 每条建议要符合场景特点，同时体现对方的接受风格
+3. 考虑对方的敏感点，避免不当表达
+4. 建议要有实用性，可以直接使用或稍作修改
+
+【建议风格】
+- 真诚型：真挚表达，情感充沛
+- 轻松型：幽默风趣，减轻压力
+- 简洁型：言简意赅，直击要点
+- 温暖型：细腻关怀，情感细腻
+
+【返回格式】严格JSON，无其他文字：
+{
+  "eventType": "${eventType}",
+  "suggestions": [
+    {
+      "style": "建议风格",
+      "content": "具体回复内容",
+      "reason": "为什么这样回复（基于对方画像）",
+      "tips": "使用建议或注意事项",
+      "score": 85
+    }
+  ],
+  "generalTips": "针对此场景的通用建议"
+}
+
+评分标准（0-100）：
+- 90-100分：完美契合对方性格，效果最佳
+- 80-89分：很合适，推荐使用
+- 70-79分：可以使用，需稍作调整
+- 60-69分：一般，建议参考
+
+**重要要求**：
+1. 建议要具体可用，不要空洞套话
+2. 充分考虑对方的性格特点和敏感点
+3. 不同风格要有明显差异
+4. 评分要客观，基于匹配度
+5. 只返回 JSON，不要其他内容`
+
+      const content = await this.client.chatCompletions([
+        { role: 'system', content: '你是一位专业的情感沟通顾问，擅长针对不同场景和人物性格提供个性化沟通建议。' },
+        { role: 'user', content: prompt }
+      ], { maxTokens: 3000 })
+
+      if (onProgress) onProgress('📋 正在解析场景建议...')
+
+      let result
+      try {
+        result = JSON.parse(content.trim())
+      } catch (e) {
+        const jsonMatch = content.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          result = JSON.parse(jsonMatch[0])
+        } else {
+          throw new Error('AI 返回的建议格式不正确')
+        }
+      }
+
+      // 按评分排序
+      if (result.suggestions) {
+        result.suggestions.sort((a, b) => (b.score || 0) - (a.score || 0))
+      }
+
+      if (onProgress) onProgress(`✅ 已生成 ${result.suggestions?.length || 0} 个场景建议！`)
+
+      return {
+        success: true,
+        personId,
+        personName: person.name,
+        eventType,
+        eventContext,
+        ...result
+      }
+    }
   )
 ]
 

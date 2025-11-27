@@ -194,6 +194,53 @@
                 </div>
               </div>
             </div>
+
+            <div class="assistant-section">
+              <h3>🎯 事件场景建议</h3>
+              <p class="hint">针对特定场景（如生日、道歉、安慰等）生成个性化建议</p>
+              <div class="input-group">
+                <select v-model="eventType" class="select">
+                  <option value="">选择场景类型</option>
+                  <option value="生日祝福">🎂 生日祝福</option>
+                  <option value="节日问候">🎉 节日问候</option>
+                  <option value="道歉">🙏 道歉</option>
+                  <option value="安慰鼓励">💪 安慰鼓励</option>
+                  <option value="感谢表达">🙌 感谢表达</option>
+                  <option value="约会邀请">💑 约会邀请</option>
+                  <option value="工作汇报">📊 工作汇报</option>
+                  <option value="请求帮助">🤝 请求帮助</option>
+                  <option value="庆祝成就">🎊 庆祝成就</option>
+                  <option value="关心问候">❤️ 关心问候</option>
+                </select>
+                <textarea
+                  v-model="eventContext"
+                  placeholder="补充背景信息（可选）&#10;例如：因为昨天吵架了想道歉..."
+                  rows="2"
+                ></textarea>
+                <button @click="generateEventSuggestions" class="btn-primary" :disabled="!eventType || eventGenerating">
+                  {{ eventGenerating ? '生成中...' : '生成场景建议' }}
+                </button>
+              </div>
+              <div v-if="eventSuggestions.length > 0" class="suggestions-list">
+                <div v-if="generalTips" class="general-tips">
+                  <strong>💡 通用建议：</strong>{{ generalTips }}
+                </div>
+                <div v-for="(sug, index) in eventSuggestions" :key="index" class="suggestion-card event-card">
+                  <div class="sug-header">
+                    <span class="sug-style">{{ sug.style }}</span>
+                    <span class="sug-score">{{ sug.score }}分</span>
+                  </div>
+                  <div class="sug-content">{{ sug.content }}</div>
+                  <div class="sug-meta">
+                    <p><strong>选择理由：</strong>{{ sug.reason }}</p>
+                    <p><strong>使用建议：</strong>{{ sug.tips }}</p>
+                  </div>
+                  <button @click="copySuggestion(sug.content)" class="btn-copy">
+                    复制
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -242,6 +289,11 @@ const suggestionInput = ref('')
 const replyGoal = ref('casual')
 const suggestions = ref([])
 const suggesting = ref(false)
+const eventType = ref('')
+const eventContext = ref('')
+const eventSuggestions = ref([])
+const eventGenerating = ref(false)
+const generalTips = ref('')
 
 // 标签页配置
 const tabs = [
@@ -394,6 +446,50 @@ async function generateSuggestions() {
     appStore.toast('生成建议失败: ' + error.message, 'error')
   } finally {
     suggesting.value = false
+    loadingMessage.value = ''
+  }
+}
+
+async function generateEventSuggestions() {
+  if (!eventType.value) {
+    appStore.toast('请选择场景类型', 'warning')
+    return
+  }
+
+  if (!currentPersonId.value) {
+    appStore.toast('请先选择一个人物', 'warning')
+    return
+  }
+
+  if (!chatStore.currentClient) {
+    appStore.toast('AI 客户端未初始化，请先配置 API 密钥', 'warning')
+    appStore.showApiKeyDialog = true
+    return
+  }
+
+  eventGenerating.value = true
+  loadingMessage.value = `正在生成${eventType.value}场景建议...`
+
+  try {
+    const aiTool = new EmotionAITool(emotionStore, chatStore.currentClient)
+    const result = await aiTool.execute('generateEventSuggestions', {
+      personId: currentPersonId.value,
+      eventType: eventType.value,
+      eventContext: eventContext.value
+    }, (msg) => {
+      loadingMessage.value = msg
+    })
+
+    console.log('场景建议结果:', result)
+    eventSuggestions.value = result.suggestions || []
+    generalTips.value = result.generalTips || ''
+    loadingMessage.value = ''
+    appStore.toast(`已生成 ${eventSuggestions.value.length} 条场景建议`, 'success')
+  } catch (error) {
+    console.error('生成场景建议失败:', error)
+    appStore.toast('生成场景建议失败: ' + error.message, 'error')
+  } finally {
+    eventGenerating.value = false
     loadingMessage.value = ''
   }
 }
@@ -884,5 +980,24 @@ onMounted(async () => {
   text-align: center;
   padding: 40px 20px;
   color: var(--text-secondary);
+}
+
+.general-tips {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.event-card {
+  border-left: 3px solid var(--primary-color);
+}
+
+.event-card .sug-style {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
 }
 </style>

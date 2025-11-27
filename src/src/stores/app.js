@@ -15,6 +15,7 @@ export const useAppStore = defineStore('app', () => {
 
   // Toast
   const toastMessage = ref('')
+  const toastType = ref('info') // 'info' | 'success' | 'warning' | 'error'
   const showToast = ref(false)
 
   // 对话框
@@ -74,8 +75,9 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Toast 提示
-  function toast(message, duration = 3000) {
+  function toast(message, type = 'info', duration = 3000) {
     toastMessage.value = message
+    toastType.value = type
     showToast.value = true
 
     if (duration > 0) {
@@ -198,6 +200,7 @@ export const useAppStore = defineStore('app', () => {
     currentPage,
     isAppReady,
     toastMessage,
+    toastType,
     showToast,
     showSubtaskDialog,
     showConfirmDialog,
