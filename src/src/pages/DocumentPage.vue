@@ -322,6 +322,7 @@
             v-model="currentDocument.content"
             @input="handleContentChange"
             @paste="handlePaste"
+            @keydown="handleTextareaKeydown"
             class="document-textarea"
             placeholder="支持 Markdown 语法，开始编写...（支持粘贴图片）"
           ></textarea>
@@ -387,6 +388,13 @@
             @click="handlePreviewClick"
           ></div>
         </div>
+        <!-- 内联 AI 助手 -->
+        <InlineAIAssistant
+          :show="showInlineAI"
+          :position="inlineAIPosition"
+          @close="showInlineAI = false"
+          @insert="handleAIInsert"
+        />
       </div>
 
       <!-- 空状态 -->
@@ -417,11 +425,12 @@
       @clear-result="searchResult = ''"
       @navigate-document="handleNavigateDocument"
     />
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useDocumentStore } from '../stores/document'
 import { useAppStore } from '../stores/app'
@@ -429,6 +438,8 @@ import { marked } from 'marked'
 import hljs from 'highlight.js'
 import DocumentTreeItem from '../components/DocumentTreeItem.vue'
 import DocumentSearchPanel from '../components/DocumentSearchPanel.vue'
+import InlineAIAssistant from '../components/InlineAIAssistant.vue'
+import { getCaretCoordinates } from '../utils/caret_coords'
 import { DocumentAITool } from '../utils/document_ai_tool'
 import { DeepSeekClient } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
@@ -456,6 +467,10 @@ const aiResult = ref('')
 const aiClient = ref(null)
 const aiTool = ref(null)
 const inlineQuestion = ref('')
+
+// 内联 AI 助手状态
+const showInlineAI = ref(false)
+const inlineAIPosition = ref({ top: 0, left: 0 })
 
 // 智能检索面板状态
 const searchPanelCollapsed = ref(false)
@@ -1039,7 +1054,7 @@ async function handleCopyResult() {
   }
 }
 
-// 插入 AI 结果到文档
+// ���入 AI 结果到文档
 function handleInsertResult() {
   if (!currentDocument.value) return
 
@@ -1067,6 +1082,44 @@ function handleInsertResult() {
 
   appStore.toast('已插入到文档')
   aiResult.value = ''
+}
+
+// 处理内联 AI 助手插入
+function handleAIInsert(text) {
+  if (!currentDocument.value) return
+
+  const textarea = textareaRef.value
+  if (!textarea) return
+
+  const cursorPos = textarea.selectionStart
+  const currentContent = currentDocument.value.content || ''
+  
+  const newContent = 
+    currentContent.slice(0, cursorPos) + text + currentContent.slice(cursorPos)
+  
+  currentDocument.value.content = newContent
+  handleContentChange()
+
+  nextTick(() => {
+    const newCursorPos = cursorPos + text.length
+    textarea.setSelectionRange(newCursorPos, newCursorPos)
+    textarea.focus()
+  })
+}
+
+// 处理文本域快捷键
+function handleTextareaKeydown(event) {
+  if (event.ctrlKey && event.key === 'i') {
+    event.preventDefault()
+    
+    const textarea = textareaRef.value
+    if (textarea) {
+      const coords = getCaretCoordinates(textarea, textarea.selectionEnd)
+      // 20 is a magic number to offset the panel below the text line
+      inlineAIPosition.value = { top: coords.top + coords.height, left: coords.left }
+      showInlineAI.value = true
+    }
+  }
 }
 
 // 替换文档内容为 AI 结果
