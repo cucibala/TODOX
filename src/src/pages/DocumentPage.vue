@@ -329,6 +329,58 @@
 
         <!-- 预览模式 -->
         <div v-else class="document-preview" ref="previewRef">
+          <!-- 文档内搜索工具栏 -->
+          <div class="preview-search-toolbar">
+            <div class="preview-search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+              </svg>
+              <input
+                v-model="previewSearchQuery"
+                type="text"
+                placeholder="在文档中搜索..."
+                class="preview-search-input"
+                @input="handlePreviewSearch"
+                @keydown.enter="handlePreviewSearchNext"
+                @keydown.escape="handleClearPreviewSearch"
+              />
+              <button
+                v-if="previewSearchQuery"
+                class="btn-clear-preview-search"
+                @click="handleClearPreviewSearch"
+                title="清空搜索"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div class="preview-search-controls" v-if="previewSearchQuery && searchMatchCount > 0">
+              <span class="search-match-info">{{ currentMatchIndex + 1 }} / {{ searchMatchCount }}</span>
+              <button
+                class="btn-search-nav"
+                @click="handlePreviewSearchPrev"
+                title="上一个"
+                :disabled="searchMatchCount === 0"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              <button
+                class="btn-search-nav"
+                @click="handlePreviewSearchNext"
+                title="下一个"
+                :disabled="searchMatchCount === 0"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
           <div
             class="markdown-body"
             v-html="renderedMarkdown"
@@ -411,6 +463,11 @@ const searchProcessing = ref(false)
 const searchProcessingMessage = ref('')
 const searchResult = ref('')
 const searchDocumentMap = ref({})
+
+// 预览模式文档内搜索状态
+const previewSearchQuery = ref('')
+const searchMatchCount = ref(0)
+const currentMatchIndex = ref(0)
 
 // 过滤后的文档列表（用于搜索）
 const filteredDocuments = computed(() => {
@@ -1026,6 +1083,177 @@ async function handleReplaceResult() {
   aiResult.value = ''
 }
 
+// 预览模式文档内搜索处理
+function handlePreviewSearch() {
+  if (!previewSearchQuery.value.trim()) {
+    handleClearPreviewSearch()
+    return
+  }
+
+  const query = previewSearchQuery.value.trim()
+  const previewElement = previewRef.value?.querySelector('.markdown-body')
+  if (!previewElement) return
+
+  // 清除之前的高亮
+  clearPreviewSearchHighlight()
+
+  // 高亮匹配项
+  highlightTextInElement(previewElement, query)
+
+  // 滚动到第一个匹配项
+  scrollToCurrentMatch()
+}
+
+// 清除搜索高亮
+function clearPreviewSearchHighlight() {
+  const previewElement = previewRef.value?.querySelector('.markdown-body')
+  if (!previewElement) return
+
+  const highlights = previewElement.querySelectorAll('.search-highlight')
+  highlights.forEach(highlight => {
+    const parent = highlight.parentNode
+    if (parent) {
+      parent.replaceChild(document.createTextNode(highlight.textContent), highlight)
+      parent.normalize()
+    }
+  })
+
+  searchMatchCount.value = 0
+  currentMatchIndex.value = 0
+}
+
+// 在元素中高亮文本
+function highlightTextInElement(element, searchText) {
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node) => {
+        // 跳过脚本和样式标签
+        if (node.parentElement &&
+            (node.parentElement.tagName === 'SCRIPT' ||
+             node.parentElement.tagName === 'STYLE' ||
+             node.parentElement.classList.contains('search-highlight'))) {
+          return NodeFilter.FILTER_REJECT
+        }
+        // 只处理包含搜索文本的节点
+        if (node.textContent.toLowerCase().includes(searchText.toLowerCase())) {
+          return NodeFilter.FILTER_ACCEPT
+        }
+        return NodeFilter.FILTER_SKIP
+      }
+    }
+  )
+
+  const nodesToReplace = []
+  let node
+  while (node = walker.nextNode()) {
+    nodesToReplace.push(node)
+  }
+
+  let matchCount = 0
+  nodesToReplace.forEach(textNode => {
+    const text = textNode.textContent
+    const regex = new RegExp(`(${escapeRegExp(searchText)})`, 'gi')
+    const matches = text.match(regex)
+
+    if (matches) {
+      const fragment = document.createDocumentFragment()
+      let lastIndex = 0
+
+      text.replace(regex, (match, _p1, offset) => {
+        // 添加匹配前的文本
+        if (offset > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, offset)))
+        }
+
+        // 创建高亮元素
+        const highlight = document.createElement('mark')
+        highlight.className = 'search-highlight'
+        highlight.textContent = match
+        highlight.dataset.matchIndex = matchCount
+        fragment.appendChild(highlight)
+
+        matchCount++
+        lastIndex = offset + match.length
+        return match
+      })
+
+      // 添加剩余文本
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)))
+      }
+
+      textNode.parentNode.replaceChild(fragment, textNode)
+    }
+  })
+
+  searchMatchCount.value = matchCount
+  currentMatchIndex.value = matchCount > 0 ? 0 : -1
+
+  // 高亮当前匹配项
+  if (matchCount > 0) {
+    updateCurrentMatchHighlight()
+  }
+}
+
+// 转义正则表达式特殊字符
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// 更新当前匹配项的高亮
+function updateCurrentMatchHighlight() {
+  const previewElement = previewRef.value?.querySelector('.markdown-body')
+  if (!previewElement) return
+
+  const highlights = previewElement.querySelectorAll('.search-highlight')
+  highlights.forEach((highlight, index) => {
+    if (index === currentMatchIndex.value) {
+      highlight.classList.add('current-match')
+    } else {
+      highlight.classList.remove('current-match')
+    }
+  })
+}
+
+// 滚动到当前匹配项
+function scrollToCurrentMatch() {
+  if (currentMatchIndex.value < 0 || searchMatchCount.value === 0) return
+
+  const previewElement = previewRef.value?.querySelector('.markdown-body')
+  if (!previewElement) return
+
+  const currentHighlight = previewElement.querySelector(`.search-highlight[data-match-index="${currentMatchIndex.value}"]`)
+  if (currentHighlight) {
+    currentHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
+
+// 搜索下一个
+function handlePreviewSearchNext() {
+  if (searchMatchCount.value === 0) return
+
+  currentMatchIndex.value = (currentMatchIndex.value + 1) % searchMatchCount.value
+  updateCurrentMatchHighlight()
+  scrollToCurrentMatch()
+}
+
+// 搜索上一个
+function handlePreviewSearchPrev() {
+  if (searchMatchCount.value === 0) return
+
+  currentMatchIndex.value = (currentMatchIndex.value - 1 + searchMatchCount.value) % searchMatchCount.value
+  updateCurrentMatchHighlight()
+  scrollToCurrentMatch()
+}
+
+// 清空搜索
+function handleClearPreviewSearch() {
+  previewSearchQuery.value = ''
+  clearPreviewSearchHighlight()
+}
+
 // 监听模式切换，同步滚动位置
 watch(viewMode, async (newMode, oldMode) => {
   // 如果是跳转到文档触发的模式切换，不进行滚动同步
@@ -1061,6 +1289,20 @@ watch(viewMode, async (newMode, oldMode) => {
     if (textarea.scrollHeight > textarea.clientHeight) {
       textarea.scrollTop = scrollPercentage * (textarea.scrollHeight - textarea.clientHeight)
     }
+  }
+
+  // 切换到预览模式时清空搜索
+  if (newMode === 'preview') {
+    handleClearPreviewSearch()
+  }
+})
+
+// 监听文档变化，重新应用搜索高亮
+watch(() => currentDocument.value?.content, () => {
+  if (viewMode.value === 'preview' && previewSearchQuery.value) {
+    nextTick(() => {
+      handlePreviewSearch()
+    })
   }
 })
 
@@ -1667,15 +1909,156 @@ onMounted(async () => {
 .document-preview {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 预览模式搜索工具栏 */
+.preview-search-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 32px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.preview-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 400px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  transition: all 0.2s;
+}
+
+.preview-search-box:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.1);
+}
+
+.preview-search-box svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.preview-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.preview-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.btn-clear-preview-search {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.btn-clear-preview-search:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.btn-clear-preview-search svg {
+  width: 12px;
+  height: 12px;
+  color: var(--text-secondary);
+}
+
+.preview-search-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-match-info {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: center;
+}
+
+.btn-search-nav {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-search-nav:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--primary-color);
+}
+
+.btn-search-nav:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-search-nav svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+}
+
+.btn-search-nav:hover:not(:disabled) svg {
+  color: var(--primary-color);
 }
 
 .markdown-body {
   max-width: 900px;
   margin: 0 auto;
+  padding: 24px 32px;
   color: var(--text-primary);
   line-height: 1.8;
   font-size: 15px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* 搜索高亮样式 */
+.markdown-body :deep(.search-highlight) {
+  background-color: rgba(255, 235, 59, 0.5);
+  border-radius: 2px;
+  padding: 1px 0;
+  transition: all 0.2s;
+}
+
+.markdown-body :deep(.search-highlight.current-match) {
+  background-color: rgba(255, 152, 0, 0.7);
+  box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.3);
 }
 
 .markdown-body :deep(h1),
