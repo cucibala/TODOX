@@ -6,11 +6,20 @@
     ref="panelRef"
   >
     <div class="ai-content">
+      <!-- 选中文字提示 -->
+      <div v-if="selectedText" class="selected-text-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path>
+          <rect x="9" y="3" width="6" height="4" rx="2"></rect>
+        </svg>
+        <span>已选中 {{ selectedText.length }} 个字符</span>
+      </div>
+
       <div class="ai-input-wrapper">
         <textarea
           ref="textareaRef"
           v-model="question"
-          placeholder="向 AI 提问 (Ctrl+Enter 发送)"
+          :placeholder="selectedText ? '如何处理选中的文字？(Ctrl+Enter 发送)' : '向 AI 提问 (Ctrl+Enter 发送)'"
           rows="1"
           class="ai-input"
           @keydown.ctrl.enter.prevent="sendQuestion"
@@ -20,12 +29,39 @@
           <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
         </button>
       </div>
+
       <div v-if="isProcessing || aiResult" class="ai-result-wrapper">
         <div v-if="isProcessing && !aiResult" class="ai-processing-indicator">
           <div class="ai-spinner"></div>
           <span>正在思考...</span>
         </div>
-        <div v-if="aiResult" class="ai-result markdown-body" v-html="renderedAIResult"></div>
+        <div v-if="aiResult" class="ai-result-content">
+          <div class="ai-result markdown-body" v-html="renderedAIResult"></div>
+          <div class="ai-result-actions">
+            <button v-if="selectedText" class="btn-action btn-replace" @click="handleReplace">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              替换
+            </button>
+            <button v-else class="btn-action btn-insert" @click="handleInsert">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              插入
+            </button>
+            <button class="btn-action btn-copy" @click="handleCopy">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              复制
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -44,10 +80,14 @@ const props = defineProps({
   position: {
     type: Object,
     default: () => ({ top: 0, left: 0 })
+  },
+  selectedText: {
+    type: String,
+    default: ''
   }
 })
 
-const emit = defineEmits(['close', 'insert'])
+const emit = defineEmits(['close', 'insert', 'replace'])
 
 const appStore = useAppStore()
 const question = ref('')
@@ -127,10 +167,29 @@ async function sendQuestion() {
   isProcessing.value = true
   aiResult.value = ''
   const currentQuestion = question.value
-  
+
+  // 如果有选中的文字，构建包含上下文的提示
+  let userContent = currentQuestion
+  if (props.selectedText) {
+    userContent = `我选中了以下文字：
+
+\`\`\`
+${props.selectedText}
+\`\`\`
+
+请根据我的要求处理这段文字：${currentQuestion}
+
+请直接返回处理后的结果，不要包含任何解释说明。`
+  }
+
   const messages = [
-    { role: 'system', content: '你是一个通用的 AI 助手，请简洁、专业、友好地回答用户的问题。' },
-    { role: 'user', content: currentQuestion }
+    {
+      role: 'system',
+      content: props.selectedText
+        ? '你是一个文档编辑助手，专门帮助用户优化和处理文本内容。请直接返回处理后的结果，不要添加任何解释说明或额外的文字。'
+        : '你是一个通用的 AI 助手，请简洁、专业、友好地回答用户的问题。'
+    },
+    { role: 'user', content: userContent }
   ]
 
   try {
@@ -143,6 +202,29 @@ async function sendQuestion() {
     aiResult.value = `**错误**: ${error.message}`
   } finally {
     isProcessing.value = false
+  }
+}
+
+// --- Action Handlers ---
+function handleReplace() {
+  if (!aiResult.value) return
+  emit('replace', aiResult.value)
+  emit('close')
+}
+
+function handleInsert() {
+  if (!aiResult.value) return
+  emit('insert', aiResult.value)
+  emit('close')
+}
+
+async function handleCopy() {
+  if (!aiResult.value) return
+  try {
+    await navigator.clipboard.writeText(aiResult.value)
+    appStore.toast('已复制到剪贴板')
+  } catch (error) {
+    appStore.toast('复制失败')
   }
 }
 
@@ -165,6 +247,7 @@ function autoResizeTextarea() {
   z-index: 1000;
   width: 500px;
   max-width: 90vw;
+  max-height: 500px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -176,6 +259,10 @@ function autoResizeTextarea() {
 
 .ai-content {
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  overflow-y: auto;
 }
 
 .ai-input-wrapper {
@@ -245,6 +332,85 @@ function autoResizeTextarea() {
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Selected Text Hint */
+.selected-text-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.selected-text-hint svg {
+  width: 16px;
+  height: 16px;
+  color: var(--primary-color);
+  flex-shrink: 0;
+}
+
+/* AI Result Content */
+.ai-result-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-result {
+  line-height: 1.6;
+}
+
+/* AI Result Actions */
+.ai-result-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.btn-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-action:hover {
+  background: var(--bg-hover);
+}
+.btn-action svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.btn-replace {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+.btn-replace:hover {
+  opacity: 0.9;
+}
+
+.btn-insert {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+.btn-insert:hover {
+  opacity: 0.9;
+}
 
 /* Markdown Styles */
 .markdown-body :deep(p:last-child) {

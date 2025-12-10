@@ -392,8 +392,10 @@
         <InlineAIAssistant
           :show="showInlineAI"
           :position="inlineAIPosition"
+          :selected-text="selectedTextInfo.text"
           @close="showInlineAI = false"
           @insert="handleAIInsert"
+          @replace="handleAIReplace"
         />
       </div>
 
@@ -471,6 +473,7 @@ const inlineQuestion = ref('')
 // 内联 AI 助手状态
 const showInlineAI = ref(false)
 const inlineAIPosition = ref({ top: 0, left: 0 })
+const selectedTextInfo = ref({ text: '', start: 0, end: 0 })
 
 // 智能检索面板状态
 const searchPanelCollapsed = ref(false)
@@ -1093,10 +1096,10 @@ function handleAIInsert(text) {
 
   const cursorPos = textarea.selectionStart
   const currentContent = currentDocument.value.content || ''
-  
-  const newContent = 
+
+  const newContent =
     currentContent.slice(0, cursorPos) + text + currentContent.slice(cursorPos)
-  
+
   currentDocument.value.content = newContent
   handleContentChange()
 
@@ -1107,16 +1110,97 @@ function handleAIInsert(text) {
   })
 }
 
+// 替换选中的文字为 AI 结果
+function handleAIReplace(text) {
+  if (!currentDocument.value) return
+
+  const textarea = textareaRef.value
+  if (!textarea) return
+
+  const currentContent = currentDocument.value.content || ''
+  const { start, end } = selectedTextInfo.value
+
+  // 替换选中的文字
+  const newContent =
+    currentContent.slice(0, start) + text + currentContent.slice(end)
+
+  currentDocument.value.content = newContent
+  handleContentChange()
+
+  nextTick(() => {
+    // 将光标移动到替换后的文字末尾
+    const newCursorPos = start + text.length
+    textarea.setSelectionRange(newCursorPos, newCursorPos)
+    textarea.focus()
+  })
+
+  // 关闭内联 AI 助手
+  showInlineAI.value = false
+}
+
 // 处理文本域快捷键
 function handleTextareaKeydown(event) {
   if (event.ctrlKey && event.key === 'i') {
     event.preventDefault()
-    
+
     const textarea = textareaRef.value
     if (textarea) {
+      // 获取选中的文字和范围
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const selectedText = textarea.value.substring(start, end)
+
+      // 保存选中的文字信息
+      selectedTextInfo.value = {
+        text: selectedText,
+        start: start,
+        end: end
+      }
+
       const coords = getCaretCoordinates(textarea, textarea.selectionEnd)
-      // 20 is a magic number to offset the panel below the text line
-      inlineAIPosition.value = { top: coords.top + coords.height, left: coords.left }
+
+      // 智能定位：检测面板是否会超出可视区域
+      const textareaRect = textarea.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+
+      // AI 面板的预估最大高度（包括输入框、结果区域等）
+      const panelMaxHeight = 500 // 对应 InlineAIAssistant 的最大高度
+      const panelMinHeight = 80  // 最小高度（只有输入框时）
+
+      // 计算光标在视口中的绝对位置
+      const cursorAbsoluteY = textareaRect.top + coords.top + coords.height
+
+      // 检查下方空间是否足够
+      const spaceBelow = viewportHeight - cursorAbsoluteY
+      const spaceAbove = textareaRect.top + coords.top
+
+      let top, placement
+
+      if (spaceBelow >= panelMinHeight) {
+        // 下方空间足够，显示在下方
+        top = coords.top + coords.height + 5
+        placement = 'below'
+      } else if (spaceAbove >= panelMinHeight) {
+        // 下方空间不足但上方足够，显示在上方
+        // 预留一些空间，面板会向上延伸
+        top = coords.top - Math.min(panelMaxHeight, spaceAbove) - 5
+        placement = 'above'
+      } else {
+        // 上下空间都不足，优先显示在空间较大的一侧
+        if (spaceBelow > spaceAbove) {
+          top = coords.top + coords.height + 5
+          placement = 'below'
+        } else {
+          top = coords.top - panelMinHeight - 5
+          placement = 'above'
+        }
+      }
+
+      inlineAIPosition.value = {
+        top,
+        left: coords.left,
+        placement // 传递位置信息，便于组件调整样式
+      }
       showInlineAI.value = true
     }
   }
