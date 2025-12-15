@@ -1157,48 +1157,57 @@ function handleTextareaKeydown(event) {
         end: end
       }
 
-      const coords = getCaretCoordinates(textarea, textarea.selectionEnd)
+      const coords = getCaretCoordinates(textarea, textarea.selectionStart)
 
       // 智能定位：检测面板是否会超出可视区域
       const textareaRect = textarea.getBoundingClientRect()
       const viewportHeight = window.innerHeight
 
+      // 修正坐标：减去滚动距离，加上 textarea 在视口中的偏移
+      // 注意：getCaretCoordinates 返回的是相对于 textarea 内容起点的坐标
+      const relativeTop = coords.top - textarea.scrollTop
+      const relativeLeft = coords.left - textarea.scrollLeft
+      
+      // 计算在视口中的绝对位置
+      const absoluteTop = textareaRect.top + relativeTop
+      const absoluteLeft = textareaRect.left + relativeLeft
+
       // AI 面板的预估最大高度（包括输入框、结果区域等）
       const panelMaxHeight = 500 // 对应 InlineAIAssistant 的最大高度
       const panelMinHeight = 80  // 最小高度（只有输入框时）
 
-      // 计算光标在视口中的绝对位置
-      const cursorAbsoluteY = textareaRect.top + coords.top + coords.height
+      // 计算光标在视口中的底部位置
+      const cursorAbsoluteBottom = absoluteTop + coords.height
 
       // 检查下方空间是否足够
-      const spaceBelow = viewportHeight - cursorAbsoluteY
-      const spaceAbove = textareaRect.top + coords.top
+      const spaceBelow = viewportHeight - cursorAbsoluteBottom
+      const spaceAbove = absoluteTop
 
       let top, placement
 
       if (spaceBelow >= panelMinHeight) {
         // 下方空间足够，显示在下方
-        top = coords.top + coords.height + 5
+        top = absoluteTop + coords.height + 5
         placement = 'below'
       } else if (spaceAbove >= panelMinHeight) {
         // 下方空间不足但上方足够，显示在上方
         // 预留一些空间，面板会向上延伸
-        top = coords.top - Math.min(panelMaxHeight, spaceAbove) - 5
+        top = absoluteTop - Math.min(panelMaxHeight, spaceAbove) - 5
         placement = 'above'
       } else {
         // 上下空间都不足，优先显示在空间较大的一侧
         if (spaceBelow > spaceAbove) {
-          top = coords.top + coords.height + 5
+          top = absoluteTop + coords.height + 5
           placement = 'below'
         } else {
-          top = coords.top - panelMinHeight - 5
+          top = absoluteTop - panelMinHeight - 5
           placement = 'above'
         }
       }
 
       inlineAIPosition.value = {
         top,
-        left: coords.left,
+        left: absoluteLeft,
         placement // 传递位置信息，便于组件调整样式
       }
       showInlineAI.value = true
@@ -2175,7 +2184,6 @@ onMounted(async () => {
 }
 
 .markdown-body {
-  max-width: 900px;
   margin: 0 auto;
   padding: 24px 32px;
   color: var(--text-primary);
@@ -2183,6 +2191,7 @@ onMounted(async () => {
   font-size: 15px;
   flex: 1;
   overflow-y: auto;
+  width: 100%;
 }
 
 /* 搜索高亮样式 */

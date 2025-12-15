@@ -90,17 +90,6 @@ function getCaretCoordinates(element, position) {
     left: span.offsetLeft + parseInt(computed['borderLeftWidth']),
     height: parseInt(computed['lineHeight'])
   }
-  
-  // Adjust for textarea scroll position
-  coordinates.top -= element.scrollTop
-  coordinates.left -= element.scrollLeft
-
-  // Get textarea's position relative to the viewport
-  const rect = element.getBoundingClientRect()
-  
-  coordinates.top += rect.top
-  coordinates.left += rect.left
-
 
   document.body.removeChild(div)
 
