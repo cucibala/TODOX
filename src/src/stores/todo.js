@@ -547,6 +547,19 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
   
+  // 更新子任务信息
+  async function updateSubtask(taskId, subtaskId, updates) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (task && task.subtasks) {
+      const subtask = task.subtasks.find(st => st.id === subtaskId)
+      if (subtask) {
+        Object.assign(subtask, updates)
+        // 单条更新数据库
+        await electronAPI.updateSubtask(subtaskId, JSON.parse(JSON.stringify(updates)))
+      }
+    }
+  }
+
   return {
     // 状态
     todos,
@@ -586,6 +599,7 @@ export const useTodoStore = defineStore('todo', () => {
     removeCurrentImage,
     clearCurrentImages,
     addSubtask,
+    updateSubtask,
     toggleSubtask,
     deleteSubtask,
     reorderSubtasks,

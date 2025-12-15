@@ -1289,3 +1289,72 @@
   user-select: none;
 }
 
+/* Subtask Editing */
+.subtask-edit-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--primary-color);
+  border-radius: 4px;
+  resize: vertical;
+  min-height: 32px;
+}
+
+.subtask-edit-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(138, 157, 251, 0.1);
+}
+
+/* Subtask Weight Clickable */
+.subtask-weight.clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.1s;
+}
+
+.subtask-weight.clickable:hover {
+  transform: scale(1.1);
+}
+
+.subtask-weight.clickable:active {
+  transform: scale(0.95);
+}
+
+/* Inline Add Subtask */
+.add-subtask-inline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-top: 4px;
+  margin-left: 20px; /* Align with subtask item checkbox roughly */
+}
+
+.add-subtask-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.add-subtask-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(138, 157, 251, 0.1);
+}
+
+.subtask-checkbox.placeholder {
+  width: 22px;
+  height: 22px;
+  border: 2px dashed var(--border-color);
+  border-radius: 50%;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+

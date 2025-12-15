@@ -192,7 +192,7 @@
       </div>
 
       <!-- 子任务 -->
-      <div v-if="task.subtasks && task.subtasks.length > 0" class="task-subtasks-section">
+      <div v-if="(task.subtasks && task.subtasks.length > 0) || isAddingSubtask" class="task-subtasks-section">
         <div class="subtasks-list">
           <div 
             v-for="(subtask, index) in task.subtasks" 
@@ -231,16 +231,33 @@
               </svg>
             </div>
             <span 
-              class="subtask-weight" 
+              class="subtask-weight clickable" 
               :class="`subtask-weight-${getWeightClass(subtask.weight)}`"
+              @click.stop="handleCycleSubtaskWeight(subtask)"
+              title="点击切换优先级"
             >
               {{ getWeightText(subtask.weight) }}
             </span>
             <div class="subtask-content">
-              <div class="subtask-text-line">
+              <!-- 编辑模式 -->
+              <div v-if="editingSubtaskId === subtask.id" class="subtask-edit-mode">
+                 <textarea
+                   v-model="editingSubtaskText"
+                   class="subtask-edit-input"
+                   ref="editSubtaskInputRef"
+                   rows="1"
+                   @keydown.enter.prevent="handleSaveEditSubtask(subtask.id)"
+                   @keydown.esc="handleCancelEditSubtask"
+                   @blur="handleSaveEditSubtask(subtask.id)"
+                 ></textarea>
+              </div>
+              <!-- 显示模式 -->
+              <div v-else class="subtask-text-line">
                 <span 
                   class="subtask-text" 
                   :class="{ completed: subtask.completed }"
+                  @click="handleStartEditSubtask(subtask)"
+                  title="点击编辑"
                 >
                   {{ subtask.text }}
                 </span>
@@ -314,6 +331,20 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- 内联添加子任务输入框 -->
+        <div v-if="isAddingSubtask" class="add-subtask-inline">
+           <div class="subtask-checkbox placeholder"></div>
+           <input
+             v-model="newSubtaskText"
+             class="add-subtask-input"
+             placeholder="输入子任务内容 (Enter 添加, Esc 取消)"
+             ref="newSubtaskInputRef"
+             @keydown.enter="handleConfirmAddSubtask"
+             @keydown.esc="handleCancelAddSubtask"
+             @blur="handleConfirmAddSubtask" 
+           />
         </div>
       </div>
 
@@ -589,6 +620,14 @@ const draggedSubtaskId = ref(null)
 const draggedSubtaskIndex = ref(null)
 const dragOverIndex = ref(null)
 
+// 子任务内联添加/编辑状态
+const isAddingSubtask = ref(false)
+const newSubtaskText = ref('')
+const newSubtaskInputRef = ref(null)
+const editingSubtaskId = ref(null)
+const editingSubtaskText = ref('')
+const editSubtaskInputRef = ref(null)
+
 // 进度记录输入
 const progressInput = ref('')
 const showProgress = ref(false)
@@ -789,8 +828,82 @@ async function handleDelete() {
 }
 
 function handleAddSubtask() {
-  todoStore.currentSubtaskTaskId = props.task.id
-  appStore.showSubtaskDialog = true
+  // 切换内联添加模式
+  isAddingSubtask.value = true
+  // 聚焦输入框
+  nextTick(() => {
+    if (newSubtaskInputRef.value) {
+      newSubtaskInputRef.value.focus()
+    }
+  })
+}
+
+async function handleConfirmAddSubtask() {
+  const text = newSubtaskText.value.trim()
+  if (!text) {
+    // 如果为空，取消添加
+    handleCancelAddSubtask()
+    return
+  }
+  
+  await todoStore.addSubtask(props.task.id, text)
+  newSubtaskText.value = ''
+  
+  // 继续保持添加模式，方便连续添加
+  nextTick(() => {
+    if (newSubtaskInputRef.value) {
+      newSubtaskInputRef.value.focus()
+    }
+  })
+}
+
+function handleCancelAddSubtask() {
+  isAddingSubtask.value = false
+  newSubtaskText.value = ''
+}
+
+// 开始编辑子任务
+async function handleStartEditSubtask(subtask) {
+  editingSubtaskId.value = subtask.id
+  editingSubtaskText.value = subtask.text
+  
+  await nextTick()
+  if (editSubtaskInputRef.value && editSubtaskInputRef.value[0]) {
+    editSubtaskInputRef.value[0].focus()
+    // 自动调整高度
+    editSubtaskInputRef.value[0].style.height = 'auto'
+    editSubtaskInputRef.value[0].style.height = editSubtaskInputRef.value[0].scrollHeight + 'px'
+  }
+}
+
+// 保存子任务编辑
+async function handleSaveEditSubtask(subtaskId) {
+  const newText = editingSubtaskText.value.trim()
+  if (!newText) {
+    appStore.toast('子任务内容不能为空')
+    return
+  }
+  
+  await todoStore.updateSubtask(props.task.id, subtaskId, { text: newText })
+  editingSubtaskId.value = null
+  editingSubtaskText.value = ''
+}
+
+// 取消子任务编辑
+function handleCancelEditSubtask() {
+  editingSubtaskId.value = null
+  editingSubtaskText.value = ''
+}
+
+// 切换子任务权重 (优先级)
+async function handleCycleSubtaskWeight(subtask) {
+  // 权重循环: 1(低) -> 3(中) -> 5(高) -> 1(低)
+  let newWeight = 1
+  if (subtask.weight === 1) newWeight = 3
+  else if (subtask.weight === 3) newWeight = 5
+  else newWeight = 1
+  
+  await todoStore.updateSubtask(props.task.id, subtask.id, { weight: newWeight })
 }
 
 // AI 智能拆解任务
