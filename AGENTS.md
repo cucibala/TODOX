@@ -47,3 +47,7 @@ No dedicated unit/e2e framework is configured. Validate changes with:
 ## Security & Configuration Tips
 
 - Never commit API keys or secrets; keep local config in `.env`/app settings and exclude it from commits.
+
+## Agent-Specific Instructions
+
+- Use **Serena** tools for codebase understanding and edits (e.g., symbol search/replace) when making code changes in this repository.
