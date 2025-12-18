@@ -1,5 +1,8 @@
 // 豆包（Doubao）API 工具类
 // 参考：https://www.volcengine.com/docs/82379/1399008
+import { assertOkResponse, postChatCompletions, postChatCompletionsJson } from './llm_http.js'
+import { consumeChatCompletionsSSE } from './llm_stream.js'
+import { buildDailyTaskSummary, parseJsonArrayFromText } from './llm_utils.js'
 
 /**
  * 豆包 API 客户端
@@ -19,7 +22,6 @@ export class DoubaoClient {
    */
   async chatCompletionsStream(messages, options = {}) {
     const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning, enableTools = false, enableReasoningMode = false } = options
-    console.log(`豆包思考模式: ${enableReasoningMode ? '开启' : '关闭'}`)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
     const requestBody = {
@@ -42,89 +44,11 @@ export class DoubaoClient {
       requestBody.tools = tools
     }
     
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    })
+    const url = `${this.baseURL}/chat/completions`
+    const response = await postChatCompletions(url, this.apiKey, requestBody)
+    await assertOkResponse(response, '豆包')
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
-      console.error('豆包 API 请求失败:', errorMsg, errorData)
-      throw new Error(errorMsg)
-    }
-
-    // 处理流式响应
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let toolCallsBuffer = []
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      for (const line of lines) {
-        const trimmedLine = line.trim()
-        if (!trimmedLine || trimmedLine === 'data: [DONE]') continue
-        
-        if (trimmedLine.startsWith('data: ')) {
-          try {
-            const jsonStr = trimmedLine.slice(6)
-            const data = JSON.parse(jsonStr)
-            const delta = data.choices[0]?.delta
-            
-            // 处理思考内容（推理模型）
-            if (delta?.reasoning_content && onReasoning) {
-              onReasoning(delta.reasoning_content)
-            }
-            
-            // 处理普通内容
-            if (delta?.content) {
-              onContent(delta.content)
-            }
-            
-            // 处理工具调用
-            if (delta?.tool_calls) {
-              for (const toolCall of delta.tool_calls) {
-                if (toolCall.index !== undefined) {
-                  if (!toolCallsBuffer[toolCall.index]) {
-                    toolCallsBuffer[toolCall.index] = {
-                      id: '',
-                      type: 'function',
-                      function: {
-                        name: '',
-                        arguments: ''
-                      }
-                    }
-                  }
-                  
-                  const currentTool = toolCallsBuffer[toolCall.index]
-                  if (toolCall.id) currentTool.id = toolCall.id
-                  if (toolCall.function?.name) currentTool.function.name += toolCall.function.name
-                  if (toolCall.function?.arguments) currentTool.function.arguments += toolCall.function.arguments
-                }
-              }
-            }
-          } catch (e) {
-            console.error('解析流式数据失败:', e)
-          }
-        }
-      }
-    }
-
-    // 如果有工具调用，返回
-    if (toolCallsBuffer.length > 0) {
-      await onToolCalls(toolCallsBuffer)
-    }
+    await consumeChatCompletionsSSE(response, { onContent, onToolCalls, onReasoning })
   }
 
   /**
@@ -149,22 +73,8 @@ export class DoubaoClient {
       requestBody.tools = tools
     }
 
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      throw new Error(errorData.error?.message || '豆包 API 请求失败')
-    }
-
-    const data = await response.json()
-    return data
+    const url = `${this.baseURL}/chat/completions`
+    return await postChatCompletionsJson(url, this.apiKey, requestBody, '豆包')
   }
 
   /**
@@ -202,26 +112,8 @@ export class DoubaoClient {
       const response = await this.chatCompletions(messages, { model, maxTokens: 1500 })
       const content = response.choices[0]?.message?.content || ''
       
-      // 尝试解析 JSON
-      let subtasks = []
-      try {
-        subtasks = JSON.parse(content.trim())
-      } catch (e) {
-        // 尝试提取 JSON 数组
-        const jsonMatch = content.match(/\[[\s\S]*\]/)
-        if (jsonMatch) {
-          subtasks = JSON.parse(jsonMatch[0])
-        } else {
-          console.error('无法解析子任务 JSON:', content)
-          return []
-        }
-      }
-
-      if (!Array.isArray(subtasks)) {
-        console.error('子任务不是数组:', subtasks)
-        return []
-      }
-
+      const subtasks = parseJsonArrayFromText(content)
+      if (!Array.isArray(subtasks) || subtasks.length === 0) return []
       return subtasks
     } catch (error) {
       console.error('AI 拆解任务失败:', error)
@@ -238,18 +130,7 @@ export class DoubaoClient {
   async generateDailySummary(tasks, model = null) {
     model = model || this.defaultModel
     
-    const taskSummary = {
-      total: tasks.length,
-      completed: tasks.filter(t => t.completed).length,
-      pending: tasks.filter(t => !t.completed).length,
-      tasks: tasks.map(t => ({
-        text: t.text,
-        completed: t.completed,
-        priority: t.priority || 'medium',
-        subtasks: t.subtasks?.length || 0,
-        subtasksCompleted: t.subtasks?.filter(st => st.completed).length || 0
-      }))
-    }
+    const taskSummary = buildDailyTaskSummary(tasks)
     
     const response = await this.chatCompletions([
       {

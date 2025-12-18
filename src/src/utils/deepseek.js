@@ -1,4 +1,7 @@
 // DeepSeek API 工具类
+import { assertOkResponse, postChatCompletions, postChatCompletionsJson } from './llm_http.js'
+import { consumeChatCompletionsSSE } from './llm_stream.js'
+import { buildDailyTaskSummary, parseJsonArrayFromText } from './llm_utils.js'
 
 /**
  * DeepSeek API 客户端
@@ -17,11 +20,9 @@ export class DeepSeekClient {
    */
   async chatCompletionsStream(messages, options = {}) {
     const { tools = [], onContent, onToolCalls, onReasoning, enableTools = false, enableReasoningMode = false } = options
-    console.log('chatCompletionsStream', messages, tools)
     
     // 根据思考模式选择模型
     const model = enableReasoningMode ? 'deepseek-reasoner' : 'deepseek-chat'
-    console.log(`使用模型: ${model}`)
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
     const requestBody = {
@@ -37,90 +38,11 @@ export class DeepSeekClient {
       requestBody.tools = tools
     }
     
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    })
+    const url = `${this.baseURL}/chat/completions`
+    const response = await postChatCompletions(url, this.apiKey, requestBody)
+    await assertOkResponse(response, 'DeepSeek')
 
-    if (!response.ok) {
-      const errorData = await response.json()
-      const errorMsg = errorData.error?.message || `API 请求失败: ${response.status}`
-      console.error('DeepSeek API 请求失败:', errorMsg, errorData)
-      throw new Error(errorMsg)
-    }
-
-    // 处理流式响应
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let toolCallsBuffer = []
-
-    while (true) {
-      const { done, value } = await reader.read()
-      
-      if (done) break
-      
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      
-      for (const line of lines) {
-        const trimmedLine = line.trim()
-        if (!trimmedLine || trimmedLine === 'data: [DONE]') continue
-        
-        if (trimmedLine.startsWith('data: ')) {
-          try {
-            const jsonStr = trimmedLine.slice(6)
-            const data = JSON.parse(jsonStr)
-            const delta = data.choices[0]?.delta
-            
-            // 处理思考内容（推理模型）
-            if (delta?.reasoning_content && onReasoning) {
-              onReasoning(delta.reasoning_content)
-            }
-            
-            // 处理普通内容
-            if (delta?.content) {
-              onContent(delta.content)
-            }
-            
-            // 处理工具调用
-            if (delta?.tool_calls) {
-              for (const toolCall of delta.tool_calls) {
-                if (toolCall.index !== undefined) {
-                  if (!toolCallsBuffer[toolCall.index]) {
-                    toolCallsBuffer[toolCall.index] = {
-                      id: '',
-                      type: 'function',
-                      function: {
-                        name: '',
-                        arguments: ''
-                      }
-                    }
-                  }
-                  
-                  const currentTool = toolCallsBuffer[toolCall.index]
-                  if (toolCall.id) currentTool.id = toolCall.id
-                  if (toolCall.function?.name) currentTool.function.name += toolCall.function.name
-                  if (toolCall.function?.arguments) currentTool.function.arguments += toolCall.function.arguments
-                }
-              }
-            }
-          } catch (e) {
-            console.error('解析流式数据失败:', e)
-          }
-        }
-      }
-    }
-
-    // 如果有工具调用，返回
-    if (toolCallsBuffer.length > 0) {
-      await onToolCalls(toolCallsBuffer)
-    }
+    await consumeChatCompletionsSSE(response, { onContent, onToolCalls, onReasoning })
   }
 
   /**
@@ -145,24 +67,8 @@ export class DeepSeekClient {
       requestBody.tools = tools
     }
 
-    const response = await fetch(`${this.baseURL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    })
-
-    if (!response.ok) {
-      const errorData = await response.json()
-      const errorMsg = errorData.error?.message || '调用 API 失败'
-      console.error('DeepSeek API 调用失败:', errorMsg, errorData)
-      throw new Error(errorMsg)
-    }
-
-    const data = await response.json()
-    return data
+    const url = `${this.baseURL}/chat/completions`
+    return await postChatCompletionsJson(url, this.apiKey, requestBody, 'DeepSeek')
   }
 }
 
@@ -185,24 +91,9 @@ export async function aiBreakdownTask(taskText, apiKey) {
       content: `请将以下任务拆解为3-5个具体可执行的子任务：\n\n任务：${taskText}\n\n要求：\n1. 子任务要具体、可执行\n2. 按照执行顺序排列\n3. 合理评估每个子任务的重要程度(1-5)\n4. 对于需要记录结果的子任务（如测量体重、检查数据、记录进度等），设置 requiresInput: true\n5. 只返回 JSON 数组，不要其他解释\n\n返回格式：\n[\n  {"text":"子任务1","weight":3},\n  {"text":"检查体重","weight":5,"requiresInput":true}\n]`
     }
   ], { maxTokens: 800 })
-  const content = response.choices[0].message.content
-  
-  // 提取 JSON 数组
-  let subtasks
-  try {
-    subtasks = JSON.parse(content)
-  } catch (e) {
-    const match = content.match(/\[[\s\S]*\]/)
-    if (match) {
-      subtasks = JSON.parse(match[0])
-    } else {
-      throw new Error('无法解析 AI 返回的结果')
-    }
-  }
-  
-  if (!Array.isArray(subtasks) || subtasks.length === 0) {
-    throw new Error('AI 返回的格式不正确')
-  }
+  const content = response.choices?.[0]?.message?.content || ''
+  const subtasks = parseJsonArrayFromText(content)
+  if (!Array.isArray(subtasks) || subtasks.length === 0) throw new Error('AI 返回的格式不正确')
   
   // 格式化子任务
   return subtasks.map((st, idx) => {
@@ -228,18 +119,7 @@ export async function aiBreakdownTask(taskText, apiKey) {
 export async function generateDailySummary(tasks, apiKey) {
   const client = new DeepSeekClient(apiKey)
   
-  const taskSummary = {
-    total: tasks.length,
-    completed: tasks.filter(t => t.completed).length,
-    pending: tasks.filter(t => !t.completed).length,
-    tasks: tasks.map(t => ({
-      text: t.text,
-      completed: t.completed,
-      priority: t.priority || 'medium',
-      subtasks: t.subtasks?.length || 0,
-      subtasksCompleted: t.subtasks?.filter(st => st.completed).length || 0
-    }))
-  }
+  const taskSummary = buildDailyTaskSummary(tasks)
   
   const response = await client.chatCompletions([
     {
@@ -251,6 +131,5 @@ export async function generateDailySummary(tasks, apiKey) {
       content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
     }
   ], { maxTokens: 500 })
-  return response.choices[0].message.content
+  return response.choices?.[0]?.message?.content || ''
 }
-
