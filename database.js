@@ -154,6 +154,9 @@ class TodoXDatabase {
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
         content TEXT,
+        parent_id TEXT,
+        type TEXT DEFAULT 'document',
+        order_index INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -1350,18 +1353,56 @@ class TodoXDatabase {
   }
 
   /**
+   * 验证并修复文档表的 schema（处理迁移失败的情况）
+   */
+  verifyAndRepairDocumentsTable() {
+    try {
+      const tableInfo = this.db.prepare('PRAGMA table_info(documents)').all();
+      const columnNames = tableInfo.map(col => col.name);
+      let repaired = false;
+
+      if (!columnNames.includes('parent_id')) {
+        this.db.exec('ALTER TABLE documents ADD COLUMN parent_id TEXT;');
+        console.log('✓ Repaired: Added missing parent_id column to documents table');
+        repaired = true;
+      }
+
+      if (!columnNames.includes('type')) {
+        this.db.exec("ALTER TABLE documents ADD COLUMN type TEXT DEFAULT 'document';");
+        console.log('✓ Repaired: Added missing type column to documents table');
+        repaired = true;
+      }
+
+      if (!columnNames.includes('order_index')) {
+        this.db.exec('ALTER TABLE documents ADD COLUMN order_index INTEGER DEFAULT 0;');
+        console.log('✓ Repaired: Added missing order_index column to documents table');
+        repaired = true;
+      }
+
+      if (repaired) {
+        console.log('Documents table schema repair completed');
+      }
+    } catch (error) {
+      console.error('Failed to verify/repair documents table:', error);
+    }
+  }
+
+  /**
    * 检查并执行数据库迁移
    */
   checkAndMigrate() {
     const currentDbVersion = this.getDatabaseVersion();
-    
+
     // 如果是新数据库，直接设置为最新版本
     if (currentDbVersion === 0) {
       this.setDatabaseVersion(this.currentVersion, '初始数据库版本');
       console.log(`New database initialized to version v${this.currentVersion}`);
       return;
     }
-    
+
+    // 始终验证并修复文档表 schema（处理迁移失败的情况）
+    this.verifyAndRepairDocumentsTable();
+
     // 如果数据库版本已是最新，无需迁移
     if (currentDbVersion >= this.currentVersion) {
       console.log(`Database version v${currentDbVersion} is already the latest`);
