@@ -583,11 +583,12 @@ ipcMain.handle('load-projects', async () => {
       throw new Error('数据库未初始化');
     }
     const projects = db.getProjects();
+    const projectGroups = db.getProjectGroups();
     const currentProjectId = db.getCurrentProjectId();
-    return { projects, currentProjectId };
+    return { projects, projectGroups, currentProjectId };
   } catch (error) {
     console.error('读取项目数据失败:', error);
-    return { projects: [], currentProjectId: null };
+    return { projects: [], projectGroups: [], currentProjectId: null };
   }
 });
 
@@ -632,6 +633,48 @@ ipcMain.handle('update-project', async (event, projectId, updates) => {
     return { success: true };
   } catch (error) {
     console.error('更新项目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加项目分组
+ipcMain.handle('add-project-group', async (event, group) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addProjectGroup(group);
+    return { success: true };
+  } catch (error) {
+    console.error('添加项目分组失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新项目分组
+ipcMain.handle('update-project-group', async (event, groupId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updateProjectGroup(groupId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新项目分组失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除项目分组
+ipcMain.handle('delete-project-group', async (event, groupId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deleteProjectGroup(groupId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除项目分组失败:', error);
     return { success: false, error: error.message };
   }
 });

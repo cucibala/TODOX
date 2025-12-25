@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 5;
+const DATABASE_VERSION = 6;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -44,6 +44,17 @@ class TodoXDatabase {
    * 创建数据库表结构
    */
   createTables() {
+    // 项目分组表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS project_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        "order" INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
     // 项目表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS projects (
@@ -51,6 +62,7 @@ class TodoXDatabase {
         name TEXT NOT NULL,
         color TEXT,
         icon TEXT,
+        group_id TEXT,
         "order" INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -213,6 +225,7 @@ class TodoXDatabase {
 
     // 创建索引
     this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(group_id);
       CREATE INDEX IF NOT EXISTS idx_todos_project ON todos(project_id);
       CREATE INDEX IF NOT EXISTS idx_subtasks_todo ON subtasks(todo_id);
       CREATE INDEX IF NOT EXISTS idx_progress_todo ON progress_records(todo_id);
@@ -243,19 +256,85 @@ class TodoXDatabase {
     return stmt.all();
   }
 
+
+  /**
+   * 获取所有项目分组
+   */
+  getProjectGroups() {
+    const stmt = this.db.prepare('SELECT * FROM project_groups ORDER BY "order" ASC');
+    return stmt.all();
+  }
+
+  /**
+   * 添加单个项目分组
+   */
+  addProjectGroup(group) {
+    const stmt = this.db.prepare(`
+      INSERT INTO project_groups (id, name, "order", created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      String(group.id),
+      group.name,
+      group.order || 0,
+      group.createdAt || group.created_at || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新单个项目分组
+   */
+  updateProjectGroup(groupId, updates) {
+    const fields = [];
+    const values = [];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.order !== undefined) {
+      fields.push('"order" = ?');
+      values.push(updates.order);
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(String(groupId));
+
+    const stmt = this.db.prepare(`
+      UPDATE project_groups SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除单个项目分组
+   */
+  deleteProjectGroup(groupId) {
+    const transaction = this.db.transaction(() => {
+      this.db.prepare('UPDATE projects SET group_id = NULL WHERE group_id = ?').run(String(groupId));
+      this.db.prepare('DELETE FROM project_groups WHERE id = ?').run(String(groupId));
+    });
+
+    transaction();
+  }
+
   /**
    * 添加单个项目
    */
   addProject(project) {
     const stmt = this.db.prepare(`
-        INSERT INTO projects (id, name, color, icon, "order", created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, name, color, icon, group_id, "order", created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
+    const groupId = project.groupId ?? project.group_id ?? null;
     stmt.run(
           String(project.id),
           project.name,
           project.color || null,
           project.icon || null,
+          groupId ? String(groupId) : null,
           project.order || 0,
       project.createdAt || project.created_at || new Date().toISOString(),
           new Date().toISOString()
@@ -284,6 +363,11 @@ class TodoXDatabase {
     if (updates.order !== undefined) {
       fields.push('"order" = ?');
       values.push(updates.order);
+    }
+    if (updates.groupId !== undefined || updates.group_id !== undefined) {
+      const groupId = updates.groupId ?? updates.group_id ?? null;
+      fields.push('group_id = ?');
+      values.push(groupId ? String(groupId) : null);
     }
     
     fields.push('updated_at = ?');
@@ -1547,6 +1631,29 @@ class TodoXDatabase {
           });
           console.log(`✓ 已为 ${docs.length} 个现有文档设置排序索引`);
         }
+      },
+
+      // 版本 6 - 项目分组支持
+      6: function() {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS project_groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            "order" INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        `);
+
+        const projectsTableInfo = this.db.prepare('PRAGMA table_info(projects)').all();
+        const projectColumns = projectsTableInfo.map(col => col.name);
+
+        if (!projectColumns.includes('group_id')) {
+          this.db.exec('ALTER TABLE projects ADD COLUMN group_id TEXT;');
+          console.log('✓ 已为 projects 表添加 group_id 字段');
+        }
+
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(group_id);');
       },
 
       // 未来的迁移函数在这里添加...

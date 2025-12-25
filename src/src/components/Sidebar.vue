@@ -28,57 +28,186 @@
           </button>
         </div>
       </div>
+      <div class="project-group-create">
+        <input
+          v-model="newGroupName"
+          class="project-group-input"
+          placeholder="新建分组..."
+          @keyup.enter="handleCreateGroup"
+        />
+        <button
+          class="btn-add-group"
+          @click="handleCreateGroup"
+          title="新建分组"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <line x1="12" y1="11" x2="12" y2="17"></line>
+            <line x1="9" y1="14" x2="15" y2="14"></line>
+          </svg>
+        </button>
+      </div>
       <div class="project-list">
-        <div v-if="!hasProjects" class="project-empty-hint">
+        <div v-if="!hasProjects && projectGroups.length === 0" class="project-empty-hint">
           暂无项目，点击 + 创建
         </div>
-        <div
-          v-for="project in projects"
-          :key="project.id"
-          class="project-item"
-          :class="{ active: currentProjectId === project.id }"
-          @click="projectStore.selectProject(project.id)"
-        >
-          <div class="project-color" :style="{ backgroundColor: project.color }"></div>
-          <div class="project-info">
-            <div class="project-header">
-              <div class="project-name">{{ project.name }}</div>
-              <div class="project-count">
-                {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
+        <div v-else class="project-group-list">
+          <div
+            class="project-group"
+            :class="{ 'drop-target': activeDropGroupId === ungroupedGroupId }"
+            @dragover.prevent="handleGroupDragOver(ungroupedGroupId)"
+            @dragleave="handleGroupDragLeave(ungroupedGroupId)"
+            @drop.prevent="handleGroupDrop(ungroupedGroupId, $event)"
+          >
+            <div class="project-group-header">
+              <div class="project-group-title">
+                <span class="project-group-name">未分组</span>
+                <span class="project-group-count">{{ ungroupedProjects.length }}</span>
               </div>
             </div>
-            <div class="project-progress-bar">
-              <div 
-                class="project-progress-fill" 
-                :style="{ 
-                  width: getProjectProgress(project.id) + '%',
-                  backgroundColor: project.color 
-                }"
-              ></div>
+            <div class="project-group-items">
+              <div v-if="ungroupedProjects.length === 0" class="project-group-empty">
+                拖动项目到此分组
+              </div>
+              <div
+                v-for="project in ungroupedProjects"
+                :key="project.id"
+                class="project-item"
+                :class="{ active: currentProjectId === project.id, dragging: draggedProjectId === project.id }"
+                draggable="true"
+                @dragstart="handleProjectDragStart($event, project.id)"
+                @dragend="handleProjectDragEnd"
+                @click="projectStore.selectProject(project.id)"
+              >
+                <div class="project-color" :style="{ backgroundColor: project.color }"></div>
+                <div class="project-info">
+                  <div class="project-header">
+                    <div class="project-name">{{ project.name }}</div>
+                    <div class="project-count">
+                      {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
+                    </div>
+                  </div>
+                  <div class="project-progress-bar">
+                    <div 
+                      class="project-progress-fill" 
+                      :style="{ 
+                        width: getProjectProgress(project.id) + '%',
+                        backgroundColor: project.color 
+                      }"
+                    ></div>
+                  </div>
+                </div>
+                <div class="project-actions">
+                  <button 
+                    class="btn-export-project" 
+                    @click.stop="handleExportProject(project.id)" 
+                    title="导出项目"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                  </button>
+                  <button 
+                    class="btn-delete-project" 
+                    @click.stop="projectStore.deleteProject(project.id)" 
+                    title="删除项目"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="project-actions">
-            <button 
-              class="btn-export-project" 
-              @click.stop="handleExportProject(project.id)" 
-              title="导出项目"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-            </button>
-            <button 
-              class="btn-delete-project" 
-              @click.stop="projectStore.deleteProject(project.id)" 
-              title="删除项目"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+
+          <div
+            v-for="group in sortedProjectGroups"
+            :key="group.id"
+            class="project-group"
+            :class="{ 'drop-target': activeDropGroupId === String(group.id) }"
+            @dragover.prevent="handleGroupDragOver(String(group.id))"
+            @dragleave="handleGroupDragLeave(String(group.id))"
+            @drop.prevent="handleGroupDrop(String(group.id), $event)"
+          >
+            <div class="project-group-header">
+              <div class="project-group-title">
+                <span class="project-group-name">{{ group.name }}</span>
+                <span class="project-group-count">{{ getGroupProjects(group.id).length }}</span>
+              </div>
+              <div class="project-group-actions">
+                <button
+                  class="btn-delete-group"
+                  @click.stop="handleDeleteGroup(group)"
+                  title="删除分组"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="project-group-items">
+              <div v-if="getGroupProjects(group.id).length === 0" class="project-group-empty">
+                拖动项目到此分组
+              </div>
+              <div
+                v-for="project in getGroupProjects(group.id)"
+                :key="project.id"
+                class="project-item"
+                :class="{ active: currentProjectId === project.id, dragging: draggedProjectId === project.id }"
+                draggable="true"
+                @dragstart="handleProjectDragStart($event, project.id)"
+                @dragend="handleProjectDragEnd"
+                @click="projectStore.selectProject(project.id)"
+              >
+                <div class="project-color" :style="{ backgroundColor: project.color }"></div>
+                <div class="project-info">
+                  <div class="project-header">
+                    <div class="project-name">{{ project.name }}</div>
+                    <div class="project-count">
+                      {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
+                    </div>
+                  </div>
+                  <div class="project-progress-bar">
+                    <div 
+                      class="project-progress-fill" 
+                      :style="{ 
+                        width: getProjectProgress(project.id) + '%',
+                        backgroundColor: project.color 
+                      }"
+                    ></div>
+                  </div>
+                </div>
+                <div class="project-actions">
+                  <button 
+                    class="btn-export-project" 
+                    @click.stop="handleExportProject(project.id)" 
+                    title="导出项目"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="17 8 12 3 7 8"></polyline>
+                      <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                  </button>
+                  <button 
+                    class="btn-delete-project" 
+                    @click.stop="projectStore.deleteProject(project.id)" 
+                    title="删除项目"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -405,7 +534,7 @@ const appStore = useAppStore()
 const projectStore = useProjectStore()
 const todoStore = useTodoStore()
 
-const { projects, currentProjectId, hasProjects } = storeToRefs(projectStore)
+const { projects, projectGroups, currentProjectId, hasProjects } = storeToRefs(projectStore)
 const { 
   todos,
   totalCount, 
@@ -422,6 +551,69 @@ const {
   overdueTasks,
   overdueTasksCount
 } = storeToRefs(todoStore)
+
+// 分组创建
+const newGroupName = ref('')
+const ungroupedGroupId = 'ungrouped'
+const draggedProjectId = ref(null)
+const activeDropGroupId = ref(null)
+
+const sortedProjectGroups = computed(() => {
+  return [...projectGroups.value].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+})
+
+const ungroupedProjects = computed(() => {
+  return projects.value.filter(project => !project.groupId)
+})
+
+function getGroupProjects(groupId) {
+  return projects.value.filter(project => String(project.groupId ?? '') === String(groupId))
+}
+
+async function handleCreateGroup() {
+  const group = await projectStore.addProjectGroup(newGroupName.value)
+  if (group) {
+    newGroupName.value = ''
+  }
+}
+
+async function handleDeleteGroup(group) {
+  await projectStore.deleteProjectGroup(group.id)
+}
+
+function handleProjectDragStart(event, projectId) {
+  draggedProjectId.value = projectId
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(projectId))
+  }
+}
+
+function handleProjectDragEnd() {
+  draggedProjectId.value = null
+  activeDropGroupId.value = null
+}
+
+function handleGroupDragOver(groupId) {
+  activeDropGroupId.value = groupId
+}
+
+function handleGroupDragLeave(groupId) {
+  if (activeDropGroupId.value === groupId) {
+    activeDropGroupId.value = null
+  }
+}
+
+async function handleGroupDrop(groupId, event) {
+  const fallbackId = event?.dataTransfer?.getData('text/plain')
+  const projectId = draggedProjectId.value || fallbackId
+  if (!projectId) return
+
+  const targetGroupId = groupId === ungroupedGroupId ? null : groupId
+  await projectStore.moveProjectToGroup(projectId, targetGroupId)
+  draggedProjectId.value = null
+  activeDropGroupId.value = null
+}
 
 // 展开/收起状态
 const showAddedDetails = ref(false)

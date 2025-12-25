@@ -549,6 +549,52 @@
   align-items: center;
 }
 
+.project-group-create {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.project-group-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.project-group-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.btn-add-group {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #4fd1c5;
+  color: white;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-add-group:hover {
+  background: #38b2ac;
+  transform: scale(1.1);
+}
+
+.btn-add-group svg {
+  width: 14px;
+  height: 14px;
+}
+
 .btn-add-project,
 .btn-import-project {
   width: 24px;
@@ -590,6 +636,97 @@
   gap: 8px;
 }
 
+.project-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-group {
+  padding: 8px;
+  border-radius: var(--radius-md);
+  border: 1px dashed transparent;
+  background: var(--bg-secondary);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.project-group.drop-target {
+  border-color: var(--primary-color);
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.project-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.project-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.project-group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.project-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-delete-group {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-group:hover {
+  color: #e53e3e;
+  background: rgba(229, 62, 62, 0.1);
+}
+
+.btn-delete-group svg {
+  width: 12px;
+  height: 12px;
+}
+
+.project-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-group-empty {
+  padding: 8px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
 .project-empty-hint {
   text-align: center;
   padding: 20px 10px;
@@ -617,6 +754,10 @@
 .project-item.active {
   background: rgba(102, 126, 234, 0.1);
   border: 1px solid var(--primary-color);
+}
+
+.project-item.dragging {
+  opacity: 0.6;
 }
 
 .project-color {

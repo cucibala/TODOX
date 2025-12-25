@@ -8,6 +8,7 @@ import { generateId } from '../utils/tools'
 export const useProjectStore = defineStore('project', () => {
   // 状态
   const projects = ref([])
+  const projectGroups = ref([])
   const currentProjectId = ref(null)
   
   // 获取 electronAPI
@@ -20,21 +21,51 @@ export const useProjectStore = defineStore('project', () => {
   
   const hasProjects = computed(() => projects.value.length > 0)
   
+  function normalizeProject(project) {
+    if (!project) return null
+    return {
+      ...project,
+      groupId: project.groupId ?? project.group_id ?? null,
+      createdAt: project.createdAt || project.created_at,
+      updatedAt: project.updatedAt || project.updated_at
+    }
+  }
+  
+  function normalizeProjectGroup(group) {
+    if (!group) return null
+    return {
+      ...group,
+      order: group.order ?? 0,
+      createdAt: group.createdAt || group.created_at,
+      updatedAt: group.updatedAt || group.updated_at
+    }
+  }
+  
+  function getNextGroupOrder() {
+    const maxOrder = projectGroups.value.reduce((max, group) => {
+      const orderValue = group.order ?? 0
+      return Math.max(max, orderValue)
+    }, -1)
+    return maxOrder + 1
+  }
+  
   // 加载项目
   async function loadProjects() {
     try {
       const data = await electronAPI.loadProjects()
-      projects.value = data.projects || []
+      projects.value = (data.projects || []).map(normalizeProject)
+      projectGroups.value = (data.projectGroups || []).map(normalizeProjectGroup)
       currentProjectId.value = data.currentProjectId || null
     } catch (error) {
       console.error('加载项目数据失败:', error)
       projects.value = []
+      projectGroups.value = []
       currentProjectId.value = null
     }
   }
   
   // 添加项目
-  async function addProject(name, color) {
+  async function addProject(name, color, groupId = null) {
     if (!name) return
     
     const appStore = useAppStore()
@@ -42,6 +73,7 @@ export const useProjectStore = defineStore('project', () => {
       id: generateId(),
       name,
       color,
+      groupId: groupId ? String(groupId) : null,
       createdAt: new Date().toISOString()
     }
     
@@ -58,6 +90,74 @@ export const useProjectStore = defineStore('project', () => {
     await electronAPI.addProject(JSON.parse(JSON.stringify(project)))
     appStore.toast(`项目"${name}"创建成功`)
     return project
+  }
+  
+  // 添加项目分组
+  async function addProjectGroup(name) {
+    const trimmedName = (name || '').trim()
+    if (!trimmedName) return
+
+    const appStore = useAppStore()
+    const exists = projectGroups.value.some(group => group.name === trimmedName)
+    if (exists) {
+      appStore.toast('分组名称已存在')
+      return
+    }
+
+    const group = {
+      id: generateId(),
+      name: trimmedName,
+      order: getNextGroupOrder(),
+      createdAt: new Date().toISOString()
+    }
+
+    projectGroups.value.push(group)
+    await electronAPI.addProjectGroup(JSON.parse(JSON.stringify(group)))
+    appStore.toast(`分组"${trimmedName}"创建成功`)
+    return group
+  }
+
+  // 更新项目分组
+  async function updateProjectGroup(groupId, updates) {
+    const group = projectGroups.value.find(item => String(item.id) === String(groupId))
+    if (!group) return
+
+    Object.assign(group, updates)
+    await electronAPI.updateProjectGroup(groupId, JSON.parse(JSON.stringify(updates)))
+  }
+
+  // 删除项目分组
+  async function deleteProjectGroup(groupId) {
+    const appStore = useAppStore()
+    const group = projectGroups.value.find(item => String(item.id) === String(groupId))
+    if (!group) return
+
+    const message = `确定要删除分组"${group.name}"吗？分组内项目将移动到未分组。`
+    const confirmed = await appStore.confirm(message)
+    if (!confirmed) return
+
+    projects.value = projects.value.map(project => {
+      if (String(project.groupId ?? '') === String(groupId)) {
+        return { ...project, groupId: null }
+      }
+      return project
+    })
+    projectGroups.value = projectGroups.value.filter(item => String(item.id) !== String(groupId))
+
+    await electronAPI.deleteProjectGroup(groupId)
+    appStore.toast(`分组"${group.name}"已删除`)
+  }
+
+  // 移动项目到分组
+  async function moveProjectToGroup(projectId, groupId) {
+    const project = projects.value.find(item => String(item.id) === String(projectId))
+    if (!project) return
+
+    const nextGroupId = groupId ? String(groupId) : null
+    if ((project.groupId ?? null) === nextGroupId) return
+
+    project.groupId = nextGroupId
+    await electronAPI.updateProject(project.id, { groupId: nextGroupId })
   }
   
   // 选择项目
@@ -220,6 +320,10 @@ export const useProjectStore = defineStore('project', () => {
         }
         projectName = `${projectName} (${counter})`
       }
+
+      const importedGroupId = importData.project.groupId ?? importData.project.group_id ?? null
+      const matchedGroup = projectGroups.value.find(group => String(group.id) === String(importedGroupId))
+      const finalGroupId = matchedGroup ? matchedGroup.id : null
       
       // 创建新项目
       const newProjectId = Date.now()
@@ -227,6 +331,7 @@ export const useProjectStore = defineStore('project', () => {
         id: newProjectId,
         name: projectName,
         color: importData.project.color,
+        groupId: finalGroupId,
         createdAt: new Date().toISOString()
       }
       
@@ -278,6 +383,7 @@ export const useProjectStore = defineStore('project', () => {
   return {
     // 状态
     projects,
+    projectGroups,
     currentProjectId,
     currentProject,
     hasProjects,
@@ -285,6 +391,10 @@ export const useProjectStore = defineStore('project', () => {
     // 方法
     loadProjects,
     addProject,
+    addProjectGroup,
+    updateProjectGroup,
+    deleteProjectGroup,
+    moveProjectToGroup,
     selectProject,
     deleteProject,
     getProjectStats,
