@@ -24,7 +24,13 @@ export const useChatStore = defineStore('chat', () => {
     {
       id: 'project',
       name: '项目助手',
-      systemPrompt: '你是一个专业的项目管理助手，擅长帮助用户管理任务、制定计划、跟踪进度。你可以查询用户的任务和项目数据，并提供个性化的建议。',
+      systemPrompt: `你是一个专业的项目管理助手，擅长把目标转化为可执行的任务计划，并能通过工具查询/修改用户的项目与任务数据。
+
+工作方式：
+1) 先确认关键信息：目标、时间范围/天数、起始日期、约束（资源/优先级/里程碑）。
+2) 给出清晰结构：先用 3-6 行概览（阶段/里程碑），再给可执行清单（任务+子任务）。
+3) 任务要具体可执行、避免空泛；子任务默认 3-6 条，包含明确产出/验收标准。
+4) 需要创建/修改数据时，优先使用工具；一次尽量合并操作，避免无意义的多轮。`,
       enableTools: true,
       enableProjects: true
     }
@@ -39,6 +45,7 @@ export const useChatStore = defineStore('chat', () => {
   const isLoading = ref(false)
   const streamingMessageIndex = ref(-1)
   const userInput = ref('')
+  const abortController = ref(null)
   
   // AI 客户端（支持多模型）
   const deepseekClient = ref(null)
@@ -199,6 +206,9 @@ export const useChatStore = defineStore('chat', () => {
   // 发送消息到 AI（支持函数调用循环）
   async function sendToAI(isContinuation = false) {
     isLoading.value = true
+
+    // 每次请求创建新的 AbortController，支持 UI 取消（包括 continuation）
+    abortController.value = new AbortController()
     
     
     try {
@@ -295,6 +305,7 @@ export const useChatStore = defineStore('chat', () => {
           enableTools: currentRole.enableTools,
           // 传递思考模式设置
           enableReasoningMode: appStore.enableReasoningMode,
+          signal: abortController.value.signal,
           onReasoning: (delta) => {
             // 处理思考内容（推理模型）
             if (streamingMessageIndex.value >= 0) {
@@ -326,7 +337,8 @@ export const useChatStore = defineStore('chat', () => {
             const aiTool = new AITool(
               { todoStore: useTodoStore(), projectStore: useProjectStore() },
               currentClient.value,
-              projectIds
+              projectIds,
+              { signal: abortController.value?.signal }
             )
             
             // 执行工具调用
@@ -450,6 +462,12 @@ export const useChatStore = defineStore('chat', () => {
       await saveConversations()
       
     } catch (error) {
+      if (error?.name === 'AbortError') {
+        console.warn('聊天请求已取消')
+        appStore.toast('已取消')
+        return
+      }
+
       console.error('聊天失败:', error)
       appStore.toast('聊天失败: ' + error.message)
       
@@ -468,6 +486,152 @@ export const useChatStore = defineStore('chat', () => {
       
       isLoading.value = false
       streamingMessageIndex.value = -1
+      abortController.value = null
+    }
+  }
+
+  function abortRequest() {
+    if (abortController.value) {
+      abortController.value.abort()
+    }
+  }
+
+  /**
+   * 计划生成器：直接为指定项目批量生成并导入任务（减少聊天回合，提高速度/质量）
+   */
+  async function generateProjectPlan({ projectId = null, description, days = 7, detailLevel = 'normal', projectName = '' } = {}) {
+    if (isLoading.value) return { success: false, error: 'busy' }
+
+    if (!currentRoleId.value) {
+      appStore.toast('请先选择 AI 角色')
+      return { success: false, error: 'no_role' }
+    }
+
+    const hasKey = await checkApiKey()
+    if (!hasKey) return { success: false, error: 'no_key' }
+
+    const desc = (description || '').trim()
+    if (!desc) {
+      appStore.toast('请输入计划需求描述')
+      return { success: false, error: 'no_description' }
+    }
+
+    // 如果没有当前对话，创建一个
+    if (!currentConversationId.value) {
+      createNewConversation()
+    }
+
+    const promptText = `生成计划：${desc}`.trim()
+    messages.value.push({
+      id: generateId(),
+      role: 'user',
+      content: promptText,
+      timestamp: Date.now()
+    })
+
+    const progressMessageId = generateId()
+    messages.value.push({
+      id: progressMessageId,
+      role: 'assistant',
+      content: '开始生成计划...\n已等待 0 秒',
+      timestamp: Date.now(),
+      isProgress: true
+    })
+
+    isLoading.value = true
+    appStore.showChatStatusIndicator = true
+    abortController.value = new AbortController()
+    const startTime = Date.now()
+
+    const setProgress = (status) => {
+      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+      const msg = messages.value.find(m => m.id === progressMessageId)
+      const statusText = `${status}（已等待 ${elapsedSeconds} 秒）`
+      if (msg) msg.content = `${status}\n已等待 ${elapsedSeconds} 秒`
+      appStore.chatStatusText = statusText
+    }
+
+    setProgress('开始生成计划...')
+
+    const inferProjectNameFromDescription = () => {
+      const providedName = (projectName || '').trim()
+      if (providedName) return providedName
+
+      const quoted = (desc.match(/[“"「『](.+?)[”"」』]/)?.[1] || '').trim()
+      if (quoted && quoted.length <= 40) return quoted
+
+      const firstLine = (desc.split(/\r?\n/).find(l => l.trim()) || '').trim()
+      const cleaned = firstLine.replace(/^生成计划\s*[:：]?\s*/i, '').trim()
+      if (cleaned) return cleaned.length > 30 ? cleaned.slice(0, 30) : cleaned
+
+      const dateStr = new Date().toISOString().slice(0, 10)
+      return `AI计划 ${dateStr}`
+    }
+
+    try {
+      const projectStore = useProjectStore()
+
+      if (!projectId) {
+        setProgress('正在创建项目...')
+        const createdProject = await projectStore.addProject(inferProjectNameFromDescription(), '#667eea')
+        projectId = createdProject?.id || null
+
+        if (projectId) {
+          await projectStore.selectProject(projectId)
+        }
+      }
+
+      if (!projectId) {
+        throw new Error('项目创建失败')
+      }
+
+      // 将项目挂到当前对话上下文中（用于后续 AI 上下文/工具调用）
+      const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
+      if (currentConv) {
+        if (!Array.isArray(currentConv.projectIds)) currentConv.projectIds = []
+        if (!currentConv.projectIds.includes(projectId)) {
+          currentConv.projectIds.push(projectId)
+          await electronAPI.updateConversation(currentConv.id, { projectIds: currentConv.projectIds })
+        }
+      }
+
+      const aiTool = new AITool(
+        { todoStore: useTodoStore(), projectStore: useProjectStore() },
+        currentClient.value,
+        [projectId],
+        { signal: abortController.value?.signal }
+      )
+
+      setProgress('正在生成并导入任务...')
+      const result = await aiTool.execute(
+        'addProjectTasks',
+        { projectId, description: desc, days, detailLevel },
+        setProgress
+      )
+
+      recentProjectId.value = projectId
+
+      const msg = messages.value.find(m => m.id === progressMessageId)
+      if (msg) {
+        msg.isProgress = false
+        msg.content = `计划已导入：新增 ${result.tasksAdded} 个任务（第${result.startDay}-${result.endDay}天）`
+      }
+
+      await saveConversations()
+      return { success: true, result }
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        setProgress('已取消')
+        return { success: false, error: 'aborted' }
+      }
+      console.error('生成计划失败:', error)
+      setProgress('生成计划失败：' + (error?.message || 'unknown'))
+      return { success: false, error: error?.message || 'unknown' }
+    } finally {
+      isLoading.value = false
+      abortController.value = null
+      appStore.showChatStatusIndicator = false
+      appStore.chatStatusText = ''
     }
   }
   
@@ -719,6 +883,8 @@ export const useChatStore = defineStore('chat', () => {
     initAIClients,
     checkApiKey,
     sendMessage,
+    abortRequest,
+    generateProjectPlan,
     sendToAI,
     createNewConversation,
     selectConversation,

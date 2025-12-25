@@ -1,5 +1,6 @@
 // AI 工具类 - 封装所有 AI 可调用的工具函数
 import { generateId, generateSubId } from './tools'
+import { parseJsonArrayFromText, parseJsonObjectFromText } from './llm_utils.js'
 
 /**
  * AI 函数封装类
@@ -85,24 +86,17 @@ async function createRemainingDays(context, project, totalDays, currentDay, desc
 字段说明：tx=任务文本, pr=优先级(h/m/l), dd=截止日期, s=子任务数组, w=权重(1-5), r=需要记录(0/1)`
 
     try {
-      const content = await context.client.chatCompletions([
+      const content = await context.client.chatCompletionsText([
         { role: 'system', content: '你是一个专业的项目管理助手。' },
         { role: 'user', content: prompt }
-      ], { maxTokens: 1500 })
+      ], { maxTokens: 1500, signal: context.signal })
       
-      let taskData
-      try {
-        taskData = JSON.parse(content.trim())
-    } catch (e) {
-      const jsonMatch = content.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-          taskData = JSON.parse(jsonMatch[0])
-      } else {
-          console.error('AI返回内容:', content)
-          console.error(`第${dayNumber}天任务生成失败，跳过`)
-          currentDay++
-          continue
-        }
+      const taskData = parseJsonObjectFromText(content)
+      if (!taskData) {
+        console.error('AI返回内容:', content)
+        console.error(`第${dayNumber}天任务生成失败，跳过`)
+        currentDay++
+        continue
       }
       
       const taskText = taskData.tx || taskData.text
@@ -273,24 +267,15 @@ let addTask = new AIFunction(
   ]
 }`
 
-    const content = await this.client.chatCompletions([
+    const content = await this.client.chatCompletionsText([
       { role: 'system', content: '你是一个专业的项目管理助手。' },
       { role: 'user', content: prompt }
-    ], { maxTokens: 2000 })
+    ], { maxTokens: 2000, signal: this.signal })
     
     if (onProgress) onProgress('📋 正在添加新任务...')
     
-    let taskData
-    try {
-      taskData = JSON.parse(content.trim())
-    } catch (e) {
-      const jsonMatch = content.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        taskData = JSON.parse(jsonMatch[0])
-      } else {
-        throw new Error('AI 返回的任务格式不正确')
-      }
-    }
+    const taskData = parseJsonObjectFromText(content)
+    if (!taskData) throw new Error('AI 返回的任务格式不正确')
     
     const newTaskId = generateId()
     const newTask = {
@@ -446,26 +431,15 @@ ${operation === 'add'
 
 ${operation !== 'replace' ? '⚠️ 重要：必须保留已完成子任务的 completed: true 状态！' : ''}`
 
-    const content = await this.client.chatCompletions([
+    const content = await this.client.chatCompletionsText([
       { role: 'system', content: '你是一个专业的项目管理助手，擅长将任务细化为具体可执行的子任务。' },
       { role: 'user', content: prompt }
-    ], { maxTokens: 3000 })
+    ], { maxTokens: 3000, signal: this.signal })
     
     if (onProgress) onProgress('📋 正在应用子任务修改...')
     
-    let newSubtasks
-    try {
-      newSubtasks = JSON.parse(content.trim())
-    } catch (e) {
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        newSubtasks = JSON.parse(jsonMatch[0])
-      } else {
-        throw new Error('AI 返回的子任务列表格式不正确')
-      }
-    }
-    
-    if (!Array.isArray(newSubtasks)) {
+    const newSubtasks = parseJsonArrayFromText(content)
+    if (!Array.isArray(newSubtasks) || newSubtasks.length === 0) {
       throw new Error('子任务列表结构不正确')
     }
     
@@ -522,6 +496,15 @@ let addProjectTasks = new AIFunction(
         type: 'string',
         description: '新任务的描述，包括要添加的内容、天数、具体要求等'
       },
+      days: {
+        type: 'number',
+        description: '要生成的任务天数/条数（可选，默认从描述中解析或 7，建议 1-30）'
+      },
+      detailLevel: {
+        type: 'string',
+        enum: ['brief', 'normal', 'detailed'],
+        description: '计划细化程度：brief=更快更简洁，normal=默认，detailed=更细更慢（可选）'
+      },
       startDay: {
         type: 'number',
         description: '从第几天开始添加（可选，默认为项目现有任务数+1）'
@@ -530,7 +513,7 @@ let addProjectTasks = new AIFunction(
     ['projectId', 'description']
   ),
   async function(args, onProgress = null) {
-    const { projectId, description, startDay } = args
+    const { projectId, description, startDay, days, detailLevel = 'normal' } = args
     
     if (!this.client) {
       throw new Error('AI 客户端未初始化')
@@ -545,7 +528,7 @@ let addProjectTasks = new AIFunction(
     const currentTaskCount = projectTasks.length
     const actualStartDay = startDay || (currentTaskCount + 1)
     
-    if (onProgress) onProgress(`🤔 正在分析要添加的任务...`)
+    if (onProgress) onProgress('正在分析要添加的任务...')
     
     let startDate
     if (projectTasks.length > 0) {
@@ -558,77 +541,52 @@ let addProjectTasks = new AIFunction(
     const startDateStr = startDate.toISOString().split('T')[0]
     
     const daysMatch = description.match(/(\d+)\s*[天日]/)
-    const daysToAdd = daysMatch ? parseInt(daysMatch[1]) : 7
-    
-    const prompt = `你正在为项目"${project.name}"批量添加新任务，需要确保任务的连贯性和合理性。
+    const parsedDays = daysMatch ? parseInt(daysMatch[1]) : null
+    const requestedDays = Math.min(Math.max(Number(days || parsedDays || 7), 1), 30)
 
-【项目基础信息】
-- 项目名称：${project.name}
-- 现有任务总数：${currentTaskCount} 个
-- 新任务起始编号：第 ${actualStartDay} 天
-- 新任务起始日期：${startDateStr}
-${projectTasks.length > 0 ? `- 最后一个任务：${projectTasks[projectTasks.length - 1]?.text}` : ''}
+    const sortedByDueDate = projectTasks
+      .filter(t => t.dueDate)
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+    const recentExamples = sortedByDueDate.slice(-3).map(t => t.text).filter(Boolean)
 
-【新增任务需求】
-${description}
+    const subtaskCountHint =
+      detailLevel === 'brief' ? '2-4' : detailLevel === 'detailed' ? '5-8' : '3-6'
 
-【任务生成规范】
-1. **编号规则**：从第${actualStartDay}天开始，连续递增
-2. **日期规则**：从${startDateStr}开始，每个任务日期+1天
-3. **一致性要求**：
-   - 延续项目现有任务的风格和难度曲线
-   - 保持描述语言和粒度的统一性
-   - 与前置任务形成合理衔接
-4. **任务设计原则**：
-   - 标题格式：第N天 - [具体内容]（简洁明了，10-20字）
-   - 子任务数量：3-6个，覆盖任务的核心步骤
-   - 难度分布：合理递进，避免突变
-   - 优先级分配：
-     * high: 关键里程碑、阻塞性任务
-     * medium: 常规推进任务（大部分）
-     * low: 辅助优化任务
-5. **子任务标准**：
-   - 具体可执行，有明确的操作对象和目标
-   - 权重合理：1-2(简单) 3(中等) 4-5(复杂)
-   - 需要记录成果的步骤设置 requiresInput: true
-6. **整体质量**：
-   - 任务间逻辑连贯，前后衔接自然
-   - 覆盖需求的所有关键环节
-   - 避免重复或冗余内容
+    const prompt = `为项目添加后续任务计划（要求更快、更稳、更具体）。
 
-【返回格式】严格JSON数组，无其他文字：
+项目：${project.name}
+现有任务数：${currentTaskCount}
+起始：第${actualStartDay}天，日期从${startDateStr}开始
+需要生成：${requestedDays}个任务（严格等于${requestedDays}个）
+子任务数量：每个${subtaskCountHint}个
+${recentExamples.length ? `现有任务示例：\n- ${recentExamples.join('\n- ')}` : ''}
+
+新增需求：${description}
+
+输出要求：
+1) 任务标题：第N天 - 具体内容（10-20字），N从${actualStartDay}递增
+2) dueDate：从${startDateStr}起逐日递增（每天+1）
+3) subtasks：可执行步骤，weight=1-5，需记录成果的步骤 requiresInput=true
+4) 只输出 JSON 数组（不要解释、不要Markdown、不要代码块）
+
+返回示例：
 [
-  {
-    "text": "第${actualStartDay}天 - 任务标题",
-    "priority": "medium",
-    "dueDate": "${startDateStr}",
-    "subtasks": [
-      {"text": "具体子任务", "weight": 3, "requiresInput": false}
-    ]
-  }
+  {"text":"第${actualStartDay}天 - ...","priority":"medium","dueDate":"${startDateStr}","subtasks":[{"text":"...","weight":3,"requiresInput":false}]}
 ]`
 
-    const content = await this.client.chatCompletions([
+    const maxTokens = Math.min(1200 + requestedDays * 220, 3500)
+    const content = await this.client.chatCompletionsText([
       { role: 'system', content: '你是一个专业的项目管理助手。' },
       { role: 'user', content: prompt }
-    ], { maxTokens: 8000 })
+    ], { maxTokens, signal: this.signal })
     
-    if (onProgress) onProgress('📋 正在解析新任务...')
+    if (onProgress) onProgress('正在解析新任务...')
     
-    let newTasks
-    try {
-      newTasks = JSON.parse(content.trim())
-    } catch (e) {
-      const jsonMatch = content.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        newTasks = JSON.parse(jsonMatch[0])
-      } else {
-        throw new Error('AI 返回的任务列表格式不正确')
-      }
-    }
-    
-    if (!Array.isArray(newTasks)) {
-      throw new Error('任务列表结构不正确')
+    let newTasks = parseJsonArrayFromText(content)
+    if (!Array.isArray(newTasks) || newTasks.length === 0) throw new Error('任务列表结构不正确')
+    if (newTasks.length > requestedDays) newTasks = newTasks.slice(0, requestedDays)
+    if (newTasks.length < requestedDays) {
+      if (onProgress) onProgress(`仅生成了 ${newTasks.length}/${requestedDays} 个任务，将按现有结果导入`)
     }
     
     const addedTasks = []
@@ -637,7 +595,7 @@ ${description}
       const taskData = newTasks[i]
       
       if (onProgress) {
-        onProgress(`✅ 正在添加第 ${actualStartDay + i} 天的任务... (${Math.round(((i + 1) / newTasks.length) * 100)}%)`)
+        onProgress(`正在添加第 ${actualStartDay + i} 天的任务... (${Math.round(((i + 1) / newTasks.length) * 100)}%)`)
       }
       
       let taskDate = taskData.dueDate
@@ -670,16 +628,25 @@ ${description}
         progressRecords: []
       }
       
-      this.todoStore.todos.push(task)
       addedTasks.push(task)
-      await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
-      
-      if (i < newTasks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    
+    if (onProgress) onProgress(`正在保存 ${addedTasks.length} 个任务到数据库...`)
+    
+    // 优先使用批量 IPC 以提升计划生成/导入速度
+    if (window.electronAPI.addTodosBatch) {
+      const result = await window.electronAPI.addTodosBatch(JSON.parse(JSON.stringify(addedTasks)))
+      if (!result?.success) throw new Error(result?.error || '批量保存任务失败')
+    } else {
+      for (const task of addedTasks) {
+        await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
       }
     }
     
-    if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加 ${addedTasks.length} 个新任务！`)
+    // 写入本地 store（与数据库保持一致）
+    this.todoStore.todos.push(...addedTasks)
+    
+    if (onProgress) onProgress(`成功为项目"${project.name}"添加 ${addedTasks.length} 个新任务！`)
     
     return {
       success: true,
@@ -1326,7 +1293,6 @@ const allFunctions = [
 
 // 导出工具定义列表供 AI 使用
 export const availableTools = allFunctions.map(func => func.functionDef)
-console.log(availableTools, 'availableTools')
 
 /**
  * AI 工具类
@@ -1337,11 +1303,12 @@ console.log(availableTools, 'availableTools')
  *   }
  */
 export class AITool {
-  constructor(stores, client = null, selectedProjectIds = []) {
+  constructor(stores, client = null, selectedProjectIds = [], options = {}) {
     this.todoStore = stores.todoStore
     this.projectStore = stores.projectStore
     this.client = client
     this.selectedProjectIds = selectedProjectIds
+    this.signal = options.signal
   }
 
   /**

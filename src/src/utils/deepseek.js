@@ -19,7 +19,15 @@ export class DeepSeekClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { tools = [], onContent, onToolCalls, onReasoning, enableTools = false, enableReasoningMode = false } = options
+    const {
+      tools = [],
+      onContent,
+      onToolCalls,
+      onReasoning,
+      enableTools = false,
+      enableReasoningMode = false,
+      signal
+    } = options
     
     // 根据思考模式选择模型
     const model = enableReasoningMode ? 'deepseek-reasoner' : 'deepseek-chat'
@@ -39,7 +47,7 @@ export class DeepSeekClient {
     }
     
     const url = `${this.baseURL}/chat/completions`
-    const response = await postChatCompletions(url, this.apiKey, requestBody)
+    const response = await postChatCompletions(url, this.apiKey, requestBody, { signal })
     await assertOkResponse(response, 'DeepSeek')
 
     await consumeChatCompletionsSSE(response, { onContent, onToolCalls, onReasoning })
@@ -52,7 +60,7 @@ export class DeepSeekClient {
    * @returns {Promise<object>} 完整的 API 响应对象
    */
   async chatCompletions(messages, options = {}) {
-    const { temperature = 0.7, maxTokens = 2000, tools = [] } = options
+    const { temperature = 0.7, maxTokens = 2000, tools = [], signal } = options
 
     const requestBody = {
       model: 'deepseek-chat',
@@ -68,7 +76,18 @@ export class DeepSeekClient {
     }
 
     const url = `${this.baseURL}/chat/completions`
-    return await postChatCompletionsJson(url, this.apiKey, requestBody, 'DeepSeek')
+    return await postChatCompletionsJson(url, this.apiKey, requestBody, 'DeepSeek', { signal })
+  }
+
+  /**
+   * 调用 Chat Completions API 并直接返回 assistant.content（非流式）
+   * @param {Array} messages
+   * @param {object} options
+   * @returns {Promise<string>}
+   */
+  async chatCompletionsText(messages, options = {}) {
+    const data = await this.chatCompletions(messages, options)
+    return data.choices?.[0]?.message?.content || ''
   }
 }
 

@@ -32,3 +32,21 @@ export function parseJsonArrayFromText(text) {
   }
 }
 
+export function parseJsonObjectFromText(text) {
+  const trimmed = (text || '').trim()
+  if (!trimmed) return null
+
+  try {
+    const parsed = JSON.parse(trimmed)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/)
+    if (!match) return null
+    try {
+      const parsed = JSON.parse(match[0])
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }
+}

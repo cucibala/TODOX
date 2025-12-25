@@ -57,6 +57,7 @@ export const useProjectStore = defineStore('project', () => {
     // 单条插入数据库
     await electronAPI.addProject(JSON.parse(JSON.stringify(project)))
     appStore.toast(`项目"${name}"创建成功`)
+    return project
   }
   
   // 选择项目

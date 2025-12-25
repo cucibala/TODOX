@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),
   addTodo: (todo) => ipcRenderer.invoke('add-todo', todo),
+  addTodosBatch: (todos) => ipcRenderer.invoke('add-todos-batch', todos),
   updateTodo: (todoId, updates) => ipcRenderer.invoke('update-todo', todoId, updates),
   deleteTodo: (todoId) => ipcRenderer.invoke('delete-todo', todoId),
   addSubtask: (todoId, subtask) => ipcRenderer.invoke('add-subtask', todoId, subtask),
@@ -113,4 +114,3 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 监听模式变化
   onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop))
 });
-

@@ -17,22 +17,23 @@ export async function assertOkResponse(response, label = 'LLM') {
   throw new Error(errorMsg)
 }
 
-export async function postChatCompletions(url, apiKey, body) {
+export async function postChatCompletions(url, apiKey, body, options = {}) {
+  const { signal } = options
   return fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   })
 }
 
-export async function postChatCompletionsJson(url, apiKey, body, label = 'LLM') {
-  const response = await postChatCompletions(url, apiKey, body)
+export async function postChatCompletionsJson(url, apiKey, body, label = 'LLM', options = {}) {
+  const response = await postChatCompletions(url, apiKey, body, options)
   await assertOkResponse(response, label)
   const data = await safeReadJson(response)
   if (!data) throw new Error(`${label} 返回了非 JSON 响应`)
   return data
 }
-

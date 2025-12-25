@@ -21,7 +21,16 @@ export class DoubaoClient {
    * @returns {Promise<void>}
    */
   async chatCompletionsStream(messages, options = {}) {
-    const { model = this.defaultModel, tools = [], onContent, onToolCalls, onReasoning, enableTools = false, enableReasoningMode = false } = options
+    const {
+      model = this.defaultModel,
+      tools = [],
+      onContent,
+      onToolCalls,
+      onReasoning,
+      enableTools = false,
+      enableReasoningMode = false,
+      signal
+    } = options
     
     // 构建请求体，只有当 tools 非空时才包含 tools 字段
     const requestBody = {
@@ -45,7 +54,7 @@ export class DoubaoClient {
     }
     
     const url = `${this.baseURL}/chat/completions`
-    const response = await postChatCompletions(url, this.apiKey, requestBody)
+    const response = await postChatCompletions(url, this.apiKey, requestBody, { signal })
     await assertOkResponse(response, '豆包')
 
     await consumeChatCompletionsSSE(response, { onContent, onToolCalls, onReasoning })
@@ -58,7 +67,7 @@ export class DoubaoClient {
    * @returns {Promise<object>} 完整的 API 响应对象
    */
   async chatCompletions(messages, options = {}) {
-    const { model = this.defaultModel, maxTokens = 2000, tools = [] } = options
+    const { model = this.defaultModel, maxTokens = 2000, tools = [], signal } = options
 
     const requestBody = {
       model,
@@ -74,7 +83,18 @@ export class DoubaoClient {
     }
 
     const url = `${this.baseURL}/chat/completions`
-    return await postChatCompletionsJson(url, this.apiKey, requestBody, '豆包')
+    return await postChatCompletionsJson(url, this.apiKey, requestBody, '豆包', { signal })
+  }
+
+  /**
+   * 调用 Chat Completions API 并直接返回 assistant.content（非流式）
+   * @param {Array} messages
+   * @param {object} options
+   * @returns {Promise<string>}
+   */
+  async chatCompletionsText(messages, options = {}) {
+    const data = await this.chatCompletions(messages, options)
+    return data.choices?.[0]?.message?.content || ''
   }
 
   /**

@@ -436,6 +436,22 @@ class TodoXDatabase {
   }
 
   /**
+   * 批量添加任务（事务内执行，用于计划/导入等场景加速）
+   * @param {Array} todos
+   */
+  addTodosBatch(todos) {
+    if (!Array.isArray(todos) || todos.length === 0) {
+      return
+    }
+
+    const run = this.db.transaction((items) => {
+      items.forEach((todo) => this.addTodo(todo))
+    })
+
+    run(todos)
+  }
+
+  /**
    * 更新单个任务
    */
   updateTodo(todoId, updates) {

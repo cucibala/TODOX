@@ -691,6 +691,23 @@ ipcMain.handle('add-todo', async (event, todo) => {
   }
 });
 
+// IPC 通信处理 - 批量添加任务（加速计划生成/导入）
+ipcMain.handle('add-todos-batch', async (event, todos) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    if (!Array.isArray(todos)) {
+      throw new Error('参数 todos 必须为数组');
+    }
+    db.addTodosBatch(todos);
+    return { success: true, count: todos.length };
+  } catch (error) {
+    console.error('批量添加任务失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 更新单个任务
 ipcMain.handle('update-todo', async (event, todoId, updates) => {
   try {
@@ -1900,4 +1917,3 @@ ipcMain.handle('delete-diary', async (event, diaryId) => {
     return { success: false, error: error.message };
   }
 });
-

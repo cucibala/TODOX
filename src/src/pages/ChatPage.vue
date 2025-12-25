@@ -100,6 +100,22 @@
               <span>{{ appStore.enableReasoningMode ? '思考中' : '普通' }}</span>
             </button>
           </div>
+
+          <!-- 计划生成器 -->
+          <div class="plan-generator-toggle">
+            <button
+              class="btn-plan-generator"
+              @click="handleGeneratePlanQuick"
+              :disabled="isLoading || !currentRole.enableProjects"
+              title="生成计划并自动导入（可自动创建项目）"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"></path>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+              <span>生成计划</span>
+            </button>
+          </div>
         </div>
         
         <!-- 项目详情下拉（仅项目助手角色显示且已有消息） -->
@@ -349,10 +365,21 @@
               </div>
               
               <div class="input-actions-right">
-              <button 
-                class="btn-send" 
+              <button
+                v-if="isLoading"
+                class="btn-cancel"
+                @click="chatStore.abortRequest"
+                title="取消"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                </svg>
+              </button>
+              <button
+                v-else
+                class="btn-send"
                 @click="handleSend"
-                  :disabled="(!userInput.trim() && selectedImages.length === 0) || isLoading"
+                :disabled="(!userInput.trim() && selectedImages.length === 0)"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -493,6 +520,31 @@ const currentRole = computed(() => {
   }
   return availableRoles.find(r => r.id === currentRoleId.value) || availableRoles[0]
 })
+
+async function handleGeneratePlanQuick() {
+  if (!currentRole.value.enableProjects) {
+    appStore.toast('请先选择“项目助手”角色')
+    return
+  }
+
+  const description = (userInput.value || '').trim()
+  if (!description) {
+    appStore.toast('请输入计划需求描述')
+    nextTick(() => inputTextarea.value?.focus())
+    return
+  }
+
+  const preferredProjectId = selectedProjectIds.value?.[0] || projectStore.currentProjectId || null
+  userInput.value = ''
+
+  await chatStore.generateProjectPlan({
+    projectId: preferredProjectId,
+    description,
+    days: 7,
+    detailLevel: 'brief'
+  })
+  nextTick(() => scrollToBottom())
+}
 
 // 注意：showProjectSelector 和 selectedProjectIds 已在上面声明
 
@@ -1081,5 +1133,61 @@ watch(currentConversationId, () => {
   width: 16px;
   height: 16px;
 }
-</style>
 
+/* 计划生成器按钮 */
+.btn-plan-generator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-plan-generator:hover:not(:disabled) {
+  background: var(--hover-bg);
+  border-color: var(--primary-color);
+}
+
+.btn-plan-generator:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-plan-generator svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* 取消按钮 */
+.btn-cancel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: var(--hover-bg);
+  border-color: var(--primary-color);
+}
+
+.btn-cancel svg {
+  width: 18px;
+  height: 18px;
+}
+
+</style>
