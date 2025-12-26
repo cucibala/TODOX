@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 6;
+const DATABASE_VERSION = 7;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -26,12 +26,13 @@ class TodoXDatabase {
       // 创建或打开数据库
       this.db = new Database(this.dbPath);
       this.db.pragma('journal_mode = WAL'); // 启用 WAL 模式提升性能
-      
+      // 检查并执行数据库迁移
+      this.checkAndMigrate();
+
       // 创建基础表结构
       this.createTables();
       
-      // 检查并执行数据库迁移
-      this.checkAndMigrate();
+     
       console.log('Database initialized successfully:', this.dbPath);
       return true;
     } catch (error) {
@@ -63,6 +64,7 @@ class TodoXDatabase {
         color TEXT,
         icon TEXT,
         group_id TEXT,
+        priority TEXT DEFAULT 'medium',
         "order" INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
@@ -325,8 +327,8 @@ class TodoXDatabase {
    */
   addProject(project) {
     const stmt = this.db.prepare(`
-        INSERT INTO projects (id, name, color, icon, group_id, "order", created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, name, color, icon, group_id, priority, "order", created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
     const groupId = project.groupId ?? project.group_id ?? null;
     stmt.run(
@@ -335,6 +337,7 @@ class TodoXDatabase {
           project.color || null,
           project.icon || null,
           groupId ? String(groupId) : null,
+          project.priority || 'medium',
           project.order || 0,
       project.createdAt || project.created_at || new Date().toISOString(),
           new Date().toISOString()
@@ -368,6 +371,10 @@ class TodoXDatabase {
       const groupId = updates.groupId ?? updates.group_id ?? null;
       fields.push('group_id = ?');
       values.push(groupId ? String(groupId) : null);
+    }
+    if (updates.priority !== undefined) {
+      fields.push('priority = ?');
+      values.push(updates.priority || 'medium');
     }
     
     fields.push('updated_at = ?');
@@ -1493,29 +1500,26 @@ class TodoXDatabase {
   checkAndMigrate() {
     const currentDbVersion = this.getDatabaseVersion();
 
-    // 如果是新数据库，直接设置为最新版本
-    if (currentDbVersion === 0) {
-      this.setDatabaseVersion(this.currentVersion, '初始数据库版本');
-      console.log(`New database initialized to version v${this.currentVersion}`);
-      return;
-    }
-
     // 始终验证并修复文档表 schema（处理迁移失败的情况）
     this.verifyAndRepairDocumentsTable();
 
-    // 如果数据库版本已是最新，无需迁移
-    if (currentDbVersion >= this.currentVersion) {
+    // 如果数据库版本已是最新且有版本记录，无需迁移
+    if (currentDbVersion >= this.currentVersion && currentDbVersion > 0) {
       console.log(`Database version v${currentDbVersion} is already the latest`);
       return;
     }
-    
+
+    if (currentDbVersion === 0) {
+      console.log('Database version not set, running migrations to align schema');
+    }
+
     // 执行逐版本迁移
     console.log(`Starting database migration: v${currentDbVersion} → v${this.currentVersion}`);
-    
+
     for (let version = currentDbVersion + 1; version <= this.currentVersion; version++) {
       console.log(`Migrating to version v${version}...`);
       const migrationFunc = this.getMigrationFunction(version);
-      
+
       if (migrationFunc) {
         try {
           // 在事务中执行迁移
@@ -1523,7 +1527,7 @@ class TodoXDatabase {
             migrationFunc.call(this);
             this.setDatabaseVersion(version, `迁移至版本 ${version}`);
           });
-          
+
           transaction();
           console.log(`✓ Successfully migrated to version v${version}`);
         } catch (error) {
@@ -1535,7 +1539,7 @@ class TodoXDatabase {
         this.setDatabaseVersion(version, `版本 ${version}`);
       }
     }
-    
+
     console.log(`Database migration completed, current version v${this.currentVersion}`);
   }
 
@@ -1654,6 +1658,17 @@ class TodoXDatabase {
         }
 
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(group_id);');
+      },
+
+      // 版本 7 - 项目优先级支持
+      7: function() {
+        const projectsTableInfo = this.db.prepare('PRAGMA table_info(projects)').all();
+        const projectColumns = projectsTableInfo.map(col => col.name);
+
+        if (!projectColumns.includes('priority')) {
+          this.db.exec("ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT 'medium';");
+          console.log('? 已为 projects 表添加 priority 字段');
+        }
       },
 
       // 未来的迁移函数在这里添加...

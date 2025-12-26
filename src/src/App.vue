@@ -48,9 +48,6 @@
     <!-- 确认对话框 -->
     <ConfirmDialog />
 
-    <!-- 项目对话框 -->
-    <ProjectDialog />
-
     <!-- 密码设置对话框 -->
     <PasswordDialog />
 
@@ -82,7 +79,6 @@ import SubtaskDialog from './components/SubtaskDialog.vue'
 import Toast from './components/Toast.vue'
 import ImageViewer from './components/ImageViewer.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
-import ProjectDialog from './components/ProjectDialog.vue'
 import PasswordDialog from './components/PasswordDialog.vue'
 import ApiKeyDialog from './components/ApiKeyDialog.vue'
 import DoubaoConfigDialog from './components/DoubaoConfigDialog.vue'

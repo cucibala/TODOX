@@ -21,8 +21,23 @@
               class="color-option"
               :class="{ selected: projectColor === color }"
               :style="{ backgroundColor: color }"
-              @click="projectColor = color"
+              @click="handleProjectColorSelect(color)"
             ></div>
+          </div>
+        </div>
+        <div class="project-priority-selector">
+          <label class="project-priority-label">项目优先级：</label>
+          <div class="project-priority-options">
+            <button
+              v-for="option in projectPriorityOptions"
+              :key="option.value"
+              type="button"
+              class="project-priority-option"
+              :class="{ selected: projectPriority === option.value }"
+              :data-priority="option.value"
+              :title="option.label"
+              @click="handleProjectPrioritySelect(option.value)"
+            ></button>
           </div>
         </div>
         <div class="dialog-footer">
@@ -46,7 +61,8 @@ const projectStore = useProjectStore()
 const { showProjectDialog } = storeToRefs(appStore)
 
 const projectName = ref('')
-const projectColor = ref('#667eea')
+const projectColor = ref('#ed8936')
+const projectPriority = ref('medium')
 const nameInput = ref(null)
 
 const colors = [
@@ -60,15 +76,41 @@ const colors = [
   '#ed64a6'
 ]
 
+const projectPriorityOptions = [
+  { value: 'high', label: '高优先级' },
+  { value: 'medium', label: '中优先级' },
+  { value: 'low', label: '低优先级' }
+]
+const projectPriorityColorMap = {
+  high: '#f56565',
+  medium: '#ed8936',
+  low: '#48bb78'
+}
+
 watch(showProjectDialog, (show) => {
   if (show) {
     projectName.value = ''
-    projectColor.value = '#667eea'
+    projectPriority.value = 'medium'
+    projectColor.value = projectPriorityColorMap[projectPriority.value]
     setTimeout(() => {
       nameInput.value?.focus()
     }, 100)
   }
 })
+
+function handleProjectPrioritySelect(priority) {
+  projectPriority.value = priority
+  projectColor.value = projectPriorityColorMap[priority] || projectColor.value
+}
+
+function handleProjectColorSelect(color) {
+  projectColor.value = color
+  const matchedPriority = Object.keys(projectPriorityColorMap)
+    .find(key => projectPriorityColorMap[key] === color)
+  if (matchedPriority) {
+    projectPriority.value = matchedPriority
+  }
+}
 
 function handleClose() {
   appStore.showProjectDialog = false
@@ -79,7 +121,12 @@ async function handleConfirm() {
     return
   }
   
-  await projectStore.addProject(projectName.value.trim(), projectColor.value)
+  await projectStore.addProject(
+    projectName.value.trim(),
+    projectColor.value,
+    null,
+    projectPriority.value
+  )
   handleClose()
 }
 </script>

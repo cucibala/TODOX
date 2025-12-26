@@ -156,6 +156,57 @@
   transform: scale(1.1);
 }
 
+.project-priority-selector {
+  margin-bottom: 20px;
+}
+
+.project-priority-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.project-priority-options {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.project-priority-option {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+.project-priority-option[data-priority='high'] {
+  background: var(--danger-color);
+}
+
+.project-priority-option[data-priority='medium'] {
+  background: var(--warning-color);
+}
+
+.project-priority-option[data-priority='low'] {
+  background: var(--success-color);
+}
+
+.project-priority-option:hover {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.project-priority-option.selected {
+  opacity: 1;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.35);
+}
+
 /* 锁定界面样式 */
 .lock-screen {
   position: fixed;

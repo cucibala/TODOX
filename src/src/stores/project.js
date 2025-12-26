@@ -21,15 +21,16 @@ export const useProjectStore = defineStore('project', () => {
   
   const hasProjects = computed(() => projects.value.length > 0)
   
-  function normalizeProject(project) {
-    if (!project) return null
-    return {
-      ...project,
-      groupId: project.groupId ?? project.group_id ?? null,
-      createdAt: project.createdAt || project.created_at,
-      updatedAt: project.updatedAt || project.updated_at
-    }
+function normalizeProject(project) {
+  if (!project) return null
+  return {
+    ...project,
+    groupId: project.groupId ?? project.group_id ?? null,
+    priority: project.priority || 'medium',
+    createdAt: project.createdAt || project.created_at,
+    updatedAt: project.updatedAt || project.updated_at
   }
+}
   
   function normalizeProjectGroup(group) {
     if (!group) return null
@@ -65,7 +66,7 @@ export const useProjectStore = defineStore('project', () => {
   }
   
   // 添加项目
-  async function addProject(name, color, groupId = null) {
+  async function addProject(name, color = '#667eea', groupId = null, priority = 'medium') {
     if (!name) return
     
     const appStore = useAppStore()
@@ -74,6 +75,7 @@ export const useProjectStore = defineStore('project', () => {
       name,
       color,
       groupId: groupId ? String(groupId) : null,
+      priority: priority || 'medium',
       createdAt: new Date().toISOString()
     }
     
@@ -148,6 +150,25 @@ export const useProjectStore = defineStore('project', () => {
     appStore.toast(`分组"${group.name}"已删除`)
   }
 
+  // 更新项目
+  async function updateProject(projectId, updates) {
+    if (!updates || Object.keys(updates).length === 0) return
+
+    const project = projects.value.find(item => String(item.id) === String(projectId))
+    if (!project) return
+
+    const normalizedUpdates = { ...updates }
+    if (normalizedUpdates.groupId !== undefined) {
+      normalizedUpdates.groupId = normalizedUpdates.groupId ? String(normalizedUpdates.groupId) : null
+    }
+    if (normalizedUpdates.priority !== undefined) {
+      normalizedUpdates.priority = normalizedUpdates.priority || 'medium'
+    }
+
+    Object.assign(project, normalizedUpdates)
+    await electronAPI.updateProject(projectId, JSON.parse(JSON.stringify(normalizedUpdates)))
+  }
+
   // 移动项目到分组
   async function moveProjectToGroup(projectId, groupId) {
     const project = projects.value.find(item => String(item.id) === String(projectId))
@@ -156,8 +177,7 @@ export const useProjectStore = defineStore('project', () => {
     const nextGroupId = groupId ? String(groupId) : null
     if ((project.groupId ?? null) === nextGroupId) return
 
-    project.groupId = nextGroupId
-    await electronAPI.updateProject(project.id, { groupId: nextGroupId })
+    await updateProject(project.id, { groupId: nextGroupId })
   }
   
   // 选择项目
@@ -331,6 +351,7 @@ export const useProjectStore = defineStore('project', () => {
         id: newProjectId,
         name: projectName,
         color: importData.project.color,
+        priority: importData.project.priority || 'medium',
         groupId: finalGroupId,
         createdAt: new Date().toISOString()
       }
@@ -394,6 +415,7 @@ export const useProjectStore = defineStore('project', () => {
     addProjectGroup,
     updateProjectGroup,
     deleteProjectGroup,
+    updateProject,
     moveProjectToGroup,
     selectProject,
     deleteProject,

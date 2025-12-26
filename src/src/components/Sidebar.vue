@@ -16,16 +16,39 @@
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
           </button>
-          <button 
-            class="btn-add-project" 
-            @click="appStore.showProjectDialog = true" 
-            title="创建项目"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
+        </div>
+      </div>
+      <div class="project-create-actions">
+        <input
+          v-model="newProjectName"
+          class="project-create-input"
+          placeholder="新建项目..."
+          @keyup.enter="handleCreateProject"
+        />
+        <button
+          class="btn-add-project-inline"
+          @click="handleCreateProject"
+          title="新建项目"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="project-priority-select">
+        <span class="project-priority-label">项目优先级</span>
+        <div class="project-priority-options">
+          <button
+            v-for="option in projectPriorityOptions"
+            :key="option.value"
+            type="button"
+            class="project-priority-option"
+            :class="{ selected: newProjectPriority === option.value }"
+            :data-priority="option.value"
+            :title="option.label"
+            @click="newProjectPriority = option.value"
+          ></button>
         </div>
       </div>
       <div class="project-group-create">
@@ -61,11 +84,27 @@
           >
             <div class="project-group-header">
               <div class="project-group-title">
+                <button
+                  class="btn-toggle-group"
+                  @click.stop="toggleGroupCollapsed(ungroupedGroupId)"
+                  title="折叠/展开"
+                >
+                  <svg
+                    class="toggle-icon"
+                    :class="{ collapsed: isGroupCollapsed(ungroupedGroupId) }"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
                 <span class="project-group-name">未分组</span>
                 <span class="project-group-count">{{ ungroupedProjects.length }}</span>
               </div>
             </div>
-            <div class="project-group-items">
+            <div v-if="!isGroupCollapsed(ungroupedGroupId)" class="project-group-items">
               <div v-if="ungroupedProjects.length === 0" class="project-group-empty">
                 拖动项目到此分组
               </div>
@@ -74,7 +113,7 @@
                 :key="project.id"
                 class="project-item"
                 :class="{ active: currentProjectId === project.id, dragging: draggedProjectId === project.id }"
-                draggable="true"
+                :draggable="editingProjectId !== project.id"
                 @dragstart="handleProjectDragStart($event, project.id)"
                 @dragend="handleProjectDragEnd"
                 @click="projectStore.selectProject(project.id)"
@@ -82,7 +121,20 @@
                 <div class="project-color" :style="{ backgroundColor: project.color }"></div>
                 <div class="project-info">
                   <div class="project-header">
-                    <div class="project-name">{{ project.name }}</div>
+                    <div class="project-name">
+                      <input
+                        v-if="editingProjectId === project.id"
+                        v-model="editingProjectName"
+                        class="project-name-edit"
+                        :data-project-edit-id="project.id"
+                        maxlength="30"
+                        @click.stop
+                        @keyup.enter="handleSaveProjectName(project)"
+                        @keyup.esc="handleCancelProjectEdit"
+                        @blur="handleSaveProjectName(project)"
+                      />
+                      <span v-else>{{ project.name }}</span>
+                    </div>
                     <div class="project-count">
                       {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
                     </div>
@@ -98,6 +150,16 @@
                   </div>
                 </div>
                 <div class="project-actions">
+                  <button 
+                    class="btn-edit-project" 
+                    @click.stop="handleStartProjectEdit(project)" 
+                    title="重命名项目"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9"></path>
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                    </svg>
+                  </button>
                   <button 
                     class="btn-export-project" 
                     @click.stop="handleExportProject(project.id)" 
@@ -135,6 +197,22 @@
           >
             <div class="project-group-header">
               <div class="project-group-title">
+                <button
+                  class="btn-toggle-group"
+                  @click.stop="toggleGroupCollapsed(group.id)"
+                  title="折叠/展开"
+                >
+                  <svg
+                    class="toggle-icon"
+                    :class="{ collapsed: isGroupCollapsed(group.id) }"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
                 <span class="project-group-name">{{ group.name }}</span>
                 <span class="project-group-count">{{ getGroupProjects(group.id).length }}</span>
               </div>
@@ -151,7 +229,7 @@
                 </button>
               </div>
             </div>
-            <div class="project-group-items">
+            <div v-if="!isGroupCollapsed(group.id)" class="project-group-items">
               <div v-if="getGroupProjects(group.id).length === 0" class="project-group-empty">
                 拖动项目到此分组
               </div>
@@ -160,7 +238,7 @@
                 :key="project.id"
                 class="project-item"
                 :class="{ active: currentProjectId === project.id, dragging: draggedProjectId === project.id }"
-                draggable="true"
+                :draggable="editingProjectId !== project.id"
                 @dragstart="handleProjectDragStart($event, project.id)"
                 @dragend="handleProjectDragEnd"
                 @click="projectStore.selectProject(project.id)"
@@ -168,7 +246,20 @@
                 <div class="project-color" :style="{ backgroundColor: project.color }"></div>
                 <div class="project-info">
                   <div class="project-header">
-                    <div class="project-name">{{ project.name }}</div>
+                    <div class="project-name">
+                      <input
+                        v-if="editingProjectId === project.id"
+                        v-model="editingProjectName"
+                        class="project-name-edit"
+                        :data-project-edit-id="project.id"
+                        maxlength="30"
+                        @click.stop
+                        @keyup.enter="handleSaveProjectName(project)"
+                        @keyup.esc="handleCancelProjectEdit"
+                        @blur="handleSaveProjectName(project)"
+                      />
+                      <span v-else>{{ project.name }}</span>
+                    </div>
                     <div class="project-count">
                       {{ getProjectStats(project.id).completed }}/{{ getProjectStats(project.id).total }}
                     </div>
@@ -184,6 +275,16 @@
                   </div>
                 </div>
                 <div class="project-actions">
+                  <button 
+                    class="btn-edit-project" 
+                    @click.stop="handleStartProjectEdit(project)" 
+                    title="重命名项目"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9"></path>
+                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+                    </svg>
+                  </button>
                   <button 
                     class="btn-export-project" 
                     @click.stop="handleExportProject(project.id)" 
@@ -552,11 +653,33 @@ const {
   overdueTasksCount
 } = storeToRefs(todoStore)
 
-// 分组创建
+// 新建项目/分组
+const newProjectName = ref('')
+const newProjectPriority = ref('medium')
 const newGroupName = ref('')
+const projectPriorityOptions = [
+  { value: 'high', label: '高优先级' },
+  { value: 'medium', label: '中优先级' },
+  { value: 'low', label: '低优先级' }
+]
+const projectPriorityColorMap = {
+  high: '#f56565',
+  medium: '#ed8936',
+  low: '#48bb78'
+}
+
+// 分组折叠
 const ungroupedGroupId = 'ungrouped'
+const collapsedGroupIds = ref(new Set())
+
+// 拖拽状态
 const draggedProjectId = ref(null)
 const activeDropGroupId = ref(null)
+
+// 项目重命名
+const editingProjectId = ref(null)
+const editingProjectName = ref('')
+const editingOriginalName = ref('')
 
 const sortedProjectGroups = computed(() => {
   return [...projectGroups.value].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -570,6 +693,37 @@ function getGroupProjects(groupId) {
   return projects.value.filter(project => String(project.groupId ?? '') === String(groupId))
 }
 
+function isGroupCollapsed(groupId) {
+  return collapsedGroupIds.value.has(String(groupId))
+}
+
+function toggleGroupCollapsed(groupId) {
+  const next = new Set(collapsedGroupIds.value)
+  const id = String(groupId)
+  if (next.has(id)) {
+    next.delete(id)
+  } else {
+    next.add(id)
+  }
+  collapsedGroupIds.value = next
+}
+
+async function handleCreateProject() {
+  const trimmedName = (newProjectName.value || '').trim()
+  if (!trimmedName) return
+
+  const priorityColor = projectPriorityColorMap[newProjectPriority.value] || '#667eea'
+  const project = await projectStore.addProject(
+    trimmedName,
+    priorityColor,
+    null,
+    newProjectPriority.value
+  )
+  if (project) {
+    newProjectName.value = ''
+  }
+}
+
 async function handleCreateGroup() {
   const group = await projectStore.addProjectGroup(newGroupName.value)
   if (group) {
@@ -579,6 +733,41 @@ async function handleCreateGroup() {
 
 async function handleDeleteGroup(group) {
   await projectStore.deleteProjectGroup(group.id)
+}
+
+function handleStartProjectEdit(project) {
+  editingProjectId.value = project.id
+  editingProjectName.value = project.name || ''
+  editingOriginalName.value = project.name || ''
+
+  nextTick(() => {
+    const input = document.querySelector(`[data-project-edit-id="${project.id}"]`)
+    input?.focus()
+    input?.select()
+  })
+}
+
+function handleCancelProjectEdit() {
+  editingProjectId.value = null
+  editingProjectName.value = ''
+  editingOriginalName.value = ''
+}
+
+async function handleSaveProjectName(project) {
+  if (editingProjectId.value !== project.id) return
+
+  const trimmedName = editingProjectName.value.trim()
+  const originalName = editingOriginalName.value
+  handleCancelProjectEdit()
+
+  if (!trimmedName) {
+    appStore.toast('项目名称不能为空')
+    return
+  }
+
+  if (trimmedName !== originalName) {
+    await projectStore.updateProject(project.id, { name: trimmedName })
+  }
 }
 
 function handleProjectDragStart(event, projectId) {

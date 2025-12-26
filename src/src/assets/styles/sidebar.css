@@ -549,6 +549,103 @@
   align-items: center;
 }
 
+.project-create-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.project-priority-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.project-priority-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.project-priority-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-priority-option {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+}
+
+.project-priority-option[data-priority='high'] {
+  background: var(--danger-color);
+}
+
+.project-priority-option[data-priority='medium'] {
+  background: var(--warning-color);
+}
+
+.project-priority-option[data-priority='low'] {
+  background: var(--success-color);
+}
+
+.project-priority-option:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.project-priority-option.selected {
+  opacity: 1;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.35);
+}
+
+.project-create-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.project-create-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.btn-add-project-inline {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-add-project-inline:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+.btn-add-project-inline svg {
+  width: 14px;
+  height: 14px;
+}
+
 .project-group-create {
   display: flex;
   gap: 8px;
@@ -666,6 +763,35 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.btn-toggle-group {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-toggle-group:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.toggle-icon {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease;
+}
+
+.toggle-icon.collapsed {
+  transform: rotate(-90deg);
 }
 
 .project-group-name {
@@ -792,6 +918,21 @@
   flex: 1;
 }
 
+.project-name-edit {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.project-name-edit:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
 .project-count {
   font-size: 11px;
   color: var(--text-muted);
@@ -846,6 +987,31 @@
   justify-content: center;
   transition: all 0.2s ease;
   flex-shrink: 0;
+}
+
+.btn-edit-project {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-edit-project:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: var(--primary-color);
+}
+
+.btn-edit-project svg {
+  width: 12px;
+  height: 12px;
 }
 
 .btn-export-project:hover {
