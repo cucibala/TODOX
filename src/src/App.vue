@@ -160,6 +160,11 @@ onMounted(async () => {
   } catch (error) {
     console.error('应用初始化失败:', error)
     appStore.isAppReady = true // 即使出错也显示界面
+  } finally {
+    // 通知主进程：渲染端已准备好显示
+    if (window.electronAPI && window.electronAPI.notifyRendererReady) {
+      window.electronAPI.notifyRendererReady()
+    }
   }
 })
 

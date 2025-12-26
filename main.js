@@ -213,6 +213,19 @@ let tray = null;
 let isAlwaysOnTop = false;
 
 // 简单的密码加密（Base64 + 混淆）
+let isWindowReadyToShow = false;
+let isRendererReady = false;
+
+function showMainWindowIfReady() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!isWindowReadyToShow || !isRendererReady) return;
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  // 发送初始状态
+  mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
+}
+
 function encryptPassword(password) {
   const salt = 'TodoX-Secret-Key-2025';
   const mixed = password.split('').map((char, i) => 
@@ -377,6 +390,9 @@ function createWindow() {
     resizable: true
   });
 
+  isWindowReadyToShow = false;
+  isRendererReady = false;
+
   // 开发模式：加载 Vite 开发服务器
   // 生产模式：加载 Vue 构建的文件
   const isDev = process.argv.includes('--dev');
@@ -395,9 +411,8 @@ function createWindow() {
   
   // 窗口加载完成后显示（等待内容渲染完成，避免白屏闪烁）
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    // 发送初始状态
-    mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
+    isWindowReadyToShow = true;
+    showMainWindowIfReady();
   });
 
 
@@ -419,6 +434,12 @@ function createWindow() {
     return false;
   });
 }
+
+// 渲染端准备就绪后再显示窗口，避免启动时闪屏
+ipcMain.on('renderer-ready', () => {
+  isRendererReady = true;
+  showMainWindowIfReady();
+});
 
 
 // 创建系统托盘

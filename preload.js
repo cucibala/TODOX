@@ -109,6 +109,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   windowMinimize: () => ipcRenderer.send('window-minimize'),
   windowMaximize: () => ipcRenderer.send('window-maximize'),
   windowClose: () => ipcRenderer.send('window-close'),
+
+  notifyRendererReady: () => ipcRenderer.send('renderer-ready'),
   toggleAlwaysOnTop: () => ipcRenderer.send('toggle-always-on-top'),
   
   // 外部链接
