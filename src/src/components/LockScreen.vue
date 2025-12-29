@@ -1,5 +1,5 @@
 <template>
-  <div class="lock-screen">
+  <div class="lock-screen" :class="{ 'lock-screen--no-anim': initialLock }">
     <div class="lock-content">
       <div class="lock-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -37,6 +37,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAppStore } from '../stores/app'
+
+const { initialLock } = defineProps({
+  initialLock: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const appStore = useAppStore()
 const password = ref('')

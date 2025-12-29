@@ -34,7 +34,7 @@
     </main>
 
     <!-- 锁定界面 -->
-    <LockScreen v-if="showLockScreen" />
+    <LockScreen v-if="showLockScreen" :initial-lock="isInitialLock" />
 
     <!-- 子任务弹窗 -->
     <SubtaskDialog />
@@ -69,7 +69,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
@@ -103,6 +103,13 @@ const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 
 const { showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
+const isInitialLock = ref(false)
+
+watch(showLockScreen, (visible) => {
+  if (!visible) {
+    isInitialLock.value = false
+  }
+})
 
 // 活动监听器（用于自动锁定）
 function handleUserActivity() {
@@ -143,6 +150,10 @@ onMounted(async () => {
     
     // 检查密码保护
     await appStore.checkPasswordOnStartup()
+
+    if (showLockScreen.value) {
+      isInitialLock.value = true
+    }
     
     // 监听窗口模式变化
     appStore.listenModeChanges()
@@ -161,6 +172,7 @@ onMounted(async () => {
     console.error('应用初始化失败:', error)
     appStore.isAppReady = true // 即使出错也显示界面
   } finally {
+    await nextTick()
     // 通知主进程：渲染端已准备好显示
     if (window.electronAPI && window.electronAPI.notifyRendererReady) {
       window.electronAPI.notifyRendererReady()

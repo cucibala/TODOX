@@ -222,6 +222,11 @@
   animation: fadeIn 0.3s ease;
 }
 
+.lock-screen--no-anim {
+  animation: none;
+  opacity: 1;
+}
+
 .lock-content {
   background: white;
   border-radius: var(--radius-lg);
