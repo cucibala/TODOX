@@ -117,5 +117,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   
   // 监听模式变化
-  onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop))
+  onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop)),
+  onQuickInputModeChanged: (callback) => ipcRenderer.on('quick-input-mode-changed', (event, isQuick) => callback(isQuick)),
+  onQuickInputOpened: (callback) => ipcRenderer.on('quick-input-opened', () => callback()),
+  exitQuickInputMode: () => ipcRenderer.send('quick-input-exit'),
+  notifyQuickInputSent: () => ipcRenderer.send('quick-input-sent'),
+  onQuickInputSent: (callback) => ipcRenderer.on('quick-input-sent', () => callback()),
+  setQuickInputHasMessages: (hasMessages) => ipcRenderer.send('quick-input-has-messages', hasMessages),
+  resizeQuickInput: (height) => ipcRenderer.send('quick-input-resize', height)
 });

@@ -1,7 +1,7 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :class="{ 'quick-input-mode': isQuickInputMode }">
     <!-- 自定义标题栏 -->
-    <TitleBar />
+    <TitleBar v-if="!isQuickInputMode" />
 
     <!-- 加载状态 -->
     <div v-if="!isAppReady" class="loading-container">
@@ -11,8 +11,11 @@
 
     <!-- 主内容区 -->
     <main v-show="isAppReady" class="main-content">
+      <!-- 快捷输入模式（仅聊天输入区） -->
+      <ChatPage v-if="isQuickInputMode" />
+
       <!-- 首页 -->
-      <template v-if="currentPage === 'home'">
+      <template v-else-if="currentPage === 'home'">
         <!-- 侧边栏 -->
         <Sidebar />
 
@@ -34,7 +37,7 @@
     </main>
 
     <!-- 锁定界面 -->
-    <LockScreen v-if="showLockScreen" :initial-lock="isInitialLock" />
+    <LockScreen v-if="showLockScreen && !isQuickInputMode" :initial-lock="isInitialLock" />
 
     <!-- 子任务弹窗 -->
     <SubtaskDialog />
@@ -102,7 +105,7 @@ const projectStore = useProjectStore()
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 
-const { showLockScreen, currentPage, isAppReady } = storeToRefs(appStore)
+const { showLockScreen, currentPage, isAppReady, isQuickInputMode } = storeToRefs(appStore)
 const isInitialLock = ref(false)
 
 watch(showLockScreen, (visible) => {
@@ -178,6 +181,13 @@ onMounted(async () => {
       window.electronAPI.notifyRendererReady()
     }
   }
+
+  if (window.electronAPI?.onQuickInputSent) {
+    window.electronAPI.onQuickInputSent(async () => {
+      await chatStore.loadConversations()
+      appStore.currentPage = 'chat'
+    })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -196,11 +206,21 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  background: transparent;
 }
 
 #app {
   width: 100vw;
   height: 100vh;
+  background: transparent;
+}
+
+.app-container.quick-input-mode {
+  border-radius: 20px;
+  border: 2px solid var(--border-color);
+  overflow: hidden;
+  background: transparent;
+  -webkit-app-region: drag;
 }
 
 /* 加载动画 */

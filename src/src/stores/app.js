@@ -7,6 +7,7 @@ export const useAppStore = defineStore('app', () => {
   const showLockScreen = ref(false)
   const currentPage = ref('home') // 'home' | 'settings' | 'chat'
   const isAppReady = ref(false) // 应用是否初始化完成
+  const isQuickInputMode = ref(new URLSearchParams(window.location.search).get('quick') === '1')
 
   // 自动锁定
   const AUTO_LOCK_TIMEOUT = 15 * 60 * 1000 // 15分钟（毫秒）
@@ -60,6 +61,10 @@ export const useAppStore = defineStore('app', () => {
 
   // 检查启动时密码保护
   async function checkPasswordOnStartup() {
+    if (isQuickInputMode.value) {
+      showLockScreen.value = false
+      return
+    }
     const result = await electronAPI.hasPassword()
     if (result.hasPassword) {
       showLockScreen.value = true
@@ -71,6 +76,11 @@ export const useAppStore = defineStore('app', () => {
     // 监听置顶状态变化
     electronAPI.onAlwaysOnTopChanged((onTop) => {
       isAlwaysOnTop.value = onTop
+    })
+
+    // 监听快捷输入模式变化
+    electronAPI.onQuickInputModeChanged?.((isQuick) => {
+      setQuickInputMode(isQuick)
     })
   }
 
@@ -127,6 +137,14 @@ export const useAppStore = defineStore('app', () => {
     electronAPI.toggleAlwaysOnTop()
   }
 
+  function setQuickInputMode(isQuick) {
+    isQuickInputMode.value = isQuick
+    if (isQuick) {
+      currentPage.value = 'chat'
+      showLockScreen.value = false
+    }
+  }
+
   // 锁定/解锁
   async function lockApp() {
     const result = await electronAPI.hasPassword()
@@ -158,7 +176,7 @@ export const useAppStore = defineStore('app', () => {
   function startAutoLockTimer() {
     // 只有在设置了密码的情况下才启用自动锁定
     electronAPI.hasPassword().then(result => {
-      if (result.hasPassword) {
+      if (result.hasPassword && !isQuickInputMode.value) {
         resetActivityTimer()
       }
     })
@@ -182,7 +200,7 @@ export const useAppStore = defineStore('app', () => {
     // 设置新的计时器
     autoLockTimer = setTimeout(() => {
       // 检查是否已经锁定
-      if (!showLockScreen.value) {
+      if (!showLockScreen.value && !isQuickInputMode.value) {
         electronAPI.hasPassword().then(result => {
           if (result.hasPassword) {
             showLockScreen.value = true
@@ -199,6 +217,7 @@ export const useAppStore = defineStore('app', () => {
     showLockScreen,
     currentPage,
     isAppReady,
+    isQuickInputMode,
     toastMessage,
     toastType,
     showToast,
@@ -232,6 +251,7 @@ export const useAppStore = defineStore('app', () => {
     minimizeWindow,
     closeWindow,
     toggleAlwaysOnTop,
+    setQuickInputMode,
     lockApp,
     unlockApp,
     startAutoLockTimer,
@@ -239,4 +259,3 @@ export const useAppStore = defineStore('app', () => {
     resetActivityTimer
   }
 })
-

@@ -128,8 +128,9 @@ export const useChatStore = defineStore('chat', () => {
   }
   
   // 发送消息
-  async function sendMessage(content, images = []) {
+  async function sendMessage(content, images = [], options = {}) {
     if ((!content.trim() && images.length === 0) || isLoading.value) return false
+    const shouldDetach = options?.detach === true
 
     // 检查是否已选择角色
     if (!currentRoleId.value) {
@@ -193,11 +194,23 @@ export const useChatStore = defineStore('chat', () => {
       appStore.chatStatusText = 'AI 正在生成...'
       
       // 调用 API（流式，后台运行）
-      await sendToAI()
-    } finally {
-      // 确保动画关闭
-      appStore.showChatStatusIndicator = false
-      appStore.chatStatusText = ''
+      const sendPromise = sendToAI()
+      if (shouldDetach) {
+        sendPromise.finally(() => {
+          appStore.showChatStatusIndicator = false
+          appStore.chatStatusText = ''
+        })
+      } else {
+        await sendPromise
+        appStore.showChatStatusIndicator = false
+        appStore.chatStatusText = ''
+      }
+    } catch (error) {
+      if (!shouldDetach) {
+        appStore.showChatStatusIndicator = false
+        appStore.chatStatusText = ''
+      }
+      throw error
     }
     
     return true
@@ -636,11 +649,13 @@ export const useChatStore = defineStore('chat', () => {
   }
   
   // 创建新对话
-  async function createNewConversation(roleId = null, projectIds = []) {
+  async function createNewConversation(roleId = null, projectIds = [], options = {}) {
     // 检查当前是否已经是新对话（未发送过消息）
     const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
-    if (currentConv && currentConv.title === '新对话' && messages.value.length === 0) {
-      appStore.toast('当前已在新对话')
+    if (!options.forceNew && currentConv && currentConv.title === '新对话' && messages.value.length === 0) {
+      if (!options.silent) {
+        appStore.toast('当前已在新对话')
+      }
       return false
     }
     
@@ -663,7 +678,9 @@ export const useChatStore = defineStore('chat', () => {
     await electronAPI.addConversation(JSON.parse(JSON.stringify(newConv)))
     await electronAPI.setCurrentConversation(newConv.id)
     
-    appStore.toast('已创建新对话')
+    if (!options.silent) {
+      appStore.toast('已创建新对话')
+    }
     return true
   }
   

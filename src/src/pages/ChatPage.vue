@@ -1,7 +1,7 @@
 <template>
-  <div class="chat-page">
+  <div class="chat-page" :class="{ 'quick-input-mode': isQuickInputMode }">
     <!-- 会话列表侧边栏 -->
-    <div class="conversations-sidebar" :class="{ collapsed: sidebarCollapsed }">
+    <div v-show="!isQuickInputMode" class="conversations-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <h3 v-if="!sidebarCollapsed">对话</h3>
         <button class="btn-new-conversation" @click="handleNewConversation" :title="sidebarCollapsed ? '新对话' : ''">
@@ -53,7 +53,7 @@
 
     <!-- 聊天主区域 -->
     <div class="chat-main">
-      <div class="chat-header">
+      <div v-show="!isQuickInputMode" class="chat-header">
         <div class="chat-title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -238,7 +238,7 @@
         <div class="chat-input-area">
           <div class="input-wrapper">
             <!-- 角色选择器（输入框左侧） -->
-            <div class="input-role-selector">
+            <div v-if="!isQuickInputMode" class="input-role-selector">
               <button 
                 class="btn-role-selector"
                 @click="showInputRoleSelector = !showInputRoleSelector"
@@ -283,35 +283,6 @@
                   </div>
                 </div>
                 
-                <!-- 项目列表（仅项目助手角色显示） -->
-                <div v-if="currentRole.enableProjects" class="input-project-section">
-                  <div class="input-project-header">
-                    <span>关联项目（可选）</span>
-                    <div class="input-project-actions">
-                      <button @click="selectAllProjects" class="btn-project-action">全选</button>
-                      <button @click="clearAllProjects" class="btn-project-action">清空</button>
-                    </div>
-                  </div>
-                  <div class="input-project-list">
-                    <div 
-                      v-for="project in projectStore.projects" 
-                      :key="project.id"
-                      class="input-project-item"
-                      @click="toggleProject(project.id)"
-                    >
-                      <div class="input-project-checkbox">
-                        <svg v-if="selectedProjectIds.includes(project.id)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                          <polyline points="20 6 9 17 4 12"></polyline>
-                        </svg>
-                      </div>
-                      <div class="project-color-indicator" :style="{ backgroundColor: project.color }"></div>
-                      <span class="project-name">{{ project.name }}</span>
-                    </div>
-                    <div v-if="projectStore.projects.length === 0" class="input-project-empty">
-                      暂无项目
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
             
@@ -329,7 +300,21 @@
             </div>
             
             <!-- 输入区域 -->
-            <div class="input-main-area">
+            <div v-if="isQuickInputMode" class="input-main-area quick-input-layout">
+              <div class="input-text-row">
+                <div class="input-text-wrapper">
+                  <textarea
+                    v-model="userInput"
+                    @keydown.ctrl.enter="handleSend"
+                    placeholder="输入消息... (Ctrl+Enter 发送)"
+                    ref="inputTextarea"
+                    rows="1"
+                    @input="adjustTextareaHeight"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+            <div v-else class="input-main-area">
               <div class="input-actions-left">
                 <button 
                   class="btn-upload-image" 
@@ -354,40 +339,40 @@
               </div>
               
               <div class="input-text-wrapper">
-            <textarea
-              v-model="userInput"
-              @keydown.ctrl.enter="handleSend"
-              placeholder="输入消息... (Ctrl+Enter 发送)"
-              ref="inputTextarea"
-              rows="1"
-              @input="adjustTextareaHeight"
-            ></textarea>
+                <textarea
+                  v-model="userInput"
+                  @keydown.ctrl.enter="handleSend"
+                  placeholder="输入消息... (Ctrl+Enter 发送)"
+                  ref="inputTextarea"
+                  rows="1"
+                  @input="adjustTextareaHeight"
+                ></textarea>
               </div>
               
               <div class="input-actions-right">
-              <button
-                v-if="isLoading"
-                class="btn-cancel"
-                @click="chatStore.abortRequest"
-                title="取消"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="6" y="6" width="12" height="12" rx="2"></rect>
-                </svg>
-              </button>
-              <button
-                v-else
-                class="btn-send"
-                @click="handleSend"
-                :disabled="(!userInput.trim() && selectedImages.length === 0)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-              </button>
+                <button
+                  v-if="isLoading"
+                  class="btn-cancel"
+                  @click="chatStore.abortRequest"
+                  title="取消"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                  </svg>
+                </button>
+                <button
+                  v-else
+                  class="btn-send"
+                  @click="handleSend"
+                  :disabled="(!userInput.trim() && selectedImages.length === 0)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              </div>
             </div>
-          </div>
         </div>
       </div>
     </div>
@@ -397,7 +382,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useChatStore } from '../stores/chat'
@@ -409,9 +394,11 @@ const chatStore = useChatStore()
 const projectStore = useProjectStore()
 const todoStore = useTodoStore()
 const electronAPI = window.electronAPI
+const QUICK_INPUT_EXPANDED_HEIGHT = 460
 
 // 使用 chatStore 的响应式状态
 const { conversations, currentConversationId, messages, isLoading, userInput } = storeToRefs(chatStore)
+const { isQuickInputMode } = storeToRefs(appStore)
 
 // 过滤有效的消息（排除 undefined/null/空消息/tool消息）
 const validMessages = computed(() => {
@@ -704,10 +691,20 @@ async function handleSend() {
   resetTextareaHeight()
   
   // 调用 chatStore 发送消息（后台运行）
-  const sent = await chatStore.sendMessage(message || '查看图片', images)
+  const sent = await chatStore.sendMessage(
+    message || '查看图片',
+    images,
+    { detach: isQuickInputMode.value }
+  )
   
   if (sent) {
     scrollToBottom()
+  }
+
+  if (isQuickInputMode.value && sent) {
+    electronAPI?.setQuickInputHasMessages?.(true)
+    electronAPI?.resizeQuickInput?.(QUICK_INPUT_EXPANDED_HEIGHT)
+    nextTick(() => inputTextarea.value?.focus())
   }
 }
 
@@ -1070,8 +1067,16 @@ function handleClickOutside(event) {
   }
 }
 
+function handleQuickInputKeydown(event) {
+  if (!isQuickInputMode.value) return
+  if (event.key === 'Escape') {
+    electronAPI?.exitQuickInputMode?.()
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
+  window.addEventListener('keydown', handleQuickInputKeydown)
   
   // 从本地存储恢复思考模式设置
   const savedReasoningMode = localStorage.getItem('todox_reasoning_mode')
@@ -1081,7 +1086,28 @@ onMounted(async () => {
   
   // 初始滚动到底部
   nextTick(() => scrollToBottom())
+
+  if (electronAPI?.onQuickInputOpened) {
+    electronAPI.onQuickInputOpened(async () => {
+      if (isQuickInputMode.value) {
+        await chatStore.createNewConversation('general', [], { forceNew: true, silent: true })
+        nextTick(() => inputTextarea.value?.focus())
+      }
+    })
+  }
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('keydown', handleQuickInputKeydown)
+})
+
+// 快捷输入模式下自动聚焦
+watch(isQuickInputMode, (enabled) => {
+  if (enabled) {
+    nextTick(() => inputTextarea.value?.focus())
+  }
+}, { immediate: true })
 
 // 监听消息变化，自动滚动到底部
 watch(messages, () => {

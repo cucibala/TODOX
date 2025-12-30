@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell, globalShortcut, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const TodoXDatabase = require('./database');
@@ -13,6 +13,7 @@ if (!gotTheLock) {
   // 当尝试打开第二个实例时，聚焦到第一个实例的窗口
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     if (mainWindow) {
+      hideQuickWindow();
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
@@ -211,6 +212,10 @@ function migrateFromJSONIfNeeded() {
 let mainWindow;
 let tray = null;
 let isAlwaysOnTop = false;
+let quickWindow = null;
+let quickInputHasMessages = false;
+const QUICK_INPUT_SIZE = { width: 560, height: 180 };
+const QUICK_INPUT_EXPANDED_HEIGHT = 460;
 
 // 简单的密码加密（Base64 + 混淆）
 let isWindowReadyToShow = false;
@@ -224,6 +229,98 @@ function showMainWindowIfReady() {
   }
   // 发送初始状态
   mainWindow.webContents.send('always-on-top-changed', isAlwaysOnTop);
+}
+
+function getQuickWindowBounds(heightOverride) {
+  const cursorPoint = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursorPoint).workArea;
+  const height = heightOverride || QUICK_INPUT_SIZE.height;
+  const x = Math.round(display.x + (display.width - QUICK_INPUT_SIZE.width) / 2);
+  const y = Math.round(display.y + (display.height - height) / 2);
+  return { x, y, width: QUICK_INPUT_SIZE.width, height };
+}
+
+function createQuickWindow() {
+  if (quickWindow && !quickWindow.isDestroyed()) return quickWindow;
+
+  // 设置窗口图标
+  const iconPath = path.join(__dirname, 'assets', 'X.png');
+  let windowIcon;
+  if (fs.existsSync(iconPath)) {
+    windowIcon = nativeImage.createFromPath(iconPath);
+  }
+
+  quickWindow = new BrowserWindow({
+    width: QUICK_INPUT_SIZE.width,
+    height: QUICK_INPUT_SIZE.height,
+    minWidth: QUICK_INPUT_SIZE.width,
+    minHeight: QUICK_INPUT_SIZE.height,
+    icon: windowIcon,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    },
+    backgroundColor: '#00000000',
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false
+  });
+
+  const isDev = process.argv.includes('--dev');
+  if (isDev) {
+    quickWindow.loadURL('http://localhost:5173/?quick=1');
+  } else {
+    const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
+    quickWindow.loadFile(vueDistPath, { query: { quick: '1' } });
+  }
+
+  quickWindow.once('ready-to-show', () => {
+    quickWindow.setBounds(getQuickWindowBounds());
+  });
+
+  quickWindow.webContents.on('did-finish-load', () => {
+    quickWindow.webContents.send('quick-input-mode-changed', true);
+  });
+
+  quickWindow.on('blur', () => {
+    if (!app.isQuiting && !quickInputHasMessages) {
+      hideQuickWindow();
+    }
+  });
+
+  quickWindow.on('close', (event) => {
+    if (!app.isQuiting) {
+      event.preventDefault();
+      quickWindow.hide();
+    }
+  });
+
+  quickWindow.on('closed', () => {
+    quickWindow = null;
+  });
+
+  return quickWindow;
+}
+
+function showQuickWindow() {
+  const windowInstance = createQuickWindow();
+  quickInputHasMessages = false;
+  windowInstance.setBounds(getQuickWindowBounds());
+  if (!windowInstance.isVisible()) {
+    windowInstance.show();
+  }
+  windowInstance.focus();
+  windowInstance.webContents.send('quick-input-mode-changed', true);
+  windowInstance.webContents.send('quick-input-opened');
+}
+
+function hideQuickWindow() {
+  if (!quickWindow || quickWindow.isDestroyed()) return;
+  quickWindow.hide();
 }
 
 function encryptPassword(password) {
@@ -436,7 +533,9 @@ function createWindow() {
 }
 
 // 渲染端准备就绪后再显示窗口，避免启动时闪屏
-ipcMain.on('renderer-ready', () => {
+ipcMain.on('renderer-ready', (event) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (event.sender !== mainWindow.webContents) return;
   isRendererReady = true;
   showMainWindowIfReady();
 });
@@ -471,6 +570,7 @@ function createTray() {
   
   // 双击托盘图标显示窗口
   tray.on('double-click', () => {
+    hideQuickWindow();
     mainWindow.show();
   });
 }
@@ -483,6 +583,7 @@ function updateTrayMenu() {
     {
       label: '显示窗口',
       click: () => {
+        hideQuickWindow();
         mainWindow.show();
       }
     },
@@ -533,6 +634,17 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
+  const quickShortcutRegistered = globalShortcut.register('Alt+Space', () => {
+    if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) {
+      hideQuickWindow();
+      return;
+    }
+    showQuickWindow();
+  });
+  if (!quickShortcutRegistered) {
+    console.warn('全局快捷键 Alt+Space 注册失败');
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -549,6 +661,8 @@ app.on('window-all-closed', () => {
 
 // 应用退出前清理
 app.on('before-quit', () => {
+  app.isQuiting = true;
+  globalShortcut.unregisterAll();
   if (db) {
     db.close();
     console.log('数据库已关闭');
@@ -570,6 +684,28 @@ ipcMain.on('window-maximize', () => {
 
 ipcMain.on('window-close', () => {
   mainWindow.hide();
+});
+
+ipcMain.on('quick-input-exit', () => {
+  hideQuickWindow();
+});
+
+ipcMain.on('quick-input-sent', () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('quick-input-sent');
+  }
+});
+
+ipcMain.on('quick-input-has-messages', (event, hasMessages) => {
+  quickInputHasMessages = Boolean(hasMessages);
+});
+
+ipcMain.on('quick-input-resize', (event, height) => {
+  if (!quickWindow || quickWindow.isDestroyed()) return;
+  const parsed = Number(height);
+  const targetHeight = Number.isFinite(parsed) ? parsed : QUICK_INPUT_EXPANDED_HEIGHT;
+  const clampedHeight = Math.max(QUICK_INPUT_SIZE.height, Math.min(targetHeight, 720));
+  quickWindow.setBounds(getQuickWindowBounds(clampedHeight));
 });
 
 ipcMain.on('toggle-always-on-top', () => {
