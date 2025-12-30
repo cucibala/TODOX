@@ -80,7 +80,13 @@
     <div class="board-body">
       <div class="board-main">
         <div class="kanban-board">
-          <div class="kanban-column todo">
+          <div 
+            class="kanban-column todo"
+            :class="{ 'drag-over': activeDropColumn === 'todo' }"
+            @dragover.prevent="handleDragOver('todo')"
+            @dragleave="activeDropColumn = ''"
+            @drop="handleDrop($event, 'todo')"
+          >
             <div class="column-header">
               <div class="column-title">待办</div>
               <div class="column-meta">
@@ -94,7 +100,13 @@
             </div>
           </div>
 
-          <div class="kanban-column doing">
+          <div 
+            class="kanban-column doing"
+            :class="{ 'drag-over': activeDropColumn === 'doing' }"
+            @dragover.prevent="handleDragOver('doing')"
+            @dragleave="activeDropColumn = ''"
+            @drop="handleDrop($event, 'doing')"
+          >
             <div class="column-header">
               <div class="column-title">进行中</div>
               <div class="column-meta">
@@ -108,7 +120,13 @@
             </div>
           </div>
 
-          <div class="kanban-column done">
+          <div 
+            class="kanban-column done"
+            :class="{ 'drag-over': activeDropColumn === 'done' }"
+            @dragover.prevent="handleDragOver('done')"
+            @dragleave="activeDropColumn = ''"
+            @drop="handleDrop($event, 'done')"
+          >
             <div class="column-header">
               <div class="column-title">已完成</div>
               <div class="column-meta">
@@ -329,16 +347,22 @@ function isTaskInProgress(task) {
   return hasProgress || hasCompletedSubtask
 }
 
+function getTaskStatus(task) {
+  if (task.status) return task.status
+  if (task.completed) return 'done'
+  return isTaskInProgress(task) ? 'doing' : 'todo'
+}
+
 const todoTodos = computed(() => {
-  return filteredTodos.value.filter(task => !task.completed && !isTaskInProgress(task))
+  return filteredTodos.value.filter(task => getTaskStatus(task) === 'todo')
 })
 
 const doingTodos = computed(() => {
-  return filteredTodos.value.filter(task => !task.completed && isTaskInProgress(task))
+  return filteredTodos.value.filter(task => getTaskStatus(task) === 'doing')
 })
 
 const doneTodos = computed(() => {
-  return filteredTodos.value.filter(task => task.completed)
+  return filteredTodos.value.filter(task => getTaskStatus(task) === 'done')
 })
 
 const currentProjectTodos = computed(() => {
@@ -349,16 +373,30 @@ const currentProjectTodos = computed(() => {
 const currentTotalCount = computed(() => currentProjectTodos.value.length)
 const currentCompletedCount = computed(() => currentProjectTodos.value.filter(task => task.completed).length)
 const currentInProgressCount = computed(() => {
-  return currentProjectTodos.value.filter(task => !task.completed && isTaskInProgress(task)).length
+  return currentProjectTodos.value.filter(task => getTaskStatus(task) === 'doing').length
 })
 const currentTodoCount = computed(() => {
-  return currentProjectTodos.value.filter(task => !task.completed && !isTaskInProgress(task)).length
+  return currentProjectTodos.value.filter(task => getTaskStatus(task) === 'todo').length
 })
 
 const completionPercentage = computed(() => {
   if (currentTotalCount.value === 0) return 0
   return Math.round((currentCompletedCount.value / currentTotalCount.value) * 100)
 })
+
+const activeDropColumn = ref('')
+
+function handleDrop(event, status) {
+  event.preventDefault()
+  const taskId = event.dataTransfer?.getData('text/plain')
+  if (!taskId) return
+  todoStore.setTaskStatus(taskId, status)
+  activeDropColumn.value = ''
+}
+
+function handleDragOver(status) {
+  activeDropColumn.value = status
+}
 
 // 自动调整 textarea 高度
 function adjustTextareaHeight(event) {

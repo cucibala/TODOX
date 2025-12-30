@@ -135,10 +135,12 @@
   background: var(--bg-hover);
   border-radius: var(--radius-sm);
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .subtask-item:hover {
   background: var(--border-color);
+  padding-right: 52px;
 }
 
 .subtask-weight {
@@ -263,16 +265,21 @@
 
 /* 子任务操作按钮容器 */
 .subtask-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   gap: 4px;
   align-items: center;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.2s ease;
-  flex-shrink: 0;
 }
 
 .subtask-item:hover .subtask-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .btn-copy-subtask,

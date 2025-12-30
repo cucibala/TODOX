@@ -1,8 +1,11 @@
 <template>
   <div 
     class="task-item" 
-    :class="{ completed: task.completed, pinned: task.pinned }"
+    :class="{ completed: task.completed, pinned: task.pinned, dragging: isDragging }"
     :data-task-id="task.id"
+    :draggable="!isEditing"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
   >
     <!-- 优先级指示器 -->
     <div class="priority-indicator" :class="`priority-${task.priority}`"></div>
@@ -61,7 +64,7 @@
         </div>
       </div>
 
-      <div v-if="!isEditing" class="task-subtitle" @click="handleAddSubtask">
+      <div v-if="!isEditing" class="task-subtitle" @click="openDetailsForSubtask">
         {{ subtaskSummary }}
       </div>
 
@@ -171,269 +174,413 @@
         </template>
       </div>
 
-      <!-- 子任务 -->
-      <div v-if="showDetails && ((task.subtasks && task.subtasks.length > 0) || isAddingSubtask)" class="task-subtasks-section">
-        <div class="subtasks-list">
-          <div 
-            v-for="(subtask, index) in task.subtasks" 
-            :key="subtask.id" 
-            class="subtask-item"
-            :class="{ 
-              'dragging': draggedSubtaskId === subtask.id,
-              'drag-over': dragOverIndex === index
-            }"
-            draggable="true"
-            @dragstart="handleSubtaskDragStart(subtask.id, index, $event)"
-            @dragover.prevent="handleSubtaskDragOver(index, $event)"
-            @dragenter="handleSubtaskDragEnter(index)"
-            @dragleave="handleSubtaskDragLeave"
-            @drop="handleSubtaskDrop(index, $event)"
-            @dragend="handleSubtaskDragEnd"
-          >
-            <!-- 拖拽手柄 -->
-            <div class="subtask-drag-handle" title="拖动排序">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="9" cy="5" r="1.5"></circle>
-                <circle cx="9" cy="12" r="1.5"></circle>
-                <circle cx="9" cy="19" r="1.5"></circle>
-                <circle cx="15" cy="5" r="1.5"></circle>
-                <circle cx="15" cy="12" r="1.5"></circle>
-                <circle cx="15" cy="19" r="1.5"></circle>
-              </svg>
-            </div>
-            <div 
-              class="subtask-checkbox" 
-              :class="{ checked: subtask.completed }"
-              @click="handleToggleSubtask(subtask.id)"
+    </div>
+
+    <div class="task-action-footer">
+      <button class="task-btn secondary" @click="handleRollback" :disabled="taskStatus === 'todo'">
+        {{ secondaryActionLabel }}
+      </button>
+      <button class="task-btn primary" @click="handleComplete" :disabled="taskStatus === 'done'">
+        {{ primaryActionLabel }}
+      </button>
+    </div>
+  </div>
+
+  <div v-if="showDetails" class="task-detail-modal" @click.self="closeTaskDetails">
+    <div class="task-detail-dialog">
+      <div class="task-detail-header">
+        <div class="task-detail-title">任务详情</div>
+        <button class="task-detail-close" @click="closeTaskDetails" title="关闭">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="task-detail-body">
+        <div class="task-detail-section">
+          <div class="task-detail-name">{{ task.text }}</div>
+          <div class="task-meta">
+            <div class="task-time">{{ formatDate(task.createdAt) }}</div>
+            <div v-if="!isEditingDueDate && task.dueDate" 
+              class="task-due-date" 
+              :class="getDueDateStatus(task.dueDate)"
+              @click="handleStartEditDueDate"
+              title="点击修改到期时间"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"></polyline>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
+              {{ formatDueDate(task.dueDate) }}
             </div>
-            <span 
-              class="subtask-weight clickable" 
-              :class="`subtask-weight-${getWeightClass(subtask.weight)}`"
-              @click.stop="handleCycleSubtaskWeight(subtask)"
-              title="点击切换优先级"
-            >
-              {{ getWeightText(subtask.weight) }}
-            </span>
-            <div class="subtask-content">
-              <!-- 编辑模式 -->
-              <div v-if="editingSubtaskId === subtask.id" class="subtask-edit-mode">
-                 <textarea
-                   v-model="editingSubtaskText"
-                   class="subtask-edit-input"
-                   ref="editSubtaskInputRef"
-                   rows="1"
-                   @keydown.enter.prevent="handleSaveEditSubtask(subtask.id)"
-                   @keydown.esc="handleCancelEditSubtask"
-                   @blur="handleSaveEditSubtask(subtask.id)"
-                 ></textarea>
-              </div>
-              <!-- 显示模式 -->
-              <div v-else class="subtask-text-line">
-                <span 
-                  class="subtask-text" 
-                  :class="{ completed: subtask.completed }"
-                  @click="handleStartEditSubtask(subtask)"
-                  title="点击编辑"
-                >
-                  {{ subtask.text }}
-                </span>
-                <!-- 子任务输入值（直接跟在文字后面） -->
-                <input
-                  v-if="subtask.requiresInput"
-                  v-model="subtask.inputValue"
-                  @blur="handleSubtaskInputChange(subtask.id)"
-                  type="text"
-                  placeholder="输入结果..."
-                  class="subtask-input-inline"
-                  :disabled="subtask.completed"
-                />
-              </div>
-              <div v-if="subtask.createdAt" class="subtask-time-info">
-                <span v-if="subtask.completed && subtask.completedAt" class="subtask-time">
-                  完成于 {{ formatDate(subtask.completedAt) }}
-                </span>
-                <span v-else class="subtask-time">
-                  创建于 {{ formatDate(subtask.createdAt) }}
-                </span>
-                <span 
-                  v-if="subtask.completed && subtask.completedAt" 
-                  class="subtask-duration"
-                >
-                  耗时 {{ calculateTaskDuration(subtask.createdAt, subtask.completedAt) }}
-                </span>
-              </div>
-              <!-- 子任务图片/视频 -->
-              <div v-if="subtask.images && subtask.images.length > 0" class="subtask-images-container">
-                <template v-for="(image, imgIndex) in subtask.images" :key="imgIndex">
-                  <!-- 视频 -->
-                  <video
-                    v-if="isVideo(image) && subtaskImageCache[image]"
-                    :src="subtaskImageCache[image]"
-                    class="subtask-video"
-                    controls
-                    preload="metadata"
-                  ></video>
-                  <!-- 图片 -->
-                  <img
-                    v-else-if="!isVideo(image) && subtaskImageCache[image]"
-                    :src="subtaskImageCache[image]"
-                    class="subtask-image"
-                    @click="appStore.viewImage(subtaskImageCache[image])"
-                    alt="子任务图片"
-                  />
-                </template>
-              </div>
-            </div>
-            <div class="subtask-actions">
-              <button 
-                class="btn-copy-subtask" 
-                @click="handleCopySubtaskText(subtask.text)"
-                title="复制子任务内容"
-              >
+            <div v-if="isEditingDueDate" class="task-due-date-edit">
+              <input 
+                type="date" 
+                v-model="editDueDate" 
+                class="due-date-input"
+                ref="dueDateInputRef"
+              />
+              <button class="btn-save-due-date" @click="handleSaveDueDate" title="保存">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  <polyline points="20 6 9 17 4 12"></polyline>
                 </svg>
               </button>
-              <button 
-                class="btn-delete-subtask" 
-                @click="handleDeleteSubtask(subtask.id)"
-                title="删除子任务"
-              >
+              <button class="btn-cancel-due-date" @click="handleCancelEditDueDate" title="取消">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
               </button>
+              <button v-if="task.dueDate" class="btn-remove-due-date" @click="handleRemoveDueDate" title="移除到期时间">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
             </div>
+            <div v-if="!task.dueDate && !isEditingDueDate" 
+              class="task-add-due-date" 
+              @click="handleStartEditDueDate"
+              title="设置到期时间"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+              设置到期时间
+            </div>
+            <span class="task-priority-badge" :class="`priority-${task.priority}`">{{ priorityLabel }}</span>
           </div>
         </div>
 
-        <!-- 内联添加子任务输入框 -->
-        <div v-if="showDetails && isAddingSubtask" class="add-subtask-inline">
-           <div class="subtask-checkbox placeholder"></div>
-           <input
-             v-model="newSubtaskText"
-             class="add-subtask-input"
-             placeholder="输入子任务内容 (Enter 添加, Esc 取消)"
-             ref="newSubtaskInputRef"
-             @keydown.enter="handleConfirmAddSubtask"
-             @keydown.esc="handleCancelAddSubtask"
-             @blur="handleConfirmAddSubtask" 
-           />
-        </div>
-      </div>
-
-      <!-- 进度记录 -->
-      <div v-if="showDetails && task.progress && task.progress.length > 0" class="task-progress-section">
-        <button class="btn-toggle-progress" @click="showProgress = !showProgress">
-          <svg 
-            class="progress-toggle-icon" 
-            :style="{ transform: showProgress ? 'rotate(90deg)' : 'rotate(0deg)' }"
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            stroke-width="2"
-          >
-            <polyline points="9 18 15 12 9 6"></polyline>
-          </svg>
-          <span class="progress-count">进度记录 ({{ task.progress.length }})</span>
-        </button>
-        
-        <div v-show="showProgress" class="task-progress-container">
-          <div class="progress-list">
-            <div 
-              v-for="progressItem in task.progress" 
-              :key="progressItem.id" 
-              class="progress-item"
-            >
-              <div class="progress-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="9 11 12 14 22 4"></polyline>
-                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                </svg>
+        <div class="task-detail-section">
+          <div class="detail-section-title">子任务</div>
+          <div v-if="(task.subtasks && task.subtasks.length > 0) || isAddingSubtask" class="task-subtasks-section">
+            <div class="subtasks-list">
+              <div 
+                v-for="(subtask, index) in task.subtasks" 
+                :key="subtask.id" 
+                class="subtask-item"
+                :class="{ 
+                  'dragging': draggedSubtaskId === subtask.id,
+                  'drag-over': dragOverIndex === index
+                }"
+                draggable="true"
+                @dragstart="handleSubtaskDragStart(subtask.id, index, $event)"
+                @dragover.prevent="handleSubtaskDragOver(index, $event)"
+                @dragenter="handleSubtaskDragEnter(index)"
+                @dragleave="handleSubtaskDragLeave"
+                @drop="handleSubtaskDrop(index, $event)"
+                @dragend="handleSubtaskDragEnd"
+              >
+                <div class="subtask-drag-handle" title="拖动排序">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="9" cy="5" r="1.5"></circle>
+                    <circle cx="9" cy="12" r="1.5"></circle>
+                    <circle cx="9" cy="19" r="1.5"></circle>
+                    <circle cx="15" cy="5" r="1.5"></circle>
+                    <circle cx="15" cy="12" r="1.5"></circle>
+                    <circle cx="15" cy="19" r="1.5"></circle>
+                  </svg>
+                </div>
+                <div 
+                  class="subtask-checkbox" 
+                  :class="{ checked: subtask.completed }"
+                  @click="handleToggleSubtask(subtask.id)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </div>
+                <span 
+                  class="subtask-weight clickable" 
+                  :class="`subtask-weight-${getWeightClass(subtask.weight)}`"
+                  @click.stop="handleCycleSubtaskWeight(subtask)"
+                  title="点击切换优先级"
+                >
+                  {{ getWeightText(subtask.weight) }}
+                </span>
+                <div class="subtask-content">
+                  <div v-if="editingSubtaskId === subtask.id" class="subtask-edit-mode">
+                     <textarea
+                       v-model="editingSubtaskText"
+                       class="subtask-edit-input"
+                       ref="editSubtaskInputRef"
+                       rows="1"
+                       @keydown.enter.prevent="handleSaveEditSubtask(subtask.id)"
+                       @keydown.esc="handleCancelEditSubtask"
+                       @blur="handleSaveEditSubtask(subtask.id)"
+                     ></textarea>
+                  </div>
+                  <div v-else class="subtask-text-line">
+                    <span 
+                      class="subtask-text" 
+                      :class="{ completed: subtask.completed }"
+                      @click="handleStartEditSubtask(subtask)"
+                      title="点击编辑"
+                    >
+                      {{ subtask.text }}
+                    </span>
+                    <input
+                      v-if="subtask.requiresInput"
+                      v-model="subtask.inputValue"
+                      @blur="handleSubtaskInputChange(subtask.id)"
+                      type="text"
+                      placeholder="输入结果..."
+                      class="subtask-input-inline"
+                      :disabled="subtask.completed"
+                    />
+                  </div>
+                  <div v-if="subtask.createdAt" class="subtask-time-info">
+                    <span v-if="subtask.completed && subtask.completedAt" class="subtask-time">
+                      完成于 {{ formatDate(subtask.completedAt) }}
+                    </span>
+                    <span v-else class="subtask-time">
+                      创建于 {{ formatDate(subtask.createdAt) }}
+                    </span>
+                    <span 
+                      v-if="subtask.completed && subtask.completedAt" 
+                      class="subtask-duration"
+                    >
+                      耗时 {{ calculateTaskDuration(subtask.createdAt, subtask.completedAt) }}
+                    </span>
+                  </div>
+                  <div v-if="subtask.images && subtask.images.length > 0" class="subtask-images-container">
+                    <template v-for="(image, imgIndex) in subtask.images" :key="imgIndex">
+                      <video
+                        v-if="isVideo(image) && subtaskImageCache[image]"
+                        :src="subtaskImageCache[image]"
+                        class="subtask-video"
+                        controls
+                        preload="metadata"
+                      ></video>
+                      <img
+                        v-else-if="!isVideo(image) && subtaskImageCache[image]"
+                        :src="subtaskImageCache[image]"
+                        class="subtask-image"
+                        @click="appStore.viewImage(subtaskImageCache[image])"
+                        alt="子任务图片"
+                      />
+                    </template>
+                  </div>
+                </div>
+                <div class="subtask-actions">
+                  <button 
+                    class="btn-copy-subtask" 
+                    @click="handleCopySubtaskText(subtask.text)"
+                    title="复制子任务内容"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                  <button 
+                    class="btn-delete-subtask" 
+                    @click="handleDeleteSubtask(subtask.id)"
+                    title="删除子任务"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div class="progress-content">
-                <!-- 编辑模式 -->
-                <div v-if="editingProgressId === progressItem.id" class="progress-edit-mode">
-                  <textarea 
-                    v-model="editingProgressText" 
-                    class="progress-edit-input"
-                    @keydown.ctrl.enter="handleSaveProgressEdit(progressItem.id)"
-                    @keydown.esc="handleCancelProgressEdit"
-                  ></textarea>
-                  <div class="progress-edit-actions">
-                    <button class="btn-save-progress-edit" @click="handleSaveProgressEdit(progressItem.id)" title="保存 (Ctrl+Enter)">
+            </div>
+
+            <div v-if="isAddingSubtask" class="add-subtask-inline">
+               <div class="subtask-checkbox placeholder"></div>
+               <input
+                 v-model="newSubtaskText"
+                 class="add-subtask-input"
+                 placeholder="输入子任务内容 (Enter 添加, Esc 取消)"
+                 ref="newSubtaskInputRef"
+                 @keydown.enter="handleConfirmAddSubtask"
+                 @keydown.esc="handleCancelAddSubtask"
+                 @blur="handleConfirmAddSubtask" 
+               />
+            </div>
+          </div>
+          <div v-else class="empty-detail">暂无子任务</div>
+        </div>
+
+        <div class="task-detail-section">
+          <div class="detail-section-title">进度记录</div>
+          <div v-if="task.progress && task.progress.length > 0" class="task-progress-section">
+            <button class="btn-toggle-progress" @click="showProgress = !showProgress">
+              <svg 
+                class="progress-toggle-icon" 
+                :style="{ transform: showProgress ? 'rotate(90deg)' : 'rotate(0deg)' }"
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                stroke-width="2"
+              >
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+              <span class="progress-count">进度记录 ({{ task.progress.length }})</span>
+            </button>
+            
+            <div v-show="showProgress" class="task-progress-container">
+              <div class="progress-list">
+                <div 
+                  v-for="progressItem in task.progress" 
+                  :key="progressItem.id" 
+                  class="progress-item"
+                >
+                  <div class="progress-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="9 11 12 14 22 4"></polyline>
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                  </div>
+                  <div class="progress-content">
+                    <div v-if="editingProgressId === progressItem.id" class="progress-edit-mode">
+                      <textarea 
+                        v-model="editingProgressText" 
+                        class="progress-edit-input"
+                        @keydown.ctrl.enter="handleSaveProgressEdit(progressItem.id)"
+                        @keydown.esc="handleCancelProgressEdit"
+                      ></textarea>
+                      <div class="progress-edit-actions">
+                        <button class="btn-save-progress-edit" @click="handleSaveProgressEdit(progressItem.id)" title="保存 (Ctrl+Enter)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                          </svg>
+                          保存
+                        </button>
+                        <button class="btn-cancel-progress-edit" @click="handleCancelProgressEdit" title="取消 (Esc)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                          </svg>
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                    <template v-else>
+                      <div class="progress-text">{{ progressItem.text }}</div>
+                      <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
+                      <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
+                        <template v-for="(image, index) in progressItem.images" :key="index">
+                          <video
+                            v-if="isVideo(image) && progressImageCache[image]"
+                            :src="progressImageCache[image]"
+                            class="progress-video"
+                            controls
+                            preload="metadata"
+                          ></video>
+                          <img
+                            v-else-if="!isVideo(image) && progressImageCache[image]"
+                            :src="progressImageCache[image]"
+                            class="progress-image"
+                            @click="appStore.viewImage(progressImageCache[image])"
+                            alt="进度图片"
+                          />
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                  <div class="progress-actions">
+                    <button 
+                      class="btn-edit-progress" 
+                      @click="handleStartEditProgress(progressItem)"
+                      title="编辑进度"
+                    >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                       </svg>
-                      保存
                     </button>
-                    <button class="btn-cancel-progress-edit" @click="handleCancelProgressEdit" title="取消 (Esc)">
+                    <button 
+                      class="btn-copy-progress" 
+                      @click="handleCopyProgressText(progressItem.text)"
+                      title="复制进度内容"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                      </svg>
+                    </button>
+                    <button 
+                      class="btn-delete-progress" 
+                      @click="handleDeleteProgress(progressItem.id)"
+                      title="删除进度"
+                    >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                       </svg>
-                      取消
                     </button>
                   </div>
                 </div>
-                <!-- 显示模式 -->
-                <template v-else>
-                  <div class="progress-text">{{ progressItem.text }}</div>
-                  <div class="progress-time">{{ formatDate(progressItem.createdAt) }}</div>
-                  <!-- 进度图片/视频 -->
-                  <div v-if="progressItem.images && progressItem.images.length > 0" class="progress-images-container">
-                    <template v-for="(image, index) in progressItem.images" :key="index">
-                      <!-- 视频 -->
-                      <video
-                        v-if="isVideo(image) && progressImageCache[image]"
-                        :src="progressImageCache[image]"
-                        class="progress-video"
-                        controls
-                        preload="metadata"
-                      ></video>
-                      <!-- 图片 -->
-                      <img
-                        v-else-if="!isVideo(image) && progressImageCache[image]"
-                        :src="progressImageCache[image]"
-                        class="progress-image"
-                        @click="appStore.viewImage(progressImageCache[image])"
-                        alt="进度图片"
-                      />
-                    </template>
-                  </div>
-                </template>
               </div>
-              <div class="progress-actions">
+            </div>
+          </div>
+          <div v-else class="empty-detail">暂无进度记录</div>
+
+          <div class="add-progress-section">
+            <div class="add-progress-input-wrapper">
+              <textarea
+                v-model="progressInput"
+                placeholder="添加进度描述（支持粘贴图片/视频）..."
+                class="add-progress-input add-progress-textarea"
+                rows="1"
+                @input="adjustProgressTextareaHeight"
+                @keydown.ctrl.enter="handleAddProgress"
+                @paste="handleProgressPaste"
+                ref="progressTextareaRef"
+              ></textarea>
+              <button 
+                class="btn-add-progress-image" 
+                @click="handleSelectProgressImage"
+                title="添加进度图片"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </button>
+              <button 
+                class="btn-add-progress" 
+                @click="handleAddProgress"
+                title="添加进度"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+            <div v-if="previewImages.length > 0" class="progress-images-preview">
+              <div 
+                v-for="(image, index) in previewImages" 
+                :key="index" 
+                class="preview-image-item"
+              >
+                <video 
+                  v-if="isVideo(image.fileName)"
+                  :src="image.base64" 
+                  class="preview-video"
+                  controls
+                  preload="metadata"
+                ></video>
+                <img 
+                  v-else
+                  :src="image.base64" 
+                  alt="预览" 
+                />
                 <button 
-                  class="btn-edit-progress" 
-                  @click="handleStartEditProgress(progressItem)"
-                  title="编辑进度"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
-                <button 
-                  class="btn-copy-progress" 
-                  @click="handleCopyProgressText(progressItem.text)"
-                  title="复制进度内容"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
-                <button 
-                  class="btn-delete-progress" 
-                  @click="handleDeleteProgress(progressItem.id)"
-                  title="删除进度"
+                  class="btn-remove-preview-image" 
+                  @click="handleRemoveProgressImage(index)"
+                  :title="isVideo(image.fileName) ? '删除视频' : '删除图片'"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -445,85 +592,14 @@
           </div>
         </div>
       </div>
-
-      <!-- 添加进度 -->
-      <div v-if="showDetails" class="add-progress-section">
-        <div class="add-progress-input-wrapper">
-          <textarea
-            v-model="progressInput"
-            placeholder="添加进度描述（支持粘贴图片/视频）..."
-            class="add-progress-input add-progress-textarea"
-            rows="1"
-            @input="adjustProgressTextareaHeight"
-            @keydown.ctrl.enter="handleAddProgress"
-            @paste="handleProgressPaste"
-            ref="progressTextareaRef"
-          ></textarea>
-          <button 
-            class="btn-add-progress-image" 
-            @click="handleSelectProgressImage"
-            title="添加进度图片"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-          </button>
-          <button 
-            class="btn-add-progress" 
-            @click="handleAddProgress"
-            title="添加进度"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-        </div>
-        <!-- 进度图片/视频预览 -->
-        <div v-if="previewImages.length > 0" class="progress-images-preview">
-          <div 
-            v-for="(image, index) in previewImages" 
-            :key="index" 
-            class="preview-image-item"
-          >
-            <!-- 视频预览 -->
-            <video 
-              v-if="isVideo(image.fileName)"
-              :src="image.base64" 
-              class="preview-video"
-              controls
-              preload="metadata"
-            ></video>
-            <!-- 图片预览 -->
-            <img 
-              v-else
-              :src="image.base64" 
-              alt="预览" 
-            />
-            <button 
-              class="btn-remove-preview-image" 
-              @click="handleRemoveProgressImage(index)"
-              :title="isVideo(image.fileName) ? '删除视频' : '删除图片'"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
+      <div class="task-detail-footer">
+        <button class="task-btn secondary" @click="handleRollback" :disabled="taskStatus === 'todo'">
+          {{ secondaryActionLabel }}
+        </button>
+        <button class="task-btn primary" @click="handleComplete" :disabled="taskStatus === 'done'">
+          {{ primaryActionLabel }}
+        </button>
       </div>
-    </div>
-
-    <div class="task-action-footer">
-      <button class="task-btn secondary" @click="handleRollback" :disabled="!task.completed">
-        后退
-      </button>
-      <button class="task-btn primary" @click="handleComplete" :disabled="task.completed">
-        完成 ✓
-      </button>
     </div>
   </div>
 </template>
@@ -557,6 +633,7 @@ const editText = ref('')
 const editInputRef = ref(null)
 const showTaskMenu = ref(false)
 const showDetails = ref(false)
+const isDragging = ref(false)
 
 // 到期时间编辑状态
 const isEditingDueDate = ref(false)
@@ -631,6 +708,23 @@ const subtaskSummary = computed(() => {
   return `已完成 ${completedSubtaskCount.value}/${props.task.subtasks.length} 个子任务`
 })
 
+const taskStatus = computed(() => {
+  if (props.task.status) return props.task.status
+  return props.task.completed ? 'done' : 'todo'
+})
+
+const primaryActionLabel = computed(() => {
+  if (taskStatus.value === 'todo') return '进入进行中'
+  if (taskStatus.value === 'doing') return '完成 ✓'
+  return '已完成'
+})
+
+const secondaryActionLabel = computed(() => {
+  if (taskStatus.value === 'done') return '后退到进行中'
+  if (taskStatus.value === 'doing') return '回到待办'
+  return '后退'
+})
+
 // 判断文件是否为视频
 function isVideo(fileName) {
   if (!fileName) return false
@@ -646,7 +740,30 @@ function toggleTaskMenu(event) {
 
 function toggleTaskDetails(event) {
   event.stopPropagation()
+  showTaskMenu.value = false
   showDetails.value = !showDetails.value
+}
+
+function closeTaskDetails() {
+  showDetails.value = false
+}
+
+function handleDragStart(event) {
+  if (isEditing.value) return
+  isDragging.value = true
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', String(props.task.id))
+}
+
+function handleDragEnd() {
+  isDragging.value = false
+}
+
+async function openDetailsForSubtask() {
+  showTaskMenu.value = false
+  showDetails.value = true
+  await nextTick()
+  handleAddSubtask()
 }
 
 function handleOutsideClick() {
@@ -742,15 +859,21 @@ async function handleToggle() {
   await todoStore.toggleTask(props.task.id)
 }
 
-function handleComplete() {
-  if (!props.task.completed) {
-    handleToggle()
+async function handleComplete() {
+  const status = props.task.status || (props.task.completed ? 'done' : 'todo')
+  if (status === 'todo') {
+    await todoStore.setTaskStatus(props.task.id, 'doing')
+  } else if (status === 'doing') {
+    await todoStore.setTaskStatus(props.task.id, 'done')
   }
 }
 
-function handleRollback() {
-  if (props.task.completed) {
-    handleToggle()
+async function handleRollback() {
+  const status = props.task.status || (props.task.completed ? 'done' : 'todo')
+  if (status === 'done') {
+    await todoStore.setTaskStatus(props.task.id, 'doing')
+  } else if (status === 'doing') {
+    await todoStore.setTaskStatus(props.task.id, 'todo')
   }
 }
 

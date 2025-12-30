@@ -248,6 +248,7 @@ export const useTodoStore = defineStore('todo', () => {
       text: text.trim(),
       projectId: projectStore.currentProjectId,
       completed: false,
+      status: 'todo',
       priority: priority || 'medium',
       createdAt: new Date().toISOString(),
       dueDate: finalDueDate,
@@ -275,15 +276,37 @@ export const useTodoStore = defineStore('todo', () => {
       task.completed = !task.completed
       if (task.completed) {
         task.completedAt = new Date().toISOString()
+        task.status = 'done'
       } else {
         task.completedAt = null
+        task.status = 'doing'
       }
       // 单条更新数据库
       await electronAPI.updateTodo(id, {
         completed: task.completed,
-        completedAt: task.completedAt
+        completedAt: task.completedAt,
+        status: task.status
       })
     }
+  }
+
+  async function setTaskStatus(id, status) {
+    const task = todos.value.find(t => t.id === id)
+    if (!task) return
+
+    const nextStatus = status || 'todo'
+    const shouldComplete = nextStatus === 'done'
+    const completedAt = shouldComplete ? (task.completedAt || new Date().toISOString()) : null
+
+    task.status = nextStatus
+    task.completed = shouldComplete
+    task.completedAt = completedAt
+
+    await electronAPI.updateTodo(id, {
+      status: task.status,
+      completed: task.completed,
+      completedAt: task.completedAt
+    })
   }
   
   // 切换任务置顶
@@ -591,6 +614,7 @@ export const useTodoStore = defineStore('todo', () => {
     cleanOrphanedTasks,
     addTask,
     toggleTask,
+    setTaskStatus,
     togglePinTask,
     deleteTask,
     deleteTaskWithImages,

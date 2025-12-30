@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 7;
+const DATABASE_VERSION = 8;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -78,6 +78,7 @@ class TodoXDatabase {
         project_id TEXT,
         text TEXT NOT NULL,
         completed INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'todo',
         priority TEXT DEFAULT 'medium',
         due_date TEXT,
         created_at TEXT NOT NULL,
@@ -469,6 +470,7 @@ class TodoXDatabase {
       todo.dueDate = todo.due_date;
       todo.createdAt = todo.created_at;
       todo.completedAt = todo.completed_at;
+      todo.status = todo.status || (todo.completed ? 'done' : 'todo');
       
       // 删除下划线命名的字段
       delete todo.project_id;
@@ -487,9 +489,9 @@ class TodoXDatabase {
   addTodo(todo) {
     const stmt = this.db.prepare(`
       INSERT INTO todos (
-        id, project_id, text, completed, priority, due_date, 
+        id, project_id, text, completed, status, priority, due_date, 
         created_at, completed_at, "order", updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
@@ -497,6 +499,7 @@ class TodoXDatabase {
       todo.projectId || todo.project_id ? String(todo.projectId || todo.project_id) : null,
       todo.text,
       todo.completed ? 1 : 0,
+      todo.status || (todo.completed ? 'done' : 'todo'),
       todo.priority || 'medium',
       todo.dueDate || todo.due_date || null,
       todo.createdAt || todo.created_at || new Date().toISOString(),
@@ -560,6 +563,10 @@ class TodoXDatabase {
     if (updates.priority !== undefined) {
       fields.push('priority = ?');
       values.push(updates.priority);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = ?');
+      values.push(updates.status);
     }
     if (updates.dueDate !== undefined) {
       fields.push('due_date = ?');
@@ -1669,6 +1676,23 @@ class TodoXDatabase {
           this.db.exec("ALTER TABLE projects ADD COLUMN priority TEXT DEFAULT 'medium';");
           console.log('? 已为 projects 表添加 priority 字段');
         }
+      },
+
+      // 版本 8 - 任务状态支持（todo/doing/done）
+      8: function() {
+        const todosTableInfo = this.db.prepare('PRAGMA table_info(todos)').all();
+        const todoColumns = todosTableInfo.map(col => col.name);
+
+        if (!todoColumns.includes('status')) {
+          this.db.exec("ALTER TABLE todos ADD COLUMN status TEXT DEFAULT 'todo';");
+          console.log('? 已为 todos 表添加 status 字段');
+        }
+
+        this.db.exec(`
+          UPDATE todos
+          SET status = CASE WHEN completed = 1 THEN 'done' ELSE 'todo' END
+          WHERE status IS NULL OR status = ''
+        `);
       },
 
       // 未来的迁移函数在这里添加...

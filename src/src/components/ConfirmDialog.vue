@@ -27,3 +27,9 @@ function handleConfirm() {
 }
 </script>
 
+<style scoped>
+.dialog-overlay {
+  backdrop-filter: none;
+}
+</style>
+

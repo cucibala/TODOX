@@ -3,7 +3,7 @@
   width: 280px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
-  padding: 24px 16px;
+  padding: 24px 16px 88px;
   overflow-y: auto;
 }
 
@@ -782,6 +782,8 @@
 }
 
 .project-create-dashed {
+  position: sticky;
+  bottom: 16px;
   margin-top: 16px;
   width: 100%;
   padding: 14px 12px;
