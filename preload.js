@@ -123,6 +123,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exitQuickInputMode: () => ipcRenderer.send('quick-input-exit'),
   notifyQuickInputSent: () => ipcRenderer.send('quick-input-sent'),
   onQuickInputSent: (callback) => ipcRenderer.on('quick-input-sent', () => callback()),
+  openMainWindow: () => ipcRenderer.send('open-main-window'),
+  onOpenMainWindow: (callback) => ipcRenderer.on('open-main-window', () => callback()),
   setQuickInputHasMessages: (hasMessages) => ipcRenderer.send('quick-input-has-messages', hasMessages),
   resizeQuickInput: (height) => ipcRenderer.send('quick-input-resize', height)
 });

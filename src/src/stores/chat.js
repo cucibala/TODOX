@@ -143,8 +143,10 @@ export const useChatStore = defineStore('chat', () => {
 
     // 如果没有当前对话，创建一个
     if (!currentConversationId.value) {
-      createNewConversation()
+      await createNewConversation()
     }
+
+    await ensureCurrentConversationPersisted()
 
     // 准备消息内容（支持多模态）
     let messageContent = content
@@ -666,7 +668,8 @@ export const useChatStore = defineStore('chat', () => {
       roleId: roleId,
       projectIds: projectIds || [],
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      isTransient: true
     }
     
     conversations.value.unshift(newConv)  // 使用 unshift 添加到数组开头
@@ -674,14 +677,26 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
     recentProjectId.value = null
     
-    // 单条插入会话到数据库
-    await electronAPI.addConversation(JSON.parse(JSON.stringify(newConv)))
-    await electronAPI.setCurrentConversation(newConv.id)
+    if (options.persist) {
+      const persistedConv = { ...newConv, isTransient: false }
+      await electronAPI.addConversation(JSON.parse(JSON.stringify(persistedConv)))
+      await electronAPI.setCurrentConversation(persistedConv.id)
+      newConv.isTransient = false
+    }
     
     if (!options.silent) {
       appStore.toast('已创建新对话')
     }
     return true
+  }
+
+  async function ensureCurrentConversationPersisted() {
+    const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
+    if (!currentConv || !currentConv.isTransient) return
+    const persistedConv = { ...currentConv, isTransient: false }
+    await electronAPI.addConversation(JSON.parse(JSON.stringify(persistedConv)))
+    await electronAPI.setCurrentConversation(persistedConv.id)
+    currentConv.isTransient = false
   }
   
   // 选择对话
@@ -693,7 +708,9 @@ export const useChatStore = defineStore('chat', () => {
       recentProjectId.value = null
       
       // 更新当前会话ID到数据库
-      await electronAPI.setCurrentConversation(conversationId)
+      if (!conv.isTransient) {
+        await electronAPI.setCurrentConversation(conversationId)
+      }
     }
   }
   
@@ -702,10 +719,13 @@ export const useChatStore = defineStore('chat', () => {
     const confirmed = await appStore.confirm('确定要删除这个对话吗？')
     if (!confirmed) return
     
+    const convToDelete = conversations.value.find(c => c.id === conversationId)
     conversations.value = conversations.value.filter(c => c.id !== conversationId)
     
     // 单条删除数据库中的会话
-    await electronAPI.deleteConversation(conversationId)
+    if (!convToDelete?.isTransient) {
+      await electronAPI.deleteConversation(conversationId)
+    }
     
     if (currentConversationId.value === conversationId) {
       if (conversations.value.length > 0) {
@@ -726,10 +746,12 @@ export const useChatStore = defineStore('chat', () => {
       currentConv.projectIds = projectIds || []
       
       // 更新数据库
-      await electronAPI.updateConversation(currentConv.id, {
-        roleId: roleId,
-        projectIds: projectIds || []
-      })
+      if (!currentConv.isTransient) {
+        await electronAPI.updateConversation(currentConv.id, {
+          roleId: roleId,
+          projectIds: projectIds || []
+        })
+      }
     }
   }
   
@@ -806,6 +828,10 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const currentConv = conversations.value.find(c => c.id === currentConversationId.value)
       if (!currentConv) return
+
+      if (currentConv.isTransient) {
+        await ensureCurrentConversationPersisted()
+      }
       
       // 准备消息数据（完整保存所有字段）
       currentConv.messages = messages.value.map(msg => {

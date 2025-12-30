@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-page" :class="{ 'quick-input-mode': isQuickInputMode }">
+  <div class="chat-page" :class="{ 'quick-input-mode': isQuickInputMode, 'quick-input-expanded': isQuickInputMode && isQuickInputExpanded }">
     <!-- 会话列表侧边栏 -->
     <div v-show="!isQuickInputMode" class="conversations-sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
@@ -164,6 +164,31 @@
       </div>
 
       <div class="chat-container">
+        <div v-if="showQuickStatusBar" class="quick-status-bar">
+          <div class="quick-status-left">
+            <button class="quick-status-btn" @click="handleOpenMainPage" title="打开页面">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12l9-9 9 9"></path>
+                <path d="M4 10v10a2 2 0 0 0 2 2h4"></path>
+                <path d="M14 22h4a2 2 0 0 0 2-2V10"></path>
+              </svg>
+            </button>
+            <button class="quick-status-btn" @click="handleQuickNewConversation" title="新建对话">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="quick-status-right">
+            <button class="quick-status-btn" @click="handleQuickClose" title="关闭窗口">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
         <div class="chat-messages" ref="messagesContainer">
           <div v-if="validMessages.length === 0" class="chat-welcome">
             <div class="welcome-icon">
@@ -235,7 +260,7 @@
           </div>
         </div>
 
-        <div class="chat-input-area">
+        <div class="chat-input-area" ref="quickInputArea">
           <div class="input-wrapper">
             <!-- 角色选择器（输入框左侧） -->
             <div v-if="!isQuickInputMode" class="input-role-selector">
@@ -311,6 +336,50 @@
                     rows="1"
                     @input="adjustTextareaHeight"
                   ></textarea>
+                </div>
+              </div>
+              <div class="quick-input-toolbar">
+                <div class="quick-toolbar-left">
+                  <button class="quick-chip" title="模型">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="9"></circle>
+                      <path d="M3 12h18"></path>
+                      <path d="M12 3a15 15 0 0 1 0 18"></path>
+                      <path d="M12 3a15 15 0 0 0 0 18"></path>
+                    </svg>
+                    <span>{{ quickModelLabel }}</span>
+                    <svg class="chip-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                  </button>
+                  <button class="quick-icon-btn" title="提及">@</button>
+                </div>
+                <div class="quick-toolbar-right">
+                  <button class="quick-icon-btn" title="链接">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M10 13a5 5 0 0 1 0-7l2-2a5 5 0 0 1 7 7l-2 2"></path>
+                      <path d="M14 11a5 5 0 0 1 0 7l-2 2a5 5 0 0 1-7-7l2-2"></path>
+                    </svg>
+                  </button>
+                  <button class="quick-icon-btn" title="剪切">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="6" cy="6" r="2"></circle>
+                      <circle cx="6" cy="18" r="2"></circle>
+                      <path d="M20 4l-8.5 8.5"></path>
+                      <path d="M11.5 11.5L20 20"></path>
+                    </svg>
+                  </button>
+                  <button
+                    class="quick-send-btn"
+                    @click="handleSend"
+                    :disabled="!userInput.trim()"
+                    title="发送"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -395,6 +464,7 @@ const projectStore = useProjectStore()
 const todoStore = useTodoStore()
 const electronAPI = window.electronAPI
 const QUICK_INPUT_EXPANDED_HEIGHT = 460
+const QUICK_INPUT_COLLAPSED_MIN_HEIGHT = 96
 
 // 使用 chatStore 的响应式状态
 const { conversations, currentConversationId, messages, isLoading, userInput } = storeToRefs(chatStore)
@@ -440,6 +510,9 @@ const messagesContainer = ref(null)
 const inputTextarea = ref(null)
 const imageInput = ref(null)
 const sidebarCollapsed = ref(false)
+const quickInputArea = ref(null)
+const quickInputHasSessionMessages = ref(false)
+const isQuickInputExpanded = ref(false)
 
 // 输入框角色选择器
 const showInputRoleSelector = ref(false)
@@ -454,6 +527,8 @@ const selectedImages = ref([])
 const currentRoleId = computed(() => chatStore.currentRoleId)
 const currentConversationTitle = computed(() => chatStore.currentConversationTitle)
 const selectedProjectIds = computed(() => chatStore.selectedProjectIds)
+const showQuickStatusBar = computed(() => isQuickInputMode.value && isQuickInputExpanded.value)
+const quickModelLabel = computed(() => (appStore.currentAIModel === 'doubao' ? '豆包' : 'DS V3.2'))
 
 // 定义可用角色
 const availableRoles = [
@@ -703,7 +778,8 @@ async function handleSend() {
 
   if (isQuickInputMode.value && sent) {
     electronAPI?.setQuickInputHasMessages?.(true)
-    electronAPI?.resizeQuickInput?.(QUICK_INPUT_EXPANDED_HEIGHT)
+    quickInputHasSessionMessages.value = true
+    resizeQuickInputExpanded()
     nextTick(() => inputTextarea.value?.focus())
   }
 }
@@ -830,6 +906,53 @@ function resetTextareaHeight() {
   if (inputTextarea.value) {
     inputTextarea.value.style.height = 'auto'
   }
+}
+
+function getQuickInputCollapsedHeight() {
+  if (!quickInputArea.value) {
+    return QUICK_INPUT_COLLAPSED_MIN_HEIGHT
+  }
+  const areaHeight = quickInputArea.value.getBoundingClientRect().height
+  const appContainer = document.querySelector('.app-container')
+  let borderHeight = 0
+  if (appContainer) {
+    const styles = window.getComputedStyle(appContainer)
+    borderHeight = (parseFloat(styles.borderTopWidth) || 0) + (parseFloat(styles.borderBottomWidth) || 0)
+  }
+  const targetHeight = Math.ceil(areaHeight + borderHeight)
+  return Math.max(targetHeight, QUICK_INPUT_COLLAPSED_MIN_HEIGHT)
+}
+
+function resizeQuickInputCollapsed() {
+  if (!electronAPI?.resizeQuickInput) return
+  const height = getQuickInputCollapsedHeight()
+  electronAPI.resizeQuickInput(height)
+  isQuickInputExpanded.value = false
+}
+
+function resizeQuickInputExpanded() {
+  if (!electronAPI?.resizeQuickInput) return
+  electronAPI.resizeQuickInput(QUICK_INPUT_EXPANDED_HEIGHT)
+  isQuickInputExpanded.value = true
+}
+
+function updateQuickInputSize() {
+  if (!isQuickInputMode.value) return
+  if (quickInputHasSessionMessages.value) {
+    if (!isQuickInputExpanded.value) {
+      resizeQuickInputExpanded()
+    }
+    return
+  }
+  resizeQuickInputCollapsed()
+}
+
+function resetQuickInputLayout() {
+  quickInputHasSessionMessages.value = false
+  nextTick(() => {
+    resetTextareaHeight()
+    resizeQuickInputCollapsed()
+  })
 }
 
 
@@ -1074,6 +1197,23 @@ function handleQuickInputKeydown(event) {
   }
 }
 
+async function handleQuickNewConversation() {
+  if (!isQuickInputMode.value) return
+  await chatStore.createNewConversation('general', [], { forceNew: true, silent: true })
+  userInput.value = ''
+  selectedImages.value = []
+  resetQuickInputLayout()
+  nextTick(() => inputTextarea.value?.focus())
+}
+
+function handleOpenMainPage() {
+  electronAPI?.openMainWindow?.()
+}
+
+function handleQuickClose() {
+  electronAPI?.exitQuickInputMode?.()
+}
+
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
   window.addEventListener('keydown', handleQuickInputKeydown)
@@ -1087,10 +1227,15 @@ onMounted(async () => {
   // 初始滚动到底部
   nextTick(() => scrollToBottom())
 
+  if (isQuickInputMode.value) {
+    resetQuickInputLayout()
+  }
+
   if (electronAPI?.onQuickInputOpened) {
     electronAPI.onQuickInputOpened(async () => {
       if (isQuickInputMode.value) {
         await chatStore.createNewConversation('general', [], { forceNew: true, silent: true })
+        resetQuickInputLayout()
         nextTick(() => inputTextarea.value?.focus())
       }
     })
@@ -1105,9 +1250,16 @@ onBeforeUnmount(() => {
 // 快捷输入模式下自动聚焦
 watch(isQuickInputMode, (enabled) => {
   if (enabled) {
+    resetQuickInputLayout()
     nextTick(() => inputTextarea.value?.focus())
   }
 }, { immediate: true })
+
+watch(userInput, () => {
+  if (isQuickInputMode.value) {
+    nextTick(() => updateQuickInputSize())
+  }
+})
 
 // 监听消息变化，自动滚动到底部
 watch(messages, () => {

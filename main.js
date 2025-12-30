@@ -214,7 +214,7 @@ let tray = null;
 let isAlwaysOnTop = false;
 let quickWindow = null;
 let quickInputHasMessages = false;
-const QUICK_INPUT_SIZE = { width: 560, height: 180 };
+const QUICK_INPUT_SIZE = { width: 560, height: 96 };
 const QUICK_INPUT_EXPANDED_HEIGHT = 460;
 
 // 简单的密码加密（Base64 + 混淆）
@@ -478,10 +478,10 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js')
     },
-    backgroundColor: '#f7fafc',
+    backgroundColor: '#00000000',
     show: false,
     frame: false, // 无边框
-    transparent: false,
+    transparent: true,
     alwaysOnTop: isAlwaysOnTop,
     skipTaskbar: false,
     resizable: true
@@ -688,6 +688,15 @@ ipcMain.on('window-close', () => {
 
 ipcMain.on('quick-input-exit', () => {
   hideQuickWindow();
+});
+
+ipcMain.on('open-main-window', () => {
+  hideQuickWindow();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send('open-main-window');
+  }
 });
 
 ipcMain.on('quick-input-sent', () => {

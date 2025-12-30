@@ -114,6 +114,10 @@ watch(showLockScreen, (visible) => {
   }
 })
 
+watch(isQuickInputMode, (enabled) => {
+  document.body.classList.toggle('quick-input-body', enabled)
+}, { immediate: true })
+
 // 活动监听器（用于自动锁定）
 function handleUserActivity() {
   // 只有在未锁定状态下才重置计时器
@@ -188,6 +192,12 @@ onMounted(async () => {
       appStore.currentPage = 'chat'
     })
   }
+
+  if (window.electronAPI?.onOpenMainWindow) {
+    window.electronAPI.onOpenMainWindow(() => {
+      appStore.currentPage = 'chat'
+    })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -219,8 +229,7 @@ body {
   border-radius: 20px;
   border: 2px solid var(--border-color);
   overflow: hidden;
-  background: transparent;
-  -webkit-app-region: drag;
+  background: #ffffff;
 }
 
 /* 加载动画 */
