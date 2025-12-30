@@ -4,53 +4,6 @@
     :class="{ completed: task.completed, pinned: task.pinned }"
     :data-task-id="task.id"
   >
-    <!-- 复选框 -->
-    <div class="task-checkbox" @click="handleToggle">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-        <polyline points="20 6 9 17 4 12"></polyline>
-      </svg>
-    </div>
-
-    <!-- 圆环进度 -->
-    <div 
-      class="task-progress-circle-wrapper" 
-      @click="handleAddSubtask"
-      :title="'点击添加子任务'"
-    >
-      <svg class="task-progress-circle" viewBox="0 0 44 44">
-        <circle 
-          class="progress-circle-bg" 
-          cx="22" 
-          cy="22" 
-          :r="progressData.radius"
-        ></circle>
-        <circle 
-          class="progress-circle-fill" 
-          cx="22" 
-          cy="22" 
-          :r="progressData.radius"
-          :stroke="progressData.color"
-          :stroke-dasharray="progressData.circumference"
-          :stroke-dashoffset="progressData.offset"
-        ></circle>
-        <text 
-          class="progress-circle-text" 
-          x="22" 
-          y="22" 
-          text-anchor="middle" 
-          dy="0.35em"
-        >
-          {{ progress }}
-        </text>
-      </svg>
-      <div class="progress-circle-add-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </div>
-    </div>
-
     <!-- 优先级指示器 -->
     <div class="priority-indicator" :class="`priority-${task.priority}`"></div>
 
@@ -82,15 +35,41 @@
         </div>
       </div>
       <!-- 显示模式 -->
-      <div v-else class="task-text-wrapper">
-        <div class="task-text">{{ task.text }}</div>
-        <button class="btn-copy-text" @click="handleCopyTaskText" title="复制任务内容">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-        </button>
+      <div v-else class="task-card-header">
+        <div class="task-title">{{ task.text }}</div>
+        <div class="task-header-actions">
+          <button class="btn-task-expand" @click="toggleTaskDetails" :title="showDetails ? '收起' : '展开'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline :points="showDetails ? '6 15 12 9 18 15' : '6 9 12 15 18 9'"></polyline>
+            </svg>
+          </button>
+          <button class="btn-task-menu" @click="toggleTaskMenu" title="更多">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="5" r="1.8"></circle>
+              <circle cx="12" cy="12" r="1.8"></circle>
+              <circle cx="12" cy="19" r="1.8"></circle>
+            </svg>
+          </button>
+          <div v-if="showTaskMenu" class="task-menu" @click.stop>
+            <button class="task-menu-item" @click="handleTogglePin">
+              <span>{{ task.pinned ? '取消置顶' : '置顶' }}</span>
+            </button>
+            <button class="task-menu-item" @click="handleStartEdit">编辑</button>
+            <button class="task-menu-item" @click="handleAIBreakdown" :disabled="isAIBreakingDown">AI 拆解</button>
+            <button class="task-menu-item danger" @click="handleDelete">删除</button>
+          </div>
+        </div>
       </div>
+
+      <div v-if="!isEditing" class="task-subtitle" @click="handleAddSubtask">
+        {{ subtaskSummary }}
+      </div>
+
+      <div v-if="task.subtasks && task.subtasks.length > 0" class="task-tags">
+        <span class="task-tag">子任务 {{ completedSubtaskCount }}/{{ task.subtasks.length }}</span>
+      </div>
+
+      <div class="task-divider"></div>
       
       <!-- 元信息 -->
       <div class="task-meta">
@@ -167,6 +146,7 @@
           </svg>
           耗时 {{ duration }}
         </div>
+        <span class="task-priority-badge" :class="`priority-${task.priority}`">{{ priorityLabel }}</span>
       </div>
 
       <!-- 任务图片/视频 -->
@@ -192,7 +172,7 @@
       </div>
 
       <!-- 子任务 -->
-      <div v-if="(task.subtasks && task.subtasks.length > 0) || isAddingSubtask" class="task-subtasks-section">
+      <div v-if="showDetails && ((task.subtasks && task.subtasks.length > 0) || isAddingSubtask)" class="task-subtasks-section">
         <div class="subtasks-list">
           <div 
             v-for="(subtask, index) in task.subtasks" 
@@ -334,7 +314,7 @@
         </div>
 
         <!-- 内联添加子任务输入框 -->
-        <div v-if="isAddingSubtask" class="add-subtask-inline">
+        <div v-if="showDetails && isAddingSubtask" class="add-subtask-inline">
            <div class="subtask-checkbox placeholder"></div>
            <input
              v-model="newSubtaskText"
@@ -349,7 +329,7 @@
       </div>
 
       <!-- 进度记录 -->
-      <div v-if="task.progress && task.progress.length > 0" class="task-progress-section">
+      <div v-if="showDetails && task.progress && task.progress.length > 0" class="task-progress-section">
         <button class="btn-toggle-progress" @click="showProgress = !showProgress">
           <svg 
             class="progress-toggle-icon" 
@@ -467,7 +447,7 @@
       </div>
 
       <!-- 添加进度 -->
-      <div class="add-progress-section">
+      <div v-if="showDetails" class="add-progress-section">
         <div class="add-progress-input-wrapper">
           <textarea
             v-model="progressInput"
@@ -537,53 +517,22 @@
       </div>
     </div>
 
-    <!-- 操作按钮 -->
-    <div class="task-actions">
-      <button class="btn-pin" @click="handleTogglePin" :title="task.pinned ? '取消置顶' : '置顶'">
-        <svg 
-          viewBox="0 0 24 24" 
-          :fill="task.pinned ? 'currentColor' : 'none'" 
-          stroke="currentColor" 
-          stroke-width="2"
-        >
-          <line x1="12" y1="17" x2="12" y2="22"></line>
-          <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
-        </svg>
+    <div class="task-action-footer">
+      <button class="task-btn secondary" @click="handleRollback" :disabled="!task.completed">
+        后退
       </button>
-      <button class="btn-edit" @click="handleStartEdit" title="编辑">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
-      <button 
-        class="btn-ai-breakdown" 
-        @click="handleAIBreakdown" 
-        title="AI 智能拆解任务"
-        :disabled="isAIBreakingDown"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-          <polyline points="7.5 10 12 12.5 16.5 10"></polyline>
-          <line x1="12" y1="17" x2="12" y2="12.5"></line>
-        </svg>
-      </button>
-      <button class="btn-delete" @click="handleDelete" title="删除">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
+      <button class="task-btn primary" @click="handleComplete" :disabled="task.completed">
+        完成 ✓
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted, nextTick } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
-import { createProgressCircleData } from '../utils/progress'
 import { aiBreakdownTask } from '../utils/deepseek'
 
 const props = defineProps({
@@ -606,6 +555,8 @@ const subtaskImageCache = ref({})
 const isEditing = ref(false)
 const editText = ref('')
 const editInputRef = ref(null)
+const showTaskMenu = ref(false)
+const showDetails = ref(false)
 
 // 到期时间编辑状态
 const isEditingDueDate = ref(false)
@@ -654,10 +605,6 @@ const previewImages = computed(() => {
 // 子任务评论输入
 // 已移除子任务评论功能
 
-// 计算进度
-const progress = computed(() => todoStore.getTaskProgress(props.task))
-const progressData = computed(() => createProgressCircleData(progress.value))
-
 // 计算耗时
 const duration = computed(() => {
   if (props.task.completed && props.task.completedAt) {
@@ -666,12 +613,44 @@ const duration = computed(() => {
   return null
 })
 
+const priorityLabel = computed(() => {
+  if (props.task.priority === 'high') return '高'
+  if (props.task.priority === 'medium') return '中'
+  return '低'
+})
+
+const completedSubtaskCount = computed(() => {
+  if (!props.task.subtasks || props.task.subtasks.length === 0) return 0
+  return props.task.subtasks.filter(st => st.completed).length
+})
+
+const subtaskSummary = computed(() => {
+  if (!props.task.subtasks || props.task.subtasks.length === 0) {
+    return '点击添加子任务'
+  }
+  return `已完成 ${completedSubtaskCount.value}/${props.task.subtasks.length} 个子任务`
+})
+
 // 判断文件是否为视频
 function isVideo(fileName) {
   if (!fileName) return false
   const ext = fileName.toLowerCase().split('.').pop()
   const videoExts = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv']
   return videoExts.includes(ext)
+}
+
+function toggleTaskMenu(event) {
+  event.stopPropagation()
+  showTaskMenu.value = !showTaskMenu.value
+}
+
+function toggleTaskDetails(event) {
+  event.stopPropagation()
+  showDetails.value = !showDetails.value
+}
+
+function handleOutsideClick() {
+  showTaskMenu.value = false
 }
 
 // 加载图片/视频数据
@@ -725,6 +704,7 @@ async function loadSubtaskImage(fileName) {
 
 // 加载所有图片
 onMounted(async () => {
+  window.addEventListener('click', handleOutsideClick)
   // 加载任务图片
   if (props.task.images && props.task.images.length > 0) {
     await Promise.all(
@@ -753,19 +733,37 @@ onMounted(async () => {
   }
 })
 
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleOutsideClick)
+})
+
 // 任务操作
 async function handleToggle() {
   await todoStore.toggleTask(props.task.id)
 }
 
+function handleComplete() {
+  if (!props.task.completed) {
+    handleToggle()
+  }
+}
+
+function handleRollback() {
+  if (props.task.completed) {
+    handleToggle()
+  }
+}
+
 async function handleTogglePin() {
   await todoStore.togglePinTask(props.task.id)
+  showTaskMenu.value = false
 }
 
 // 开始编辑
 function handleStartEdit() {
   isEditing.value = true
   editText.value = props.task.text
+  showTaskMenu.value = false
   // 聚焦输入框
   setTimeout(() => {
     if (editInputRef.value) {
@@ -800,16 +798,6 @@ function handleCancelEdit() {
   editText.value = ''
 }
 
-// 复制任务内容
-async function handleCopyTaskText() {
-  try {
-    await navigator.clipboard.writeText(props.task.text)
-    appStore.toast('任务内容已复制')
-  } catch (err) {
-    appStore.toast('复制失败')
-  }
-}
-
 // 复制进度内容
 async function handleCopyProgressText(text) {
   try {
@@ -825,6 +813,7 @@ async function handleDelete() {
   if (confirmed) {
     await todoStore.deleteTask(props.task.id)
   }
+  showTaskMenu.value = false
 }
 
 function handleAddSubtask() {
@@ -909,6 +898,7 @@ async function handleCycleSubtaskWeight(subtask) {
 // AI 智能拆解任务
 async function handleAIBreakdown() {
   try {
+    showTaskMenu.value = false
     // 检查是否有 API 密钥
     // 获取 API 密钥
     const keyResult = await electronAPI.getDeepSeekKey()
