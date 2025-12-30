@@ -177,10 +177,10 @@
     </div>
 
     <div class="task-action-footer">
-      <button class="task-btn secondary" @click="handleRollback" :disabled="taskStatus === 'todo'">
+      <button v-if="showSecondaryAction" class="task-btn secondary" @click="handleRollback">
         {{ secondaryActionLabel }}
       </button>
-      <button class="task-btn primary" @click="handleComplete" :disabled="taskStatus === 'done'">
+      <button v-if="showPrimaryAction" class="task-btn primary" @click="handleComplete">
         {{ primaryActionLabel }}
       </button>
     </div>
@@ -593,10 +593,10 @@
         </div>
       </div>
       <div class="task-detail-footer">
-        <button class="task-btn secondary" @click="handleRollback" :disabled="taskStatus === 'todo'">
+        <button v-if="showSecondaryAction" class="task-btn secondary" @click="handleRollback">
           {{ secondaryActionLabel }}
         </button>
-        <button class="task-btn primary" @click="handleComplete" :disabled="taskStatus === 'done'">
+        <button v-if="showPrimaryAction" class="task-btn primary" @click="handleComplete">
           {{ primaryActionLabel }}
         </button>
       </div>
@@ -714,16 +714,19 @@ const taskStatus = computed(() => {
 })
 
 const primaryActionLabel = computed(() => {
-  if (taskStatus.value === 'todo') return '进入进行中'
-  if (taskStatus.value === 'doing') return '完成 ✓'
-  return '已完成'
+  if (taskStatus.value === 'todo') return '开始'
+  if (taskStatus.value === 'doing') return '完成'
+  return ''
 })
 
 const secondaryActionLabel = computed(() => {
-  if (taskStatus.value === 'done') return '后退到进行中'
-  if (taskStatus.value === 'doing') return '回到待办'
-  return '后退'
+  if (taskStatus.value === 'doing') return '后退'
+  if (taskStatus.value === 'done') return '后退'
+  return ''
 })
+
+const showPrimaryAction = computed(() => taskStatus.value !== 'done')
+const showSecondaryAction = computed(() => taskStatus.value !== 'todo')
 
 // 判断文件是否为视频
 function isVideo(fileName) {
@@ -1415,4 +1418,6 @@ async function handleRemoveDueDate() {
   appStore.toast('到期时间已移除')
 }
 </script>
+
+
 

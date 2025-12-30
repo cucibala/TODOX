@@ -3,8 +3,10 @@
   width: 280px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
-  padding: 24px 16px 88px;
-  overflow-y: auto;
+  padding: 24px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 /* 侧栏进度卡片 */
@@ -581,6 +583,10 @@
   margin-bottom: 32px;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--border-color);
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .section-header {
@@ -779,11 +785,14 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  padding-bottom: 56px;
 }
 
 .project-create-dashed {
-  position: sticky;
-  bottom: 16px;
   margin-top: 16px;
   width: 100%;
   padding: 14px 12px;
