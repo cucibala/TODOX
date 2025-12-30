@@ -1665,6 +1665,19 @@
   flex-wrap: wrap;
 }
 
+.chat-page.quick-input-mode .image-preview-container {
+  gap: 6px;
+  padding: 4px 0 0;
+  margin-bottom: 6px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.chat-page.quick-input-mode .image-preview-item {
+  width: 64px;
+  height: 64px;
+}
+
 .image-preview-item {
   position: relative;
   width: 100px;

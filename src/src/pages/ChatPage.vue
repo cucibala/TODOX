@@ -334,6 +334,7 @@
                     placeholder="输入消息... (Ctrl+Enter 发送)"
                     ref="inputTextarea"
                     rows="1"
+                    @paste="handlePaste"
                     @input="adjustTextareaHeight"
                   ></textarea>
                 </div>
@@ -414,6 +415,7 @@
                   placeholder="输入消息... (Ctrl+Enter 发送)"
                   ref="inputTextarea"
                   rows="1"
+                  @paste="handlePaste"
                   @input="adjustTextareaHeight"
                 ></textarea>
               </div>
@@ -742,6 +744,37 @@ async function handleImageSelect(event) {
   event.target.value = ''
 }
 
+async function handlePaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  const imageItems = Array.from(items).filter(item => item.type?.startsWith('image/'))
+  if (imageItems.length === 0) return
+
+  event.preventDefault()
+
+  for (const item of imageItems) {
+    const file = item.getAsFile()
+    if (!file) continue
+
+    if (file.size > 10 * 1024 * 1024) {
+      appStore.toast(`图片 ${file.name || '剪贴板图片'} 超过 10MB，已跳过`)
+      continue
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      selectedImages.value.push({
+        file,
+        preview: e.target.result,
+        base64: e.target.result.split(',')[1],
+        mimeType: file.type
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
 // 移除图片
 function removeImage(index) {
   selectedImages.value.splice(index, 1)
@@ -947,11 +980,13 @@ function updateQuickInputSize() {
   resizeQuickInputCollapsed()
 }
 
-function resetQuickInputLayout() {
-  quickInputHasSessionMessages.value = false
+function resetQuickInputLayout(keepExpanded = false) {
+  quickInputHasSessionMessages.value = keepExpanded
   nextTick(() => {
     resetTextareaHeight()
-    resizeQuickInputCollapsed()
+    if (!keepExpanded) {
+      resizeQuickInputCollapsed()
+    }
   })
 }
 
@@ -1202,7 +1237,7 @@ async function handleQuickNewConversation() {
   await chatStore.createNewConversation('general', [], { forceNew: true, silent: true })
   userInput.value = ''
   selectedImages.value = []
-  resetQuickInputLayout()
+  resetQuickInputLayout(isQuickInputExpanded.value)
   nextTick(() => inputTextarea.value?.focus())
 }
 
@@ -1260,6 +1295,7 @@ watch(userInput, () => {
     nextTick(() => updateQuickInputSize())
   }
 })
+
 
 // 监听消息变化，自动滚动到底部
 watch(messages, () => {
