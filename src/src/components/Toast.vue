@@ -12,8 +12,10 @@
       }"
       @animationend="() => handleAnimationEnd(item.id)"
     >
-      <span class="toast-icon">{{ getIcon(item.type) }}</span>
-      <span class="toast-text">{{ item.message }}</span>
+      <div class="toast-inner">
+        <span class="toast-icon">{{ getIcon(item.type) }}</span>
+        <span class="toast-text">{{ item.message }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -55,7 +57,7 @@ function handleAnimationEnd(id) {
   position: absolute;
   top: 6px;
   left: 8px;
-  transform: translateX(calc(-120% + var(--toast-push, 0px)));
+  transform: translateX(-120%);
   padding: 6px 12px;
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.92);
@@ -75,6 +77,14 @@ function handleAnimationEnd(id) {
   white-space: nowrap;
   -webkit-app-region: no-drag;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+.toast-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transform: translateX(var(--toast-push, 0px));
+  transition: transform 0.28s ease;
 }
 
 .toast {
@@ -124,24 +134,24 @@ function handleAnimationEnd(id) {
 @keyframes toast-danmaku {
   0% {
     opacity: 0;
-    transform: translateX(calc(-120% + var(--toast-push, 0px)));
+    transform: translateX(-120%);
     animation-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
   }
   12% {
     opacity: 1;
   }
   50% {
-    transform: translateX(calc(50vw - 120px + var(--toast-push, 0px)));
+    transform: translateX(calc(50vw - 120px));
     animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
   70% {
     opacity: 1;
-    transform: translateX(calc(50vw - 120px + var(--toast-push, 0px)));
+    transform: translateX(calc(50vw - 120px));
     animation-timing-function: cubic-bezier(0.3, 0.1, 0.7, 0.9);
   }
   100% {
     opacity: 0;
-    transform: translateX(calc(100vw + var(--toast-push, 0px)));
+    transform: translateX(100vw);
   }
 }
 </style>

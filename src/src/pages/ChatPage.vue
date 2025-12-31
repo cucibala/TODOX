@@ -189,7 +189,7 @@
             </button>
           </div>
         </div>
-        <div class="chat-messages" ref="messagesContainer">
+        <div class="chat-messages" ref="messagesContainer" @scroll="handleMessagesScroll">
           <div v-if="validMessages.length === 0" class="chat-welcome">
             <div class="welcome-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -382,6 +382,14 @@
                     </svg>
                   </button>
                   <button class="quick-icon-btn" title="提及">@</button>
+                  <button
+                    class="quick-assistant-toggle"
+                    :class="{ active: appStore.quickProjectAssistantEnabled }"
+                    @click="handleToggleQuickProjectAssistant"
+                    title="项目助手开关"
+                  >
+                    <span>项目</span>
+                  </button>
                 </div>
                 <div class="quick-toolbar-right">
                   <button class="quick-icon-btn" title="链接">
@@ -638,6 +646,7 @@ const sidebarCollapsed = ref(false)
 const quickInputArea = ref(null)
 const quickInputHasSessionMessages = ref(false)
 const isQuickInputExpanded = ref(false)
+const isUserAtBottom = ref(true)
 
 // 输入框角色选择器
 const showInputRoleSelector = ref(false)
@@ -740,7 +749,7 @@ async function handleGeneratePlanQuick() {
     days: 7,
     detailLevel: 'brief'
   })
-  nextTick(() => scrollToBottom())
+  nextTick(() => scrollToBottom(true))
 }
 
 // 注意：showProjectSelector 和 selectedProjectIds 已在上面声明
@@ -772,7 +781,7 @@ function generateConversationTitle(firstMessage) {
 // 创建新对话（简化版，不需要选择角色）
 function handleNewConversation() {
   chatStore.createNewConversation()
-  nextTick(() => scrollToBottom())
+  nextTick(() => scrollToBottom(true))
 }
 
 // 选择角色（从输入框选择器）
@@ -815,7 +824,7 @@ function cancelNewConversation() {
 function handleSelectConversation(convId) {
   if (currentConversationId.value === convId) return
   chatStore.selectConversation(convId)
-  nextTick(() => scrollToBottom())
+  nextTick(() => scrollToBottom(true))
 }
 
 // 删除对话
@@ -1049,12 +1058,24 @@ function cleanMessageSequence(messages) {
   return cleaned
 }
 
+function updateUserAtBottom() {
+  if (!messagesContainer.value) return
+  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value
+  const threshold = 24
+  isUserAtBottom.value = scrollTop + clientHeight >= scrollHeight - threshold
+}
+
+function handleMessagesScroll() {
+  updateUserAtBottom()
+}
+
 // 滚动到底部
-function scrollToBottom() {
+function scrollToBottom(force = false) {
   nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-    }
+    if (!messagesContainer.value) return
+    if (!force && !isUserAtBottom.value) return
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    isUserAtBottom.value = true
   })
 }
 
@@ -1367,7 +1388,8 @@ function handleQuickInputKeydown(event) {
 
 async function handleQuickNewConversation() {
   if (!isQuickInputMode.value) return
-  await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
+  const quickRoleId = appStore.quickProjectAssistantEnabled ? 'project' : 'general'
+  await chatStore.createNewConversation(quickRoleId, [], { forceNew: true, silent: true })
   userInput.value = ''
   selectedImages.value = []
   resetQuickInputLayout(isQuickInputExpanded.value)
@@ -1382,11 +1404,23 @@ function handleQuickClose() {
   electronAPI?.exitQuickInputMode?.()
 }
 
+function handleToggleQuickProjectAssistant() {
+  if (!isQuickInputMode.value) return
+  if (messages.value.length > 0) {
+    appStore.toast('对话已开始，无法切换助手')
+    return
+  }
+  appStore.quickProjectAssistantEnabled = !appStore.quickProjectAssistantEnabled
+  const quickRoleId = appStore.quickProjectAssistantEnabled ? 'project' : 'general'
+  chatStore.setConversationRole(quickRoleId, [])
+}
+
 async function resetQuickInputSession(options = {}) {
   if (!isQuickInputMode.value) return
   const forceNew = Boolean(options.forceNew)
   if (forceNew || messages.value.length > 0) {
-    await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
+    const quickRoleId = appStore.quickProjectAssistantEnabled ? 'project' : 'general'
+    await chatStore.createNewConversation(quickRoleId, [], { forceNew: true, silent: true })
   }
   userInput.value = ''
   selectedImages.value = []
@@ -1405,7 +1439,7 @@ onMounted(async () => {
   }
   
   // 初始滚动到底部
-  nextTick(() => scrollToBottom())
+  nextTick(() => scrollToBottom(true))
 
   if (isQuickInputMode.value) {
     await resetQuickInputSession({ forceNew: true })
@@ -1424,6 +1458,15 @@ onMounted(async () => {
       if (isQuickInputMode.value) {
         nextTick(() => inputTextarea.value?.focus())
       }
+    })
+  }
+
+  if (electronAPI?.onQuickInputClosed) {
+    electronAPI.onQuickInputClosed(async () => {
+      if (!isQuickInputMode.value) return
+      chatStore.abortRequest()
+      electronAPI?.setQuickInputHasMessages?.(false)
+      await resetQuickInputSession({ forceNew: true })
     })
   }
 })
@@ -1455,7 +1498,7 @@ watch(messages, () => {
 
 // 监听当前对话ID变化，滚动到底部
 watch(currentConversationId, () => {
-  nextTick(() => scrollToBottom())
+  nextTick(() => scrollToBottom(true))
 })
 </script>
 

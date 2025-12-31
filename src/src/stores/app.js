@@ -22,6 +22,7 @@ export const useAppStore = defineStore('app', () => {
   const toastQueue = ref([])
   const toastId = ref(0)
   const activeToasts = ref([])
+  const quickProjectAssistantEnabled = ref(false)
 
   // 对话框
   const showSubtaskDialog = ref(false)
@@ -248,6 +249,7 @@ export const useAppStore = defineStore('app', () => {
     toastQueue,
     toastId,
     activeToasts,
+    quickProjectAssistantEnabled,
     showSubtaskDialog,
     showConfirmDialog,
     showProjectDialog,

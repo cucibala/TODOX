@@ -217,6 +217,7 @@ let quickInputHasMessages = false;
 let quickWindowManualSize = false;
 let isQuickProgrammaticResize = false;
 let quickWindowReadyToShow = false;
+let lastQuickWindowBounds = null;
 const QUICK_INPUT_SIZE = { width: 560, height: 96 };
 const QUICK_INPUT_EXPANDED_HEIGHT = 460;
 
@@ -256,6 +257,7 @@ function setQuickWindowBounds(bounds) {
   if (!quickWindow || quickWindow.isDestroyed()) return;
   isQuickProgrammaticResize = true;
   quickWindow.setBounds(bounds);
+  lastQuickWindowBounds = { ...bounds };
 }
 
 function createQuickWindow() {
@@ -302,7 +304,8 @@ function createQuickWindow() {
 
   quickWindow.once('ready-to-show', () => {
     quickWindowReadyToShow = true;
-    setQuickWindowBounds(getQuickWindowBounds());
+    const initialBounds = lastQuickWindowBounds || getQuickWindowBounds();
+    setQuickWindowBounds(initialBounds);
   });
 
   quickWindow.webContents.on('did-finish-load', () => {
@@ -321,6 +324,15 @@ function createQuickWindow() {
       return;
     }
     quickWindowManualSize = true;
+    if (quickWindow && !quickWindow.isDestroyed()) {
+      lastQuickWindowBounds = quickWindow.getBounds();
+    }
+  });
+
+  quickWindow.on('move', () => {
+    if (quickWindow && !quickWindow.isDestroyed()) {
+      lastQuickWindowBounds = quickWindow.getBounds();
+    }
   });
 
   quickWindow.on('close', (event) => {
@@ -332,6 +344,7 @@ function createQuickWindow() {
 
   quickWindow.on('closed', () => {
     quickWindow = null;
+    lastQuickWindowBounds = null;
   });
 
   return quickWindow;
@@ -343,7 +356,8 @@ function showQuickWindow() {
   quickWindowManualSize = false;
   windowInstance.setResizable(false);
   const openAndFocus = () => {
-    setQuickWindowBounds(getQuickWindowBounds());
+    const targetBounds = lastQuickWindowBounds || getQuickWindowBounds();
+    setQuickWindowBounds(targetBounds);
     if (!windowInstance.isVisible()) {
       windowInstance.show();
     }
@@ -369,6 +383,9 @@ function showQuickWindow() {
 
 function hideQuickWindow() {
   if (!quickWindow || quickWindow.isDestroyed()) return;
+  if (quickWindow.webContents && !quickWindow.webContents.isDestroyed()) {
+    quickWindow.webContents.send('quick-input-closed');
+  }
   quickWindow.hide();
 }
 
@@ -767,8 +784,14 @@ ipcMain.on('quick-input-resize', (event, height) => {
   const parsed = Number(height);
   const targetHeight = Number.isFinite(parsed) ? parsed : QUICK_INPUT_EXPANDED_HEIGHT;
   const clampedHeight = Math.max(QUICK_INPUT_SIZE.height, Math.min(targetHeight, 720));
-  const { x, y, width } = quickWindow.getBounds();
-  setQuickWindowBounds({ x, y, width, height: clampedHeight });
+  const { x, y, width, height: currentHeight } = quickWindow.getBounds();
+  const delta = clampedHeight - currentHeight;
+  let nextY = y - delta;
+  const display = screen.getDisplayMatching(quickWindow.getBounds()).workArea;
+  if (nextY < display.y) {
+    nextY = display.y;
+  }
+  setQuickWindowBounds({ x, y: nextY, width, height: clampedHeight });
 });
 
 ipcMain.on('toggle-always-on-top', () => {
