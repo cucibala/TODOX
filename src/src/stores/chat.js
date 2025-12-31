@@ -27,10 +27,26 @@ export const useChatStore = defineStore('chat', () => {
       systemPrompt: `你是一个专业的项目管理助手，擅长把目标转化为可执行的任务计划，并能通过工具查询/修改用户的项目与任务数据。
 
 工作方式：
-1) 先确认关键信息：目标、时间范围/天数、起始日期、约束（资源/优先级/里程碑）。
-2) 给出清晰结构：先用 3-6 行概览（阶段/里程碑），再给可执行清单（任务+子任务）。
-3) 任务要具体可执行、避免空泛；子任务默认 3-6 条，包含明确产出/验收标准。
-4) 需要创建/修改数据时，优先使用工具；一次尽量合并操作，避免无意义的多轮。`,
+1) 仅当用户的问题与项目/任务相关时才调用工具或检索项目；无关话题不调用工具。
+2) 先确认关键信息：目标、时间范围/天数、起始日期、约束（资源/优先级/里程碑）。
+3) 给出清晰结构：先用 3-6 行概览（阶段/里程碑），再给可执行清单（任务+子任务）。
+4) 任务要具体可执行、避免空泛；子任务默认 3-6 条，包含明确产出/验收标准。
+5) 需要创建/修改数据时，优先使用工具；一次尽量合并操作，避免无意义的多轮。
+6) 工具结果不要原样贴回聊天，只需简短确认（如“已展示/已完成”）。`,
+      enableTools: true,
+      enableProjects: true
+    },
+    {
+      id: 'task',
+      name: '任务助手',
+      systemPrompt: `你是一个任务助手，专注于任务/子任务的增删改查。
+
+工作方式：
+1) 仅当用户问题与任务/项目相关时才调用工具；无关话题不要检索项目或任务。
+2) 优先调用工具获取任务/项目信息，避免让用户重复提供上下文。
+3) 工具返回结果后，不要把完整列表复述到对话中，只需简短确认（如“已展示”）。
+4) 遇到修改/删除/新增操作时，先提出将执行的动作并等待用户确认。
+5) 回复尽量简短、直达问题。`,
       enableTools: true,
       enableProjects: true
     }
@@ -46,6 +62,27 @@ export const useChatStore = defineStore('chat', () => {
   const streamingMessageIndex = ref(-1)
   const userInput = ref('')
   const abortController = ref(null)
+
+  const toolApprovalResolvers = new Map()
+  const readOnlyTools = new Set([
+    'getTodayTasks',
+    'getAllTasks',
+    'getTasksByProject',
+    'getProjects',
+    'searchTasks'
+  ])
+  const writeTools = new Set([
+    'createProjectWithTasks',
+    'updateProjectTasks',
+    'addProjectTasks',
+    'addTask',
+    'updateTaskSubtasks',
+    'addSubtask',
+    'updateTask',
+    'editSubtask',
+    'deleteSubtasks',
+    'deleteTasks'
+  ])
   
   // AI 客户端（支持多模型）
   const deepseekClient = ref(null)
@@ -357,14 +394,33 @@ export const useChatStore = defineStore('chat', () => {
             )
             
             // 执行工具调用
+            let shouldContinue = false
             for (const toolCall of toolCalls) {
               console.log('🔧 执行工具:', toolCall.function.name, toolCall.function.arguments)
+              if (!readOnlyTools.has(toolCall.function.name)) {
+                shouldContinue = true
+              }
               
               let args = {}
               try {
                 args = JSON.parse(toolCall.function.arguments)
               } catch (e) {
                 console.error('解析工具参数失败:', e)
+              }
+
+              if (writeTools.has(toolCall.function.name)) {
+                const approved = await requestToolApproval(toolCall, args)
+                if (!approved) {
+                  messages.value.push({
+                    id: generateId(),
+                    role: 'tool',
+                    content: JSON.stringify({ canceled: true, reason: 'user_rejected' }),
+                    tool_call_id: toolCall.id,
+                    name: toolCall.function.name,
+                    timestamp: Date.now()
+                  })
+                  continue
+                }
               }
               
               // 添加工具调用消息
@@ -457,6 +513,10 @@ export const useChatStore = defineStore('chat', () => {
             
             // 工具执行完成后保存对话
             await saveConversations()
+
+            if (!shouldContinue) {
+              return
+            }
             
             // 添加新的 AI 消息
             messages.value.push({
@@ -508,6 +568,38 @@ export const useChatStore = defineStore('chat', () => {
   function abortRequest() {
     if (abortController.value) {
       abortController.value.abort()
+    }
+  }
+
+  function requestToolApproval(toolCall, args) {
+    return new Promise((resolve) => {
+      toolApprovalResolvers.set(toolCall.id, resolve)
+      messages.value.push({
+        id: generateId(),
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        pendingToolCall: {
+          id: toolCall.id,
+          name: toolCall.function.name,
+          args,
+          status: 'pending'
+        }
+      })
+    })
+  }
+
+  function resolveToolApproval(toolCallId, approved) {
+    const resolver = toolApprovalResolvers.get(toolCallId)
+    if (resolver) {
+      toolApprovalResolvers.delete(toolCallId)
+      resolver(approved)
+    }
+
+    const target = messages.value.find(m => m.pendingToolCall?.id === toolCallId)
+    if (target && target.pendingToolCall) {
+      target.pendingToolCall.status = approved ? 'approved' : 'rejected'
+      target.content = approved ? '已授权执行' : '已取消'
     }
   }
 
@@ -927,6 +1019,7 @@ export const useChatStore = defineStore('chat', () => {
     checkApiKey,
     sendMessage,
     abortRequest,
+    resolveToolApproval,
     generateProjectPlan,
     sendToAI,
     createNewConversation,

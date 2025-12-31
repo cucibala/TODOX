@@ -214,6 +214,10 @@
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
                 <line x1="12" y1="22.08" x2="12" y2="12"></line>
               </svg>
+              <svg v-else-if="message.role === 'tool'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a3 3 0 0 0-4.2 4.2L3 18v3h3l7.5-7.5a3 3 0 0 0 4.2-4.2l-3-3z"></path>
+                <path d="M8.5 13.5l2 2"></path>
+              </svg>
               <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
                 <circle cx="12" cy="7" r="4"></circle>
@@ -234,8 +238,32 @@
                 </div>
               </div>
               
+              <div v-if="message.pendingToolCall" class="tool-approval-card">
+                <div class="tool-approval-title">需要确认</div>
+                <div class="tool-approval-desc">{{ getToolSummary(message.pendingToolCall) }}</div>
+                <div class="tool-approval-actions" v-if="message.pendingToolCall.status === 'pending'">
+                  <button class="tool-approval-btn confirm" @click="chatStore.resolveToolApproval(message.pendingToolCall.id, true)">允许</button>
+                  <button class="tool-approval-btn cancel" @click="chatStore.resolveToolApproval(message.pendingToolCall.id, false)">取消</button>
+                </div>
+                <div v-else class="tool-approval-desc">{{ message.content }}</div>
+              </div>
+
+              <template v-else-if="message.role === 'tool'">
+                <ToolTaskList
+                  v-if="parseToolContent(message)?.type === 'tasks'"
+                  :tasks="parseToolContent(message).tasks"
+                  title="任务结果"
+                />
+                <div v-else-if="parseToolContent(message)?.type === 'error'" class="message-text">
+                  工具执行失败：{{ parseToolContent(message).error }}
+                </div>
+                <div v-else-if="parseToolContent(message)?.type === 'canceled'" class="message-text">
+                  已取消操作
+                </div>
+              </template>
+
               <!-- 文本内容 -->
-              <div class="message-text" v-if="typeof message.content === 'string'">{{ message.content }}</div>
+              <div class="message-text" v-else-if="typeof message.content === 'string'">{{ message.content }}</div>
               
               <!-- 多模态内容（文本+图片） -->
               <template v-else-if="Array.isArray(message.content)">
@@ -459,6 +487,7 @@ import { useAppStore } from '../stores/app'
 import { useChatStore } from '../stores/chat'
 import { useProjectStore } from '../stores/project'
 import { useTodoStore } from '../stores/todo'
+import ToolTaskList from '../components/ToolTaskList.vue'
 
 const appStore = useAppStore()
 const chatStore = useChatStore()
@@ -472,11 +501,104 @@ const QUICK_INPUT_COLLAPSED_MIN_HEIGHT = 96
 const { conversations, currentConversationId, messages, isLoading, userInput } = storeToRefs(chatStore)
 const { isQuickInputMode } = storeToRefs(appStore)
 
-// 过滤有效的消息（排除 undefined/null/空消息/tool消息）
+function parseToolContent(message) {
+  if (!message || message.role !== 'tool' || !message.content) return null
+  if (typeof message.content !== 'string') return null
+  try {
+    const parsed = JSON.parse(message.content)
+    const taskList = Array.isArray(parsed?.tasks) ? parsed.tasks : parsed
+    if (Array.isArray(taskList) && taskList.every(item => item && item.id && item.text)) {
+      return { type: 'tasks', tasks: taskList }
+    }
+    if (parsed && parsed.error) {
+      return { type: 'error', error: parsed.error }
+    }
+    if (parsed && parsed.canceled) {
+      return { type: 'canceled' }
+    }
+  } catch (error) {
+    return null
+  }
+  return null
+}
+
+function getToolSummary(pendingToolCall) {
+  if (!pendingToolCall) return ''
+  const { name, args } = pendingToolCall
+  const projectName = args?.projectId
+    ? projectStore.projects.find(p => p.id === args.projectId)?.name
+    : ''
+  const taskName = args?.taskId
+    ? todoStore.todos.find(t => t.id === args.taskId)?.text
+    : ''
+  if (name === 'addSubtask') {
+    return `将为任务「${taskName || '未识别'}」添加子任务：${args?.text || ''}`
+  }
+  if (name === 'addTask') {
+    return `将为项目「${projectName || '未识别'}」添加任务：${args?.taskDescription || ''}`
+  }
+  if (name === 'updateTask') {
+    return `将更新任务「${taskName || '未识别'}」`
+  }
+  if (name === 'updateTaskSubtasks') {
+    return `将修改任务「${taskName || '未识别'}」的子任务`
+  }
+  if (name === 'deleteTasks') {
+    return `将删除 ${args?.taskIds?.length || 0} 个任务`
+  }
+  if (name === 'deleteSubtasks') {
+    return `将删除 ${args?.subtaskIds?.length || 0} 个子任务`
+  }
+  if (name === 'addProjectTasks') {
+    return `将为项目「${projectName || '未识别'}」添加新任务`
+  }
+  if (name === 'createProjectWithTasks') {
+    return `将创建项目：${args?.projectName || ''}`
+  }
+  if (name === 'editSubtask') {
+    return `将编辑任务「${taskName || '未识别'}」的子任务`
+  }
+  return `将执行操作：${name}`
+}
+
+function isProjectListJson(content) {
+  if (typeof content !== 'string') return false
+  const text = content.trim()
+  if (!text.startsWith('[') || !text.endsWith(']')) return false
+  try {
+    const parsed = JSON.parse(text)
+    if (!Array.isArray(parsed) || parsed.length === 0) return false
+    return parsed.every(item =>
+      item &&
+      typeof item === 'object' &&
+      'id' in item &&
+      'name' in item &&
+      'taskCount' in item &&
+      'completedCount' in item
+    )
+  } catch (error) {
+    return false
+  }
+}
+
+function isProjectListFragment(content) {
+  if (typeof content !== 'string') return false
+  const text = content.trim()
+  if (!text) return false
+  const hasKeys = ['"id"', '"name"', '"color"', '"taskCount"', '"completedCount"']
+    .every(key => text.includes(key))
+  if (!hasKeys) return false
+  return text.includes('{') && text.includes('}')
+}
+
+// 过滤有效的消息（排除 undefined/null/空消息）
 const validMessages = computed(() => {
   return messages.value.filter(msg => {
     if (!msg) return false
-    if (msg.role === 'tool') return false
+    if (msg.pendingToolCall) return true
+    if (msg.role === 'tool') {
+      return !!parseToolContent(msg)
+    }
     // 允许显示进度消息
     // if (msg.isProgress) return false
     
@@ -487,6 +609,7 @@ const validMessages = computed(() => {
     
     // 检查文本内容
     if (typeof msg.content === 'string') {
+      if (isProjectListJson(msg.content) || isProjectListFragment(msg.content)) return false
       return msg.content.trim().length > 0
     }
     
@@ -551,6 +674,16 @@ const availableRoles = [
     color: '#4ECDC4',
     icon: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>',
     systemPrompt: '你是一个专业的项目管理助手，擅长帮助用户管理任务、制定计划、跟踪进度。你可以查询用户的任务和项目数据，并提供个性化的建议。',
+    enableTools: true,
+    enableProjects: true
+  },
+  {
+    id: 'task',
+    name: '任务助手',
+    description: '快速查询任务、增删改查、管理子任务',
+    color: '#f6ad55',
+    icon: '<path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>',
+    systemPrompt: '你是一个任务助手，专注于任务/子任务的增删改查。优先调用工具，工具结果不要复述，只需简短确认。',
     enableTools: true,
     enableProjects: true
   },
@@ -1234,7 +1367,7 @@ function handleQuickInputKeydown(event) {
 
 async function handleQuickNewConversation() {
   if (!isQuickInputMode.value) return
-  await chatStore.createNewConversation('general', [], { forceNew: true, silent: true })
+  await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
   userInput.value = ''
   selectedImages.value = []
   resetQuickInputLayout(isQuickInputExpanded.value)
@@ -1262,6 +1395,10 @@ onMounted(async () => {
   // 初始滚动到底部
   nextTick(() => scrollToBottom())
 
+  if (isQuickInputMode.value && !currentRoleId.value) {
+    await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
+  }
+
   if (isQuickInputMode.value) {
     resetQuickInputLayout()
   }
@@ -1269,7 +1406,7 @@ onMounted(async () => {
   if (electronAPI?.onQuickInputOpened) {
     electronAPI.onQuickInputOpened(async () => {
       if (isQuickInputMode.value) {
-        await chatStore.createNewConversation('general', [], { forceNew: true, silent: true })
+        await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
         resetQuickInputLayout()
         nextTick(() => inputTextarea.value?.focus())
       }

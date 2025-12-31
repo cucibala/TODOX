@@ -17,6 +17,7 @@ export const useTodoStore = defineStore('todo', () => {
   
   // 获取 electronAPI
   const electronAPI = window.electronAPI
+  let hasTodosListener = false
   
   // 计算属性
   const filteredTodos = computed(() => {
@@ -292,6 +293,13 @@ export const useTodoStore = defineStore('todo', () => {
         startedAt: task.startedAt
       })
     }
+  }
+
+  if (!hasTodosListener && electronAPI?.onTodosChanged) {
+    hasTodosListener = true
+    electronAPI.onTodosChanged(() => {
+      loadTodos()
+    })
   }
 
   async function setTaskStatus(id, status) {

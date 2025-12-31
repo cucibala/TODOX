@@ -50,6 +50,27 @@ function getFilteredTodos(todoStore, selectedProjectIds) {
   return todos
 }
 
+function mapTaskForTool(task) {
+  return {
+    id: task.id,
+    text: task.text,
+    completed: task.completed === true,
+    priority: task.priority || 'medium',
+    projectId: task.projectId ?? null,
+    dueDate: task.dueDate || null,
+    pinned: task.pinned === true,
+    status: task.status || null,
+    subtasks: (task.subtasks || []).map(st => ({
+      id: st.id,
+      text: st.text,
+      completed: st.completed === true,
+      weight: st.weight || 3,
+      requiresInput: st.requiresInput === true,
+      inputValue: st.inputValue || ''
+    }))
+  }
+}
+
 /**
  * 创建剩余的每日任务（渐进式创建）
  * 供 createProjectWithTasks 使用的辅助函数
@@ -680,17 +701,17 @@ const allFunctions = [
       'getTodayTasks',
       '获取今天添加的任务列表，包括任务内容、优先级、完成状态、子任务等信息'
     ),
-    async function(args) {
-      let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      return todos.filter(task => {
-        const taskDate = new Date(task.createdAt)
-        taskDate.setHours(0, 0, 0, 0)
-        return taskDate.getTime() === today.getTime()
-      })
-    }
+  async function(args) {
+    let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    return todos.filter(task => {
+      const taskDate = new Date(task.createdAt)
+      taskDate.setHours(0, 0, 0, 0)
+      return taskDate.getTime() === today.getTime()
+    }).map(mapTaskForTool)
+  }
   ),
 
   // 2. 获取所有任务列表
@@ -705,11 +726,12 @@ const allFunctions = [
         }
       }
     ),
-    async function(args) {
-      const { includeCompleted = true } = args
-      let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
-      return includeCompleted ? todos : todos.filter(t => !t.completed)
-    }
+  async function(args) {
+    const { includeCompleted = true } = args
+    let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
+    const result = includeCompleted ? todos : todos.filter(t => !t.completed)
+    return result.map(mapTaskForTool)
+  }
   ),
 
   // 3. 获取指定项目下的任务
@@ -725,15 +747,17 @@ const allFunctions = [
       },
       ['projectId']
     ),
-    async function(args) {
-      const { projectId } = args
-      const targetProjectId = projectId === 'null' || projectId === null 
-        ? null 
-        : Number(projectId)
-      
-      let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
-      return todos.filter(t => t.projectId === targetProjectId)
-    }
+  async function(args) {
+    const { projectId } = args
+    const targetProjectId = projectId === 'null' || projectId === null 
+      ? null 
+      : String(projectId)
+    
+    let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
+    return todos
+      .filter(t => String(t.projectId ?? '') === String(targetProjectId ?? ''))
+      .map(mapTaskForTool)
+  }
   ),
 
   // 4. 获取所有项目列表
@@ -769,16 +793,18 @@ const allFunctions = [
       },
       ['keyword']
     ),
-    async function(args) {
-      const { keyword } = args
-      const keywordLower = keyword.toLowerCase()
-      let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
-      
-      return todos.filter(t => 
-        t.text.toLowerCase().includes(keywordLower) ||
-        (t.subtasks && t.subtasks.some(st => st.text.toLowerCase().includes(keywordLower)))
-      )
-    }
+  async function(args) {
+    const { keyword } = args
+    const safeKeyword = String(keyword || '').trim()
+    if (!safeKeyword) return []
+    const keywordLower = safeKeyword.toLowerCase()
+    let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
+    
+    return todos.filter(t => 
+      t.text.toLowerCase().includes(keywordLower) ||
+      (t.subtasks && t.subtasks.some(st => st.text.toLowerCase().includes(keywordLower)))
+    ).map(mapTaskForTool)
+  }
   ),
 
   // 6. 创建项目并生成任务
@@ -1017,6 +1043,88 @@ const allFunctions = [
         return "创建成功,请在任务列表中查看";
       }
    ),
+  // 7.1 更新任务字段
+  new AIFunction(
+    createTool(
+      'updateTask',
+      '更新指定任务的字段（标题、完成状态、优先级、截止日期等）。用于编辑任务内容或状态',
+      {
+        taskId: {
+          type: 'string',
+          description: '任务ID'
+        },
+        updates: {
+          type: 'object',
+          description: '要更新的字段（text/completed/priority/dueDate/pinned/status）',
+          properties: {
+            text: { type: 'string', description: '任务标题' },
+            completed: { type: 'boolean', description: '完成状态' },
+            priority: { type: 'string', description: '优先级 high/medium/low' },
+            dueDate: { type: 'string', description: '截止日期 YYYY-MM-DD 或 null' },
+            pinned: { type: 'boolean', description: '是否置顶' },
+            status: { type: 'string', description: '状态 todo/doing/done' }
+          }
+        }
+      },
+      ['taskId', 'updates']
+    ),
+    async function(args, onProgress = null) {
+      const { taskId, updates = {} } = args
+      const task = this.todoStore.todos.find(t => t.id === taskId)
+      if (!task) {
+        throw new Error(`找不到ID为${taskId}的任务`)
+      }
+      if (onProgress) onProgress(`正在更新任务"${task.text}"...`)
+      await this.todoStore.updateTask(taskId, updates)
+      if (onProgress) onProgress('任务已更新')
+      return {
+        success: true,
+        taskId,
+        updates
+      }
+    }
+  ),
+  // 7.2 添加子任务（直接添加）
+  new AIFunction(
+    createTool(
+      'addSubtask',
+      '为指定任务添加子任务（直接添加，不重写原有子任务）',
+      {
+        taskId: {
+          type: 'string',
+          description: '任务ID'
+        },
+        text: {
+          type: 'string',
+          description: '子任务内容'
+        },
+        weight: {
+          type: 'number',
+          description: '权重（1-5），默认 3'
+        },
+        requiresInput: {
+          type: 'boolean',
+          description: '是否需要输入记录'
+        }
+      },
+      ['taskId', 'text']
+    ),
+    async function(args, onProgress = null) {
+      const { taskId, text, weight = 3, requiresInput = false } = args
+      const task = this.todoStore.todos.find(t => t.id === taskId)
+      if (!task) {
+        throw new Error(`找不到ID为${taskId}的任务`)
+      }
+      if (onProgress) onProgress(`正在给任务"${task.text}"添加子任务...`)
+      await this.todoStore.addSubtask(taskId, text, weight, requiresInput)
+      if (onProgress) onProgress('子任务已添加')
+      return {
+        success: true,
+        taskId,
+        text
+      }
+    }
+  ),
   // 9. 直接编辑子任务
   new AIFunction(
     createTool(

@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addProgress: (todoId, record) => ipcRenderer.invoke('add-progress', todoId, record),
   updateProgress: (recordId, updates) => ipcRenderer.invoke('update-progress', recordId, updates),
   deleteProgress: (recordId) => ipcRenderer.invoke('delete-progress', recordId),
+  onTodosChanged: (callback) => ipcRenderer.on('todos-changed', () => callback()),
   
   // 图片管理
   selectImage: () => ipcRenderer.invoke('select-image'),

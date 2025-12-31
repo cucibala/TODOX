@@ -214,8 +214,19 @@ let tray = null;
 let isAlwaysOnTop = false;
 let quickWindow = null;
 let quickInputHasMessages = false;
+let quickWindowManualSize = false;
+let isQuickProgrammaticResize = false;
 const QUICK_INPUT_SIZE = { width: 560, height: 96 };
 const QUICK_INPUT_EXPANDED_HEIGHT = 460;
+
+function broadcastTodosChanged() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('todos-changed');
+  }
+  if (quickWindow && !quickWindow.isDestroyed()) {
+    quickWindow.webContents.send('todos-changed');
+  }
+}
 
 // 简单的密码加密（Base64 + 混淆）
 let isWindowReadyToShow = false;
@@ -240,6 +251,12 @@ function getQuickWindowBounds(heightOverride) {
   return { x, y, width: QUICK_INPUT_SIZE.width, height };
 }
 
+function setQuickWindowBounds(bounds) {
+  if (!quickWindow || quickWindow.isDestroyed()) return;
+  isQuickProgrammaticResize = true;
+  quickWindow.setBounds(bounds);
+}
+
 function createQuickWindow() {
   if (quickWindow && !quickWindow.isDestroyed()) return quickWindow;
 
@@ -253,7 +270,7 @@ function createQuickWindow() {
   quickWindow = new BrowserWindow({
     width: QUICK_INPUT_SIZE.width,
     height: QUICK_INPUT_SIZE.height,
-    minWidth: QUICK_INPUT_SIZE.width,
+    minWidth: 420,
     minHeight: QUICK_INPUT_SIZE.height,
     icon: windowIcon,
     webPreferences: {
@@ -267,7 +284,7 @@ function createQuickWindow() {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    resizable: false
+    resizable: true
   });
 
   const isDev = process.argv.includes('--dev');
@@ -279,7 +296,7 @@ function createQuickWindow() {
   }
 
   quickWindow.once('ready-to-show', () => {
-    quickWindow.setBounds(getQuickWindowBounds());
+    setQuickWindowBounds(getQuickWindowBounds());
   });
 
   quickWindow.webContents.on('did-finish-load', () => {
@@ -290,6 +307,14 @@ function createQuickWindow() {
     if (!app.isQuiting && !quickInputHasMessages) {
       hideQuickWindow();
     }
+  });
+
+  quickWindow.on('resize', () => {
+    if (isQuickProgrammaticResize) {
+      isQuickProgrammaticResize = false;
+      return;
+    }
+    quickWindowManualSize = true;
   });
 
   quickWindow.on('close', (event) => {
@@ -309,7 +334,8 @@ function createQuickWindow() {
 function showQuickWindow() {
   const windowInstance = createQuickWindow();
   quickInputHasMessages = false;
-  windowInstance.setBounds(getQuickWindowBounds());
+  quickWindowManualSize = false;
+  setQuickWindowBounds(getQuickWindowBounds());
   if (!windowInstance.isVisible()) {
     windowInstance.show();
   }
@@ -711,10 +737,12 @@ ipcMain.on('quick-input-has-messages', (event, hasMessages) => {
 
 ipcMain.on('quick-input-resize', (event, height) => {
   if (!quickWindow || quickWindow.isDestroyed()) return;
+  if (quickWindowManualSize) return;
   const parsed = Number(height);
   const targetHeight = Number.isFinite(parsed) ? parsed : QUICK_INPUT_EXPANDED_HEIGHT;
   const clampedHeight = Math.max(QUICK_INPUT_SIZE.height, Math.min(targetHeight, 720));
-  quickWindow.setBounds(getQuickWindowBounds(clampedHeight));
+  const { x, y, width } = quickWindow.getBounds();
+  setQuickWindowBounds({ x, y, width, height: clampedHeight });
 });
 
 ipcMain.on('toggle-always-on-top', () => {
@@ -893,6 +921,7 @@ ipcMain.handle('add-todo', async (event, todo) => {
       throw new Error('数据库未初始化');
     }
     db.addTodo(todo);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('添加任务失败:', error);
@@ -910,6 +939,7 @@ ipcMain.handle('add-todos-batch', async (event, todos) => {
       throw new Error('参数 todos 必须为数组');
     }
     db.addTodosBatch(todos);
+    broadcastTodosChanged();
     return { success: true, count: todos.length };
   } catch (error) {
     console.error('批量添加任务失败:', error);
@@ -924,6 +954,7 @@ ipcMain.handle('update-todo', async (event, todoId, updates) => {
       throw new Error('数据库未初始化');
     }
     db.updateTodo(todoId, updates);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('更新任务失败:', error);
@@ -938,6 +969,7 @@ ipcMain.handle('delete-todo', async (event, todoId) => {
       throw new Error('数据库未初始化');
     }
     db.deleteTodo(todoId);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('删除任务失败:', error);
@@ -952,6 +984,7 @@ ipcMain.handle('add-subtask', async (event, todoId, subtask) => {
       throw new Error('数据库未初始化');
     }
     db.addSubtask(todoId, subtask);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('添加子任务失败:', error);
@@ -966,6 +999,7 @@ ipcMain.handle('update-subtask', async (event, subtaskId, updates) => {
       throw new Error('数据库未初始化');
     }
     db.updateSubtask(subtaskId, updates);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('更新子任务失败:', error);
@@ -980,6 +1014,7 @@ ipcMain.handle('delete-subtask', async (event, subtaskId) => {
       throw new Error('数据库未初始化');
     }
     db.deleteSubtask(subtaskId);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('删除子任务失败:', error);
@@ -994,6 +1029,7 @@ ipcMain.handle('replace-subtasks', async (event, todoId, subtasks) => {
       throw new Error('数据库未初始化');
     }
     db.replaceSubtasks(todoId, subtasks);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('批量替换子任务失败:', error);
@@ -1008,6 +1044,7 @@ ipcMain.handle('add-progress', async (event, todoId, record) => {
       throw new Error('数据库未初始化');
     }
     db.addProgressRecord(todoId, record);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('添加进度记录失败:', error);
@@ -1022,6 +1059,7 @@ ipcMain.handle('update-progress', async (event, recordId, updates) => {
       throw new Error('数据库未初始化');
     }
     db.updateProgressRecord(recordId, updates);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('更新进度记录失败:', error);
@@ -1036,6 +1074,7 @@ ipcMain.handle('delete-progress', async (event, recordId) => {
       throw new Error('数据库未初始化');
     }
     db.deleteProgressRecord(recordId);
+    broadcastTodosChanged();
     return { success: true };
   } catch (error) {
     console.error('删除进度记录失败:', error);

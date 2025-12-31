@@ -6,13 +6,11 @@
   height: 32px;
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(240px 170px at 8% 24%, rgba(255, 120, 230, 0.75), rgba(255, 120, 230, 0) 70%),
-    radial-gradient(260px 190px at 50% 6%, rgba(255, 190, 120, 0.8), rgba(255, 190, 120, 0) 70%),
-    radial-gradient(240px 180px at 88% 32%, rgba(140, 190, 255, 0.75), rgba(140, 190, 255, 0) 70%),
-    linear-gradient(115deg, #f05fe3 0%, #ffb36a 36%, #ffd0c0 52%, #9cc8ff 74%, #f2a6d7 100%);
-  background-size: 140% 160%;
-  animation: titlebar-flow 14s ease-in-out infinite alternate;
+  z-index: 100001;
+  background: var(--titlebar-gradient);
+  background-size: var(--titlebar-gradient-size);
+  background-attachment: fixed;
+  animation: titlebar-flow var(--titlebar-gradient-duration) ease-in-out infinite alternate;
   color: white;
   -webkit-app-region: drag;
   user-select: none;
@@ -22,18 +20,25 @@
   content: '';
   position: absolute;
   inset: -40% -15% -35% -15%;
-  background:
-    radial-gradient(260px 180px at 18% 20%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 70%),
-    radial-gradient(240px 160px at 68% 80%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 70%),
-    radial-gradient(220px 140px at 92% 20%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 70%);
+  background: var(--titlebar-gradient-soft);
   filter: blur(10px);
   opacity: 0.85;
   pointer-events: none;
-  animation: titlebar-flow-soft 18s ease-in-out infinite alternate;
+  animation: titlebar-flow-soft var(--titlebar-gradient-soft-duration) ease-in-out infinite alternate;
 }
 .titlebar > * {
   position: relative;
   z-index: 1;
+}
+
+.app-container.is-locked .titlebar {
+  background: transparent;
+  animation: none;
+}
+
+.app-container.is-locked .titlebar::before {
+  opacity: 0;
+  animation: none;
 }
 
 .titlebar-drag-region {

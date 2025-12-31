@@ -19,5 +19,17 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --titlebar-gradient:
+    radial-gradient(240px 170px at 8% 24%, rgba(255, 120, 230, 0.75), rgba(255, 120, 230, 0) 70%),
+    radial-gradient(260px 190px at 50% 6%, rgba(255, 190, 120, 0.8), rgba(255, 190, 120, 0) 70%),
+    radial-gradient(240px 180px at 88% 32%, rgba(140, 190, 255, 0.75), rgba(140, 190, 255, 0) 70%),
+    linear-gradient(115deg, #f05fe3 0%, #ffb36a 36%, #ffd0c0 52%, #9cc8ff 74%, #f2a6d7 100%);
+  --titlebar-gradient-soft:
+    radial-gradient(260px 180px at 18% 20%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(240px 160px at 68% 80%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(220px 140px at 92% 20%, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 70%);
+  --titlebar-gradient-size: 140% 160%;
+  --titlebar-gradient-duration: 14s;
+  --titlebar-gradient-soft-duration: 18s;
 }
 

@@ -1,5 +1,12 @@
 <template>
-  <div class="app-container" :class="{ 'quick-input-mode': isQuickInputMode }">
+  <div
+    class="app-container"
+    :class="{
+      'quick-input-mode': isQuickInputMode,
+      'quick-glow-active': isQuickInputMode && appStore.showChatStatusIndicator,
+      'is-locked': showLockScreen && !isQuickInputMode
+    }"
+  >
     <!-- 自定义标题栏 -->
     <TitleBar v-if="!isQuickInputMode" />
 
@@ -37,7 +44,9 @@
     </main>
 
     <!-- 锁定界面 -->
-    <LockScreen v-if="showLockScreen && !isQuickInputMode" :initial-lock="isInitialLock" />
+    <Transition name="lock-reveal">
+      <LockScreen v-if="showLockScreen && !isQuickInputMode" :initial-lock="isInitialLock" />
+    </Transition>
 
     <!-- 子任务弹窗 -->
     <SubtaskDialog />
@@ -230,6 +239,44 @@ body {
   border: 2px solid var(--border-color);
   overflow: hidden;
   background: #ffffff;
+  position: relative;
+}
+
+.app-container.quick-input-mode::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  padding: 2px;
+  background: linear-gradient(
+    120deg,
+    rgba(70, 196, 255, 0.9) 0%,
+    rgba(108, 226, 255, 0.9) 18%,
+    rgba(255, 186, 120, 0.9) 38%,
+    rgba(148, 255, 212, 0.9) 58%,
+    rgba(122, 162, 255, 0.9) 78%,
+    rgba(70, 196, 255, 0.9) 100%
+  );
+  background-size: 520% 520%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: quick-glow 8s linear infinite;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  filter: none;
+  animation-play-state: paused;
+}
+
+.app-container.quick-input-mode.quick-glow-active::before {
+  opacity: 0.9;
+  animation-play-state: running;
+}
+
+.app-container.quick-input-mode > * {
+  position: relative;
+  z-index: 2;
 }
 
 /* 加载动画 */
@@ -263,6 +310,18 @@ body {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes quick-glow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
   }
 }
 </style>

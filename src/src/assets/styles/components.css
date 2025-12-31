@@ -25,6 +25,256 @@
   transform: translateX(-50%) translateY(0);
 }
 
+/* 工具结果卡片 */
+.message-item.tool .message-avatar {
+  background: rgba(79, 209, 197, 0.2);
+  color: #2c7a7b;
+}
+
+.tool-task-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tool-task-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tool-task-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tool-task-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 12px;
+  text-align: center;
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
+}
+
+.tool-task-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+}
+
+.tool-task-checkbox {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.tool-task-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
+.tool-task-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-task-text {
+  width: 100%;
+  border: none;
+  border-bottom: 1px dashed var(--border-color);
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-primary);
+  padding: 2px 0;
+}
+
+.tool-task-text:focus {
+  outline: none;
+  border-bottom-color: var(--primary-color);
+}
+
+.tool-task-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tool-task-project {
+  background: rgba(102, 126, 234, 0.12);
+  color: var(--primary-dark);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.tool-task-priority {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.tool-task-priority[data-priority='high'] {
+  background: rgba(245, 101, 101, 0.15);
+  color: var(--danger-color);
+}
+
+.tool-task-priority[data-priority='low'] {
+  background: rgba(72, 187, 120, 0.15);
+  color: var(--success-color);
+}
+
+.tool-subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-subtasks-toggle {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0;
+}
+
+.tool-subtask-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 2px solid rgba(138, 157, 251, 0.2);
+  padding-left: 10px;
+}
+
+.tool-subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-subtask-checkbox input {
+  width: 14px;
+  height: 14px;
+}
+
+.tool-subtask-text {
+  flex: 1;
+  border: none;
+  border-bottom: 1px dashed var(--border-color);
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 2px 0;
+}
+
+.tool-subtask-text:focus {
+  outline: none;
+  border-bottom-color: var(--primary-color);
+}
+
+.tool-subtask-delete,
+.tool-task-delete {
+  border: none;
+  background: rgba(245, 101, 101, 0.12);
+  color: var(--danger-color);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tool-task-delete {
+  align-self: flex-start;
+}
+
+.tool-subtask-add {
+  display: flex;
+  gap: 8px;
+}
+
+.tool-subtask-add-input {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.tool-subtask-add-btn {
+  border: none;
+  background: var(--primary-color);
+  color: white;
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tool-subtask-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tool-approval-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tool-approval-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.tool-approval-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.tool-approval-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tool-approval-btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tool-approval-btn.confirm {
+  background: var(--primary-color);
+  color: white;
+}
+
+.tool-approval-btn.cancel {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
 /* 图片查看器 */
 .image-viewer {
   position: fixed;

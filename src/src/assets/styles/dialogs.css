@@ -210,25 +210,73 @@
 /* 锁定界面样式 */
 .lock-screen {
   position: fixed;
-  top: 32px;
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background:
-    radial-gradient(320px 220px at 12% 18%, rgba(255, 120, 230, 0.5), rgba(255, 120, 230, 0) 70%),
-    radial-gradient(360px 260px at 50% 10%, rgba(255, 190, 120, 0.55), rgba(255, 190, 120, 0) 70%),
-    radial-gradient(320px 240px at 88% 32%, rgba(140, 190, 255, 0.5), rgba(140, 190, 255, 0) 70%),
-    linear-gradient(115deg, rgba(240, 95, 227, 0.92) 0%, rgba(255, 179, 106, 0.92) 36%, rgba(255, 208, 192, 0.92) 52%, rgba(156, 200, 255, 0.92) 74%, rgba(242, 166, 215, 0.92) 100%);
-  background-size: 160% 180%;
+  background: var(--titlebar-gradient);
+  background-size: var(--titlebar-gradient-size);
+  background-attachment: scroll;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-top: 32px;
+  box-sizing: border-box;
   z-index: 99999;
-  animation: fadeIn 0.3s ease, titlebar-flow 16s ease-in-out infinite alternate;
+  animation: fadeIn 0.25s ease;
+  will-change: transform, opacity;
+  transform-origin: top;
+}
+
+.lock-screen::before {
+  content: '';
+  position: absolute;
+  inset: -40% -15% -35% -15%;
+  background: var(--titlebar-gradient-soft);
+  filter: blur(10px);
+  opacity: 0.85;
+  pointer-events: none;
+  animation: none;
+}
+
+.lock-screen > * {
+  position: relative;
+  z-index: 1;
 }
 
 .lock-screen--no-anim {
   animation: none;
+  opacity: 1;
+}
+
+.lock-reveal-enter-active,
+.lock-reveal-leave-active {
+  transition: transform 0.45s ease, opacity 0.3s ease;
+}
+
+.lock-reveal-enter-from,
+.lock-reveal-leave-to {
+  transform: scaleY(0.02);
+  opacity: 0;
+}
+
+.lock-reveal-enter-to,
+.lock-reveal-leave-from {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+.lock-screen--no-anim.lock-reveal-enter-active,
+.lock-screen--no-anim.lock-reveal-leave-active {
+  transition: none;
+}
+
+.lock-screen--no-anim.lock-reveal-enter-from,
+.lock-screen--no-anim.lock-reveal-leave-to,
+.lock-screen--no-anim.lock-reveal-enter-to,
+.lock-screen--no-anim.lock-reveal-leave-from {
+  transform: scaleY(1);
   opacity: 1;
 }
 
