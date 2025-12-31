@@ -71,6 +71,22 @@ function mapTaskForTool(task) {
   }
 }
 
+function normalizeProjectName(name) {
+  return String(name || '').trim().toLowerCase()
+}
+
+function pickProjectByName(projects, rawName) {
+  const target = normalizeProjectName(rawName)
+  if (!target) return null
+  const exactMatch = projects.find(p => normalizeProjectName(p.name) === target)
+  if (exactMatch) return exactMatch
+  const candidates = projects
+    .map(p => ({ project: p, name: normalizeProjectName(p.name) }))
+    .filter(p => p.name && (p.name.includes(target) || target.includes(p.name)))
+    .sort((a, b) => b.name.length - a.name.length)
+  return candidates[0]?.project || null
+}
+
 /**
  * 创建剩余的每日任务（渐进式创建）
  * 供 createProjectWithTasks 使用的辅助函数
@@ -780,7 +796,48 @@ const allFunctions = [
     }
   ),
 
-  // 5. 搜索包含关键词的任务
+  // 5. 根据项目名称获取任务
+  new AIFunction(
+    createTool(
+      'getTasksByProjectName',
+      '根据项目名称获取任务，默认只返回未完成任务',
+      {
+        projectName: {
+          type: 'string',
+          description: '项目名称（支持模糊匹配）'
+        },
+        includeCompleted: {
+          type: 'boolean',
+          description: '是否包含已完成的任务，默认为 false'
+        }
+      },
+      ['projectName']
+    ),
+  async function(args) {
+    const { projectName, includeCompleted = false } = args
+    const projects = this.projectStore.projects || []
+    const matchedProject = pickProjectByName(projects, projectName)
+    if (!matchedProject) {
+      return {
+        projectId: null,
+        projectName: projectName || '',
+        tasks: []
+      }
+    }
+    let todos = getFilteredTodos(this.todoStore, this.selectedProjectIds)
+      .filter(t => String(t.projectId ?? '') === String(matchedProject.id))
+    if (!includeCompleted) {
+      todos = todos.filter(t => !t.completed)
+    }
+    return {
+      projectId: matchedProject.id,
+      projectName: matchedProject.name,
+      tasks: todos.map(mapTaskForTool)
+    }
+  }
+  ),
+
+  // 6. 搜索包含关键词的任务
   new AIFunction(
     createTool(
       'searchTasks',
@@ -807,7 +864,7 @@ const allFunctions = [
   }
   ),
 
-  // 6. 创建项目并生成任务
+  // 7. 创建项目并生成任务
   new AIFunction(
     createTool(
       'createProjectWithTasks',

@@ -387,6 +387,35 @@ export const useTodoStore = defineStore('todo', () => {
   async function updateTask(id, updates) {
     const task = todos.value.find(t => t.id === id)
     if (task) {
+      if (updates && (typeof updates.status === 'string' || typeof updates.completed === 'boolean')) {
+        const hasStatus = typeof updates.status === 'string'
+        const hasCompleted = typeof updates.completed === 'boolean'
+        if (hasStatus) {
+          const nextStatus = updates.status || 'todo'
+          const shouldComplete = nextStatus === 'done'
+          updates.completed = shouldComplete
+          updates.completedAt = shouldComplete
+            ? (task.completedAt || new Date().toISOString())
+            : null
+          if (nextStatus === 'doing') {
+            updates.startedAt = task.startedAt || new Date().toISOString()
+          } else if (nextStatus === 'todo') {
+            updates.startedAt = null
+          } else if (nextStatus === 'done' && !task.startedAt) {
+            updates.startedAt = updates.completedAt
+          }
+        } else if (hasCompleted) {
+          if (updates.completed) {
+            updates.status = 'done'
+            updates.completedAt = task.completedAt || new Date().toISOString()
+            updates.startedAt = task.startedAt || updates.completedAt
+          } else {
+            updates.status = 'doing'
+            updates.completedAt = null
+            updates.startedAt = task.startedAt || new Date().toISOString()
+          }
+        }
+      }
       Object.assign(task, updates)
       // 单条更新数据库
       await electronAPI.updateTodo(id, JSON.parse(JSON.stringify(updates)))
