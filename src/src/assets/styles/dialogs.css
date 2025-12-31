@@ -214,12 +214,17 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(124, 143, 240, 0.95) 100%);
+  background:
+    radial-gradient(320px 220px at 12% 18%, rgba(255, 120, 230, 0.5), rgba(255, 120, 230, 0) 70%),
+    radial-gradient(360px 260px at 50% 10%, rgba(255, 190, 120, 0.55), rgba(255, 190, 120, 0) 70%),
+    radial-gradient(320px 240px at 88% 32%, rgba(140, 190, 255, 0.5), rgba(140, 190, 255, 0) 70%),
+    linear-gradient(115deg, rgba(240, 95, 227, 0.92) 0%, rgba(255, 179, 106, 0.92) 36%, rgba(255, 208, 192, 0.92) 52%, rgba(156, 200, 255, 0.92) 74%, rgba(242, 166, 215, 0.92) 100%);
+  background-size: 160% 180%;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  animation: fadeIn 0.3s ease;
+  animation: fadeIn 0.3s ease, titlebar-flow 16s ease-in-out infinite alternate;
 }
 
 .lock-screen--no-anim {

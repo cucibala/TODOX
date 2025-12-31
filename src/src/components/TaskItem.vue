@@ -13,7 +13,7 @@
     <!-- 任务内容 -->
     <div class="task-content">
       <!-- 编辑模式 -->
-      <div v-if="isEditing" class="task-edit-mode">
+      <div v-if="isEditing && !showDetails" class="task-edit-mode">
         <textarea 
           v-model="editText" 
           class="task-edit-input"
@@ -70,6 +70,26 @@
 
       <div v-if="task.subtasks && task.subtasks.length > 0" class="task-tags">
         <span class="task-tag">子任务 {{ completedSubtaskCount }}/{{ task.subtasks.length }}</span>
+      </div>
+
+      <div v-if="task.subtasks && task.subtasks.length > 0" class="task-subtasks-mini">
+        <div
+          v-for="subtask in task.subtasks"
+          :key="subtask.id"
+          class="task-subtask-mini"
+          :class="{ completed: subtask.completed }"
+        >
+          <button
+            class="subtask-mini-checkbox"
+            @click.stop="handleToggleSubtask(subtask.id)"
+            :title="subtask.completed ? '取消完成' : '完成子任务'"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </button>
+          <span class="subtask-mini-text">{{ subtask.text }}</span>
+        </div>
       </div>
 
       <div class="task-divider"></div>
@@ -190,16 +210,48 @@
     <div class="task-detail-dialog">
       <div class="task-detail-header">
         <div class="task-detail-title">任务详情</div>
-        <button class="task-detail-close" @click="closeTaskDetails" title="关闭">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <div class="task-detail-header-actions">
+          <button class="task-detail-edit" @click="handleStartEdit" title="编辑任务">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+            </svg>
+          </button>
+          <button class="task-detail-close" @click="closeTaskDetails" title="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="task-detail-body">
         <div class="task-detail-section">
-          <div class="task-detail-name">{{ task.text }}</div>
+          <div v-if="isEditing" class="task-edit-mode">
+            <textarea
+              v-model="editText"
+              class="task-edit-input"
+              ref="editInputRef"
+              @keydown.ctrl.enter="handleSaveEdit"
+              @keydown.esc="handleCancelEdit"
+            ></textarea>
+            <div class="task-edit-actions">
+              <button class="btn-save-edit" @click="handleSaveEdit" title="保存 (Ctrl+Enter)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                保存
+              </button>
+              <button class="btn-cancel-edit" @click="handleCancelEdit" title="取消 (Esc)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                取消
+              </button>
+            </div>
+          </div>
+          <div v-else class="task-detail-name">{{ task.text }}</div>
           <div class="task-meta">
             <div class="task-time">{{ formatDate(task.createdAt) }}</div>
             <div v-if="!isEditingDueDate && task.dueDate" 
@@ -256,17 +308,35 @@
             </div>
             <span class="task-priority-badge" :class="`priority-${task.priority}`">{{ priorityLabel }}</span>
           </div>
+          <div v-if="task.images && task.images.length > 0" class="task-images-container task-images-detail">
+            <template v-for="(image, index) in task.images" :key="index">
+              <video
+                v-if="isVideo(image) && imageCache[image]"
+                :src="imageCache[image]"
+                class="task-video"
+                controls
+                preload="metadata"
+              ></video>
+              <img
+                v-else-if="!isVideo(image) && imageCache[image]"
+                :src="imageCache[image]"
+                class="task-image"
+                @click="appStore.viewImage(imageCache[image])"
+                alt="任务图片"
+              />
+            </template>
+          </div>
         </div>
 
         <div class="task-detail-section">
           <div class="detail-section-title">子任务</div>
-          <div v-if="(task.subtasks && task.subtasks.length > 0) || isAddingSubtask" class="task-subtasks-section">
-            <div class="subtasks-list">
-              <div 
-                v-for="(subtask, index) in task.subtasks" 
-                :key="subtask.id" 
+          <div class="task-subtasks-section">
+            <div v-if="task.subtasks && task.subtasks.length > 0" class="subtasks-list">
+              <div
+                v-for="(subtask, index) in task.subtasks"
+                :key="subtask.id"
                 class="subtask-item"
-                :class="{ 
+                :class="{
                   'dragging': draggedSubtaskId === subtask.id,
                   'drag-over': dragOverIndex === index
                 }"
@@ -394,53 +464,33 @@
               </div>
             </div>
 
-            <div v-if="isAddingSubtask" class="add-subtask-inline">
+            <div v-else class="empty-detail">暂无子任务</div>
+            <div class="add-subtask-inline">
                <div class="subtask-checkbox placeholder"></div>
                <input
                  v-model="newSubtaskText"
                  class="add-subtask-input"
-                 placeholder="输入子任务内容 (Enter 添加, Esc 取消)"
+                 placeholder="输入子任务内容 (Enter 添加, Esc 清空)"
                  ref="newSubtaskInputRef"
                  @keydown.enter="handleConfirmAddSubtask"
                  @keydown.esc="handleCancelAddSubtask"
-                 @blur="handleConfirmAddSubtask" 
+                 @blur="handleConfirmAddSubtask"
                />
             </div>
           </div>
-          <div v-else class="empty-detail">暂无子任务</div>
         </div>
 
         <div class="task-detail-section">
           <div class="detail-section-title">进度记录</div>
           <div v-if="task.progress && task.progress.length > 0" class="task-progress-section">
-            <button class="btn-toggle-progress" @click="showProgress = !showProgress">
-              <svg 
-                class="progress-toggle-icon" 
-                :style="{ transform: showProgress ? 'rotate(90deg)' : 'rotate(0deg)' }"
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                stroke-width="2"
-              >
-                <polyline points="9 18 15 12 9 6"></polyline>
-              </svg>
-              <span class="progress-count">进度记录 ({{ task.progress.length }})</span>
-            </button>
-            
-            <div v-show="showProgress" class="task-progress-container">
+            <div class="task-progress-container">
               <div class="progress-list">
-                <div 
-                  v-for="progressItem in task.progress" 
-                  :key="progressItem.id" 
+                <div
+                  v-for="progressItem in task.progress"
+                  :key="progressItem.id"
                   class="progress-item"
                 >
-                  <div class="progress-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="9 11 12 14 22 4"></polyline>
-                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                    </svg>
-                  </div>
-                  <div class="progress-content">
+                  <div class="progress-content" @click="handleStartEditProgress(progressItem)">
                     <div v-if="editingProgressId === progressItem.id" class="progress-edit-mode">
                       <textarea 
                         v-model="editingProgressText" 
@@ -475,19 +525,20 @@
                             class="progress-video"
                             controls
                             preload="metadata"
+                            @click.stop
                           ></video>
                           <img
                             v-else-if="!isVideo(image) && progressImageCache[image]"
                             :src="progressImageCache[image]"
                             class="progress-image"
-                            @click="appStore.viewImage(progressImageCache[image])"
+                            @click.stop="appStore.viewImage(progressImageCache[image])"
                             alt="进度图片"
                           />
                         </template>
                       </div>
                     </template>
                   </div>
-                  <div class="progress-actions">
+                  <div class="progress-actions" @click.stop>
                     <button 
                       class="btn-edit-progress" 
                       @click="handleStartEditProgress(progressItem)"
@@ -649,7 +700,6 @@ const draggedSubtaskIndex = ref(null)
 const dragOverIndex = ref(null)
 
 // 子任务内联添加/编辑状态
-const isAddingSubtask = ref(false)
 const newSubtaskText = ref('')
 const newSubtaskInputRef = ref(null)
 const editingSubtaskId = ref(null)
@@ -658,7 +708,6 @@ const editSubtaskInputRef = ref(null)
 
 // 进度记录输入
 const progressInput = ref('')
-const showProgress = ref(false)
 const progressTextareaRef = ref(null)
 
 // 进度编辑状态
@@ -685,7 +734,7 @@ const previewImages = computed(() => {
 // 计算耗时
 const duration = computed(() => {
   if (props.task.completed && props.task.completedAt) {
-    return calculateTaskDuration(props.task.createdAt, props.task.completedAt)
+    return calculateTaskDuration(props.task.startedAt, props.task.completedAt)
   }
   return null
 })
@@ -703,7 +752,7 @@ const completedSubtaskCount = computed(() => {
 
 const subtaskSummary = computed(() => {
   if (!props.task.subtasks || props.task.subtasks.length === 0) {
-    return '点击添加子任务'
+    return '暂无子任务'
   }
   return `已完成 ${completedSubtaskCount.value}/${props.task.subtasks.length} 个子任务`
 })
@@ -766,7 +815,6 @@ async function openDetailsForSubtask() {
   showTaskMenu.value = false
   showDetails.value = true
   await nextTick()
-  handleAddSubtask()
 }
 
 function handleOutsideClick() {
@@ -942,17 +990,6 @@ async function handleDelete() {
   showTaskMenu.value = false
 }
 
-function handleAddSubtask() {
-  // 切换内联添加模式
-  isAddingSubtask.value = true
-  // 聚焦输入框
-  nextTick(() => {
-    if (newSubtaskInputRef.value) {
-      newSubtaskInputRef.value.focus()
-    }
-  })
-}
-
 async function handleConfirmAddSubtask() {
   const text = newSubtaskText.value.trim()
   if (!text) {
@@ -964,7 +1001,6 @@ async function handleConfirmAddSubtask() {
   await todoStore.addSubtask(props.task.id, text)
   newSubtaskText.value = ''
   
-  // 继续保持添加模式，方便连续添加
   nextTick(() => {
     if (newSubtaskInputRef.value) {
       newSubtaskInputRef.value.focus()
@@ -973,7 +1009,6 @@ async function handleConfirmAddSubtask() {
 }
 
 function handleCancelAddSubtask() {
-  isAddingSubtask.value = false
   newSubtaskText.value = ''
 }
 
@@ -1211,6 +1246,7 @@ async function handleDeleteProgress(progressId) {
 
 // 开始编辑进度
 async function handleStartEditProgress(progressItem) {
+  if (editingProgressId.value === progressItem.id) return
   editingProgressId.value = progressItem.id
   editingProgressText.value = progressItem.text
   // 等待 DOM 更新后聚焦输入框并自动调整高度

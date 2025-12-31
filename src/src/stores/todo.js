@@ -251,6 +251,7 @@ export const useTodoStore = defineStore('todo', () => {
       status: 'todo',
       priority: priority || 'medium',
       createdAt: new Date().toISOString(),
+      startedAt: null,
       dueDate: finalDueDate,
       images: [...currentImages.value],
       progress: [],
@@ -276,16 +277,19 @@ export const useTodoStore = defineStore('todo', () => {
       task.completed = !task.completed
       if (task.completed) {
         task.completedAt = new Date().toISOString()
+        task.startedAt = task.startedAt || task.completedAt
         task.status = 'done'
       } else {
         task.completedAt = null
+        task.startedAt = task.startedAt || new Date().toISOString()
         task.status = 'doing'
       }
       // 单条更新数据库
       await electronAPI.updateTodo(id, {
         completed: task.completed,
         completedAt: task.completedAt,
-        status: task.status
+        status: task.status,
+        startedAt: task.startedAt
       })
     }
   }
@@ -297,15 +301,25 @@ export const useTodoStore = defineStore('todo', () => {
     const nextStatus = status || 'todo'
     const shouldComplete = nextStatus === 'done'
     const completedAt = shouldComplete ? (task.completedAt || new Date().toISOString()) : null
+    let startedAt = task.startedAt
+    if (nextStatus === 'doing') {
+      startedAt = task.startedAt || new Date().toISOString()
+    } else if (nextStatus === 'todo') {
+      startedAt = null
+    } else if (nextStatus === 'done' && !task.startedAt) {
+      startedAt = completedAt
+    }
 
     task.status = nextStatus
     task.completed = shouldComplete
     task.completedAt = completedAt
+    task.startedAt = startedAt
 
     await electronAPI.updateTodo(id, {
       status: task.status,
       completed: task.completed,
-      completedAt: task.completedAt
+      completedAt: task.completedAt,
+      startedAt: task.startedAt
     })
   }
   

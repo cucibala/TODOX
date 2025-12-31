@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 8;
+const DATABASE_VERSION = 9;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -82,6 +82,7 @@ class TodoXDatabase {
         priority TEXT DEFAULT 'medium',
         due_date TEXT,
         created_at TEXT NOT NULL,
+        started_at TEXT,
         completed_at TEXT,
         "order" INTEGER DEFAULT 0,
         updated_at TEXT NOT NULL,
@@ -469,6 +470,7 @@ class TodoXDatabase {
       todo.projectId = todo.project_id;
       todo.dueDate = todo.due_date;
       todo.createdAt = todo.created_at;
+      todo.startedAt = todo.started_at;
       todo.completedAt = todo.completed_at;
       todo.status = todo.status || (todo.completed ? 'done' : 'todo');
       
@@ -476,6 +478,7 @@ class TodoXDatabase {
       delete todo.project_id;
       delete todo.due_date;
       delete todo.created_at;
+      delete todo.started_at;
       delete todo.completed_at;
       delete todo.updated_at;
     });
@@ -490,8 +493,8 @@ class TodoXDatabase {
     const stmt = this.db.prepare(`
       INSERT INTO todos (
         id, project_id, text, completed, status, priority, due_date, 
-        created_at, completed_at, "order", updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, started_at, completed_at, "order", updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
@@ -503,6 +506,7 @@ class TodoXDatabase {
       todo.priority || 'medium',
       todo.dueDate || todo.due_date || null,
       todo.createdAt || todo.created_at || new Date().toISOString(),
+      todo.startedAt || todo.started_at || null,
       todo.completedAt || todo.completed_at || null,
       todo.order || 0,
       new Date().toISOString()
@@ -575,6 +579,10 @@ class TodoXDatabase {
     if (updates.completedAt !== undefined) {
       fields.push('completed_at = ?');
       values.push(updates.completedAt);
+    }
+    if (updates.startedAt !== undefined) {
+      fields.push('started_at = ?');
+      values.push(updates.startedAt);
     }
     if (updates.order !== undefined) {
       fields.push('"order" = ?');
@@ -1692,6 +1700,24 @@ class TodoXDatabase {
           UPDATE todos
           SET status = CASE WHEN completed = 1 THEN 'done' ELSE 'todo' END
           WHERE status IS NULL OR status = ''
+        `);
+      },
+
+      // 版本 9 - 任务开始时间支持
+      9: function() {
+        const todosTableInfo = this.db.prepare('PRAGMA table_info(todos)').all();
+        const todoColumns = todosTableInfo.map(col => col.name);
+
+        if (!todoColumns.includes('started_at')) {
+          this.db.exec('ALTER TABLE todos ADD COLUMN started_at TEXT;');
+          console.log('? 已为 todos 表添加 started_at 字段');
+        }
+
+        this.db.exec(`
+          UPDATE todos
+          SET started_at = created_at
+          WHERE (status = 'doing' OR status = 'done')
+            AND (started_at IS NULL OR started_at = '')
         `);
       },
 

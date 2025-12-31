@@ -211,6 +211,14 @@
               </div>
             </div>
           </div>
+          <div v-if="upcomingCount > 0 || overdueCount > 0" class="stats-alerts">
+            <div v-if="overdueCount > 0" class="stats-alert overdue">
+              有 {{ overdueCount }} 个任务已经到期
+            </div>
+            <div v-if="upcomingCount > 0" class="stats-alert upcoming">
+              有 {{ upcomingCount }} 个任务即将到期
+            </div>
+          </div>
         </div>
       </aside>
     </div>
@@ -250,43 +258,47 @@
             }"
           >
             <div class="input-group">
-              <textarea 
-                v-model="newTaskText" 
-                class="task-input task-textarea" 
-                placeholder="添加新任务（支持粘贴图片/视频）..." 
-                autocomplete="off"
-                required
-                rows="1"
-                @input="adjustTextareaHeight"
-                @keydown.ctrl.enter="handleAddTask"
-                @paste="handlePaste"
-                ref="taskInputRef"
-              ></textarea>
-              <input 
-                v-model="newTaskDueDate" 
-                type="date" 
-                class="date-input"
-                title="截止日期（可选）"
-              />
-              <select v-model="newTaskPriority" class="priority-select">
-                <option value="low">低优先级</option>
-                <option value="medium">中优先级</option>
-                <option value="high">高优先级</option>
-              </select>
-              <button type="button" class="btn-image" @click="handleSelectImage" title="添加图片（可添加多张）">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                  <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-              </button>
-              <button type="submit" class="btn-add">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-                添加
-              </button>
+              <div class="input-row">
+                <textarea 
+                  v-model="newTaskText" 
+                  class="task-input task-textarea" 
+                  placeholder="添加新任务（支持粘贴图片/视频）..." 
+                  autocomplete="off"
+                  required
+                  rows="1"
+                  @input="adjustTextareaHeight"
+                  @keydown.ctrl.enter="handleAddTask"
+                  @paste="handlePaste"
+                  ref="taskInputRef"
+                ></textarea>
+              </div>
+              <div class="input-row input-row-actions">
+                <input 
+                  v-model="newTaskDueDate" 
+                  type="date" 
+                  class="date-input"
+                  title="截止日期（可选）"
+                />
+                <select v-model="newTaskPriority" class="priority-select">
+                  <option value="low">低优先级</option>
+                  <option value="medium">中优先级</option>
+                  <option value="high">高优先级</option>
+                </select>
+                <button type="button" class="btn-image" @click="handleSelectImage" title="添加图片（可添加多张）">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                </button>
+                <button type="submit" class="btn-add">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                  添加
+                </button>
+              </div>
             </div>
             <div v-if="currentImages.length > 0" class="image-preview-container">
               <div 
@@ -377,6 +389,32 @@ const currentInProgressCount = computed(() => {
 })
 const currentTodoCount = computed(() => {
   return currentProjectTodos.value.filter(task => getTaskStatus(task) === 'todo').length
+})
+
+const upcomingCount = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const threeDaysLater = new Date(today)
+  threeDaysLater.setDate(today.getDate() + 3)
+  return currentProjectTodos.value.filter(task => {
+    if (getTaskStatus(task) === 'done') return false
+    if (!task.dueDate) return false
+    const dueDate = new Date(task.dueDate)
+    dueDate.setHours(0, 0, 0, 0)
+    return dueDate.getTime() >= today.getTime() && dueDate.getTime() <= threeDaysLater.getTime()
+  }).length
+})
+
+const overdueCount = computed(() => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return currentProjectTodos.value.filter(task => {
+    if (getTaskStatus(task) === 'done') return false
+    if (!task.dueDate) return false
+    const dueDate = new Date(task.dueDate)
+    dueDate.setHours(0, 0, 0, 0)
+    return dueDate.getTime() < today.getTime()
+  }).length
 })
 
 const completionPercentage = computed(() => {

@@ -353,18 +353,26 @@
 
 .progress-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 8px;
   margin-bottom: 6px;
   background: var(--bg-hover);
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--primary-color);
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.progress-item:hover {
+  background: var(--border-color);
+  padding-right: 52px;
 }
 
 .progress-content {
   flex: 1;
   width: 100%;
+  cursor: pointer;
 }
 
 .progress-text {
@@ -382,15 +390,21 @@
 }
 
 .progress-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
+  align-items: center;
   opacity: 0;
-  transition: opacity 0.2s;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
 }
 
 .progress-item:hover .progress-actions {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .btn-copy-progress {
@@ -439,19 +453,6 @@
 .btn-delete-progress svg {
   width: 14px;
   height: 14px;
-}
-
-.progress-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--primary-color);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.progress-icon svg {
-  width: 16px;
-  height: 16px;
 }
 
 .progress-list {
