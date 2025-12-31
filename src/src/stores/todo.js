@@ -236,13 +236,7 @@ export const useTodoStore = defineStore('todo', () => {
       return { success: false, error: '请输入任务内容' }
     }
     
-    // 如果没有指定截止日期，默认设置为3天后
-    let finalDueDate = dueDate
-    if (!dueDate) {
-      const threeDaysLater = new Date()
-      threeDaysLater.setDate(threeDaysLater.getDate() + 3)
-      finalDueDate = threeDaysLater.toISOString().split('T')[0] // YYYY-MM-DD 格式
-    }
+    const finalDueDate = dueDate || null
     
     const task = {
       id: generateId(),
@@ -312,6 +306,11 @@ export const useTodoStore = defineStore('todo', () => {
     let startedAt = task.startedAt
     if (nextStatus === 'doing') {
       startedAt = task.startedAt || new Date().toISOString()
+      if (!task.dueDate) {
+        const threeDaysLater = new Date()
+        threeDaysLater.setDate(threeDaysLater.getDate() + 3)
+        task.dueDate = threeDaysLater.toISOString().split('T')[0]
+      }
     } else if (nextStatus === 'todo') {
       startedAt = null
     } else if (nextStatus === 'done' && !task.startedAt) {
@@ -323,12 +322,16 @@ export const useTodoStore = defineStore('todo', () => {
     task.completedAt = completedAt
     task.startedAt = startedAt
 
-    await electronAPI.updateTodo(id, {
+    const updatePayload = {
       status: task.status,
       completed: task.completed,
       completedAt: task.completedAt,
       startedAt: task.startedAt
-    })
+    }
+    if (nextStatus === 'doing' && task.dueDate) {
+      updatePayload.dueDate = task.dueDate
+    }
+    await electronAPI.updateTodo(id, updatePayload)
   }
   
   // 切换任务置顶
@@ -527,19 +530,31 @@ export const useTodoStore = defineStore('todo', () => {
   }
   
   // 子任务重新排序
-  async function reorderSubtasks(taskId, sourceIndex, targetIndex) {
+  async function reorderSubtasks(taskId, orderedIds) {
     const task = todos.value.find(t => t.id === taskId)
     if (!task || !task.subtasks || task.subtasks.length === 0) {
       return
     }
-    
-    // 从源位置移除子任务
-    const [movedSubtask] = task.subtasks.splice(sourceIndex, 1)
-    
-    // 插入到目标位置
-    task.subtasks.splice(targetIndex, 0, movedSubtask)
-    
-    // 更新每个子任务的order字段
+
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return
+    }
+
+    const subtaskMap = new Map(task.subtasks.map(subtask => [subtask.id, subtask]))
+    const orderedSet = new Set(orderedIds)
+    const reordered = orderedIds
+      .map(id => subtaskMap.get(id))
+      .filter(Boolean)
+
+    for (const subtask of task.subtasks) {
+      if (!orderedSet.has(subtask.id)) {
+        reordered.push(subtask)
+      }
+    }
+
+    task.subtasks = reordered
+
+    // 更新每个子任务的 order 字段
     for (let i = 0; i < task.subtasks.length; i++) {
       task.subtasks[i].order = i
       await electronAPI.updateSubtask(task.subtasks[i].id, { order: i })

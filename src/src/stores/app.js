@@ -17,7 +17,11 @@ export const useAppStore = defineStore('app', () => {
   // Toast
   const toastMessage = ref('')
   const toastType = ref('info') // 'info' | 'success' | 'warning' | 'error'
+  const toastDuration = ref(3200)
   const showToast = ref(false)
+  const toastQueue = ref([])
+  const toastId = ref(0)
+  const activeToasts = ref([])
 
   // 对话框
   const showSubtaskDialog = ref(false)
@@ -85,16 +89,35 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // Toast 提示
-  function toast(message, type = 'info', duration = 3000) {
-    toastMessage.value = message
-    toastType.value = type
-    showToast.value = true
+  function toast(message, type = 'info', duration = 3200) {
+    if (!message) return
+    toastQueue.value.push({
+      message,
+      type,
+      duration: Math.max(1200, duration || 0)
+    })
+    dispatchToasts()
+  }
 
-    if (duration > 0) {
-      setTimeout(() => {
-        showToast.value = false
-      }, duration)
+  function dispatchToasts() {
+    const maxActive = 4
+    while (activeToasts.value.length < maxActive && toastQueue.value.length > 0) {
+      const next = toastQueue.value.shift()
+      if (!next) break
+      const delay = activeToasts.value.length * 180
+      activeToasts.value.push({
+        id: toastId.value++,
+        message: next.message,
+        type: next.type || 'info',
+        duration: next.duration || 3200,
+        delay
+      })
     }
+  }
+
+  function advanceToast(id) {
+    activeToasts.value = activeToasts.value.filter(item => item.id !== id)
+    dispatchToasts()
   }
 
   // 确认对话框
@@ -220,7 +243,11 @@ export const useAppStore = defineStore('app', () => {
     isQuickInputMode,
     toastMessage,
     toastType,
+    toastDuration,
     showToast,
+    toastQueue,
+    toastId,
+    activeToasts,
     showSubtaskDialog,
     showConfirmDialog,
     showProjectDialog,
@@ -244,6 +271,7 @@ export const useAppStore = defineStore('app', () => {
     checkPasswordOnStartup,
     listenModeChanges,
     toast,
+    advanceToast,
     confirm,
     confirmDialogResult,
     viewImage,

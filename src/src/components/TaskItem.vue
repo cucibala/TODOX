@@ -74,7 +74,7 @@
 
       <div v-if="task.subtasks && task.subtasks.length > 0" class="task-subtasks-mini">
         <div
-          v-for="subtask in task.subtasks"
+          v-for="subtask in sortedSubtasks"
           :key="subtask.id"
           class="task-subtask-mini"
           :class="{ completed: subtask.completed }"
@@ -333,7 +333,7 @@
           <div class="task-subtasks-section">
             <div v-if="task.subtasks && task.subtasks.length > 0" class="subtasks-list">
               <div
-                v-for="(subtask, index) in task.subtasks"
+                v-for="(subtask, index) in sortedSubtasks"
                 :key="subtask.id"
                 class="subtask-item"
                 :class="{
@@ -643,14 +643,6 @@
           </div>
         </div>
       </div>
-      <div class="task-detail-footer">
-        <button v-if="showSecondaryAction" class="task-btn secondary" @click="handleRollback">
-          {{ secondaryActionLabel }}
-        </button>
-        <button v-if="showPrimaryAction" class="task-btn primary" @click="handleComplete">
-          {{ primaryActionLabel }}
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -755,6 +747,31 @@ const subtaskSummary = computed(() => {
     return '暂无子任务'
   }
   return `已完成 ${completedSubtaskCount.value}/${props.task.subtasks.length} 个子任务`
+})
+
+const sortedSubtasks = computed(() => {
+  if (!props.task.subtasks || props.task.subtasks.length === 0) {
+    return []
+  }
+
+  return [...props.task.subtasks].sort((a, b) => {
+    const aCompleted = a.completed === true
+    const bCompleted = b.completed === true
+    if (aCompleted !== bCompleted) return aCompleted ? 1 : -1
+
+    const aHasOrder = Number.isFinite(a.order)
+    const bHasOrder = Number.isFinite(b.order)
+    if (aHasOrder && bHasOrder) {
+      return a.order - b.order
+    }
+    if (aHasOrder !== bHasOrder) {
+      return aHasOrder ? -1 : 1
+    }
+
+    const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0
+    const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0
+    return aCreated - bCreated
+  })
 })
 
 const taskStatus = computed(() => {
@@ -1159,18 +1176,23 @@ function handleSubtaskDragLeave() {
 function handleSubtaskDrop(targetIndex, event) {
   event.preventDefault()
   event.stopPropagation()
-  
-  const sourceIndex = draggedSubtaskIndex.value
-  
-  // 如果拖到相同位置，不做处理
-  if (sourceIndex === targetIndex) {
+
+  const orderedSubtasks = [...sortedSubtasks.value]
+  const sourceIndex = orderedSubtasks.findIndex(st => st.id === draggedSubtaskId.value)
+
+  if (sourceIndex < 0 || sourceIndex === targetIndex) {
     dragOverIndex.value = null
     return
   }
-  
-  // 执行重新排序
-  todoStore.reorderSubtasks(props.task.id, sourceIndex, targetIndex)
-  
+
+  const [movedSubtask] = orderedSubtasks.splice(sourceIndex, 1)
+  orderedSubtasks.splice(targetIndex, 0, movedSubtask)
+
+  todoStore.reorderSubtasks(
+    props.task.id,
+    orderedSubtasks.map(subtask => subtask.id)
+  )
+
   // 重置状态
   dragOverIndex.value = null
 }
