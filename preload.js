@@ -121,6 +121,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop)),
   onQuickInputModeChanged: (callback) => ipcRenderer.on('quick-input-mode-changed', (event, isQuick) => callback(isQuick)),
   onQuickInputOpened: (callback) => ipcRenderer.on('quick-input-opened', () => callback()),
+  onQuickInputFocus: (callback) => ipcRenderer.on('quick-input-focus', () => callback()),
   exitQuickInputMode: () => ipcRenderer.send('quick-input-exit'),
   notifyQuickInputSent: () => ipcRenderer.send('quick-input-sent'),
   onQuickInputSent: (callback) => ipcRenderer.on('quick-input-sent', () => callback()),

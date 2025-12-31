@@ -216,6 +216,7 @@ let quickWindow = null;
 let quickInputHasMessages = false;
 let quickWindowManualSize = false;
 let isQuickProgrammaticResize = false;
+let quickWindowReadyToShow = false;
 const QUICK_INPUT_SIZE = { width: 560, height: 96 };
 const QUICK_INPUT_EXPANDED_HEIGHT = 460;
 
@@ -259,6 +260,7 @@ function setQuickWindowBounds(bounds) {
 
 function createQuickWindow() {
   if (quickWindow && !quickWindow.isDestroyed()) return quickWindow;
+  quickWindowReadyToShow = false;
 
   // 设置窗口图标
   const iconPath = path.join(__dirname, 'assets', 'X.png');
@@ -276,12 +278,14 @@ function createQuickWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      devTools: true,
       preload: path.join(__dirname, 'preload.js')
     },
     backgroundColor: '#00000000',
     show: false,
     frame: false,
     transparent: true,
+    thickFrame: process.platform === 'win32',
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: true
@@ -290,12 +294,14 @@ function createQuickWindow() {
   const isDev = process.argv.includes('--dev');
   if (isDev) {
     quickWindow.loadURL('http://localhost:5173/?quick=1');
+    // quickWindow.webContents.openDevTools();
   } else {
     const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
     quickWindow.loadFile(vueDistPath, { query: { quick: '1' } });
   }
 
   quickWindow.once('ready-to-show', () => {
+    quickWindowReadyToShow = true;
     setQuickWindowBounds(getQuickWindowBounds());
   });
 
@@ -335,13 +341,30 @@ function showQuickWindow() {
   const windowInstance = createQuickWindow();
   quickInputHasMessages = false;
   quickWindowManualSize = false;
-  setQuickWindowBounds(getQuickWindowBounds());
-  if (!windowInstance.isVisible()) {
-    windowInstance.show();
+  windowInstance.setResizable(false);
+  const openAndFocus = () => {
+    setQuickWindowBounds(getQuickWindowBounds());
+    if (!windowInstance.isVisible()) {
+      windowInstance.show();
+    }
+    windowInstance.focus();
+    windowInstance.webContents.focus();
+    windowInstance.webContents.send('quick-input-mode-changed', true);
+    windowInstance.webContents.send('quick-input-opened');
+    setTimeout(() => {
+      if (!windowInstance || windowInstance.isDestroyed()) return;
+      windowInstance.focus();
+      windowInstance.webContents.focus();
+      windowInstance.webContents.send('quick-input-focus');
+    }, 60);
+  };
+  if (quickWindowReadyToShow) {
+    openAndFocus();
+  } else {
+    windowInstance.once('ready-to-show', () => {
+      openAndFocus();
+    });
   }
-  windowInstance.focus();
-  windowInstance.webContents.send('quick-input-mode-changed', true);
-  windowInstance.webContents.send('quick-input-opened');
 }
 
 function hideQuickWindow() {
@@ -733,6 +756,9 @@ ipcMain.on('quick-input-sent', () => {
 
 ipcMain.on('quick-input-has-messages', (event, hasMessages) => {
   quickInputHasMessages = Boolean(hasMessages);
+  if (quickWindow && !quickWindow.isDestroyed()) {
+    quickWindow.setResizable(quickInputHasMessages);
+  }
 });
 
 ipcMain.on('quick-input-resize', (event, height) => {

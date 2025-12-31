@@ -52,7 +52,7 @@
     <SubtaskDialog />
 
     <!-- Toast 提示 -->
-    <Toast />
+    <Toast v-if="!isQuickInputMode" />
 
     <!-- 图片查看器 -->
     <ImageViewer />

@@ -1382,6 +1382,18 @@ function handleQuickClose() {
   electronAPI?.exitQuickInputMode?.()
 }
 
+async function resetQuickInputSession(options = {}) {
+  if (!isQuickInputMode.value) return
+  const forceNew = Boolean(options.forceNew)
+  if (forceNew || messages.value.length > 0) {
+    await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
+  }
+  userInput.value = ''
+  selectedImages.value = []
+  resetQuickInputLayout(false)
+  nextTick(() => inputTextarea.value?.focus())
+}
+
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
   window.addEventListener('keydown', handleQuickInputKeydown)
@@ -1395,19 +1407,21 @@ onMounted(async () => {
   // 初始滚动到底部
   nextTick(() => scrollToBottom())
 
-  if (isQuickInputMode.value && !currentRoleId.value) {
-    await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
-  }
-
   if (isQuickInputMode.value) {
-    resetQuickInputLayout()
+    await resetQuickInputSession({ forceNew: true })
   }
 
   if (electronAPI?.onQuickInputOpened) {
     electronAPI.onQuickInputOpened(async () => {
       if (isQuickInputMode.value) {
-        await chatStore.createNewConversation('task', [], { forceNew: true, silent: true })
-        resetQuickInputLayout()
+        await resetQuickInputSession()
+      }
+    })
+  }
+
+  if (electronAPI?.onQuickInputFocus) {
+    electronAPI.onQuickInputFocus(() => {
+      if (isQuickInputMode.value) {
         nextTick(() => inputTextarea.value?.focus())
       }
     })
