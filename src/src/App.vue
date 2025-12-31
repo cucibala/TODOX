@@ -250,33 +250,33 @@ body {
   padding: 2px;
   background: linear-gradient(
     120deg,
-    rgba(70, 196, 255, 0.9) 0%,
-    rgba(108, 226, 255, 0.9) 18%,
-    rgba(255, 186, 120, 0.9) 38%,
-    rgba(148, 255, 212, 0.9) 58%,
-    rgba(122, 162, 255, 0.9) 78%,
-    rgba(70, 196, 255, 0.9) 100%
+    rgba(62, 198, 255, 1) 0%,
+    rgba(120, 255, 214, 1) 22%,
+    rgba(255, 182, 108, 1) 48%,
+    rgba(138, 176, 255, 1) 74%,
+    rgba(62, 198, 255, 1) 100%
   );
-  background-size: 520% 520%;
+  background-size: 320% 320%;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
-  animation: quick-glow 8s linear infinite;
+  animation: quick-glow-marquee 5s linear infinite;
   pointer-events: none;
   opacity: 0;
-  z-index: 1;
-  filter: none;
+  z-index: 3;
+  filter: blur(0.3px) saturate(1.2);
   animation-play-state: paused;
+  will-change: background-position;
 }
 
 .app-container.quick-input-mode.quick-glow-active::before {
-  opacity: 0.9;
+  opacity: 1;
   animation-play-state: running;
 }
 
 .app-container.quick-input-mode > * {
   position: relative;
-  z-index: 2;
+  z-index: 1;
 }
 
 /* 加载动画 */
@@ -313,15 +313,12 @@ body {
   }
 }
 
-@keyframes quick-glow {
+@keyframes quick-glow-marquee {
   0% {
     background-position: 0% 50%;
   }
-  50% {
-    background-position: 100% 50%;
-  }
   100% {
-    background-position: 0% 50%;
+    background-position: 100% 50%;
   }
 }
 </style>
