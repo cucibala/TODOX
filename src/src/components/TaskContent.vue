@@ -28,7 +28,7 @@
       </div>
 
       <div class="toolbar-right">
-        <div class="priority-filter-buttons">
+        <div class="priority-filter-buttons priority-chip-group">
           <button 
             class="priority-filter-btn" 
             :class="{ active: currentPriorityFilter === 'all' }"
@@ -43,6 +43,7 @@
             @click="todoStore.currentPriorityFilter = 'high'"
             title="高优先级"
           >
+            <span class="priority-dot priority-high"></span>
             高
           </button>
           <button 
@@ -51,6 +52,7 @@
             @click="todoStore.currentPriorityFilter = 'medium'"
             title="中优先级"
           >
+            <span class="priority-dot priority-medium"></span>
             中
           </button>
           <button 
@@ -59,6 +61,7 @@
             @click="todoStore.currentPriorityFilter = 'low'"
             title="低优先级"
           >
+            <span class="priority-dot priority-low"></span>
             低
           </button>
         </div>
@@ -279,11 +282,38 @@
                   class="date-input"
                   title="截止日期（可选）"
                 />
-                <select v-model="newTaskPriority" class="priority-select">
-                  <option value="low">低优先级</option>
-                  <option value="medium">中优先级</option>
-                  <option value="high">高优先级</option>
-                </select>
+                <div class="priority-chip-group priority-select-chips" role="group" aria-label="选择任务优先级">
+                  <button
+                    type="button"
+                    class="priority-chip priority-high"
+                    :class="{ active: newTaskPriority === 'high' }"
+                    @click="newTaskPriority = 'high'"
+                    title="高优先级"
+                  >
+                    <span class="priority-dot priority-high"></span>
+                    高
+                  </button>
+                  <button
+                    type="button"
+                    class="priority-chip priority-medium"
+                    :class="{ active: newTaskPriority === 'medium' }"
+                    @click="newTaskPriority = 'medium'"
+                    title="中优先级"
+                  >
+                    <span class="priority-dot priority-medium"></span>
+                    中
+                  </button>
+                  <button
+                    type="button"
+                    class="priority-chip priority-low"
+                    :class="{ active: newTaskPriority === 'low' }"
+                    @click="newTaskPriority = 'low'"
+                    title="低优先级"
+                  >
+                    <span class="priority-dot priority-low"></span>
+                    低
+                  </button>
+                </div>
                 <button type="button" class="btn-image" @click="handleSelectImage" title="添加图片（可添加多张）">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>

@@ -359,12 +359,7 @@ const todoStore = useTodoStore()
 const { projects, projectGroups, currentProjectId, hasProjects } = storeToRefs(projectStore)
 const { todos } = storeToRefs(todoStore)
 
-const progressTasks = computed(() => {
-  if (currentProjectId.value) {
-    return todos.value.filter(task => task.projectId === currentProjectId.value)
-  }
-  return todos.value
-})
+const progressTasks = computed(() => todos.value)
 
 const currentTotalCount = computed(() => progressTasks.value.length)
 const currentCompletedCount = computed(() => progressTasks.value.filter(task => task.completed).length)
