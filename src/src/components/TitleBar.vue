@@ -56,6 +56,17 @@
         </button>
         <button
           class="titlebar-nav-btn"
+          :class="{ active: currentPage === 'tools' }"
+          @click="goToTools"
+          title="工具箱"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a3 3 0 0 0-4.2 4.2L3 18v3h3l7.5-7.5a3 3 0 0 0 4.2-4.2l-3-3z"></path>
+            <path d="M8.5 13.5l2 2"></path>
+          </svg>
+        </button>
+        <button
+          class="titlebar-nav-btn"
           :class="{ active: currentPage === 'settings' }"
           @click="goToSettings"
           title="设置"
@@ -118,6 +129,11 @@ function goToDocument() {
 // 导航到聊天
 function goToChat() {
   appStore.currentPage = 'chat'
+}
+
+// 导航到工具箱
+function goToTools() {
+  appStore.currentPage = 'tools'
 }
 
 // 导航到设置

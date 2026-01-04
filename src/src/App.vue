@@ -39,6 +39,9 @@
       <!-- 聊天页面 -->
       <ChatPage v-else-if="currentPage === 'chat'" />
 
+      <!-- 工具箱页面 -->
+      <ToolboxPage v-else-if="currentPage === 'tools'" />
+
     </main>
 
     <!-- 锁定界面 -->
@@ -98,6 +101,7 @@ import AISummaryDialog from './components/AISummaryDialog.vue'
 import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
 import DocumentPage from './pages/DocumentPage.vue'
+import ToolboxPage from './pages/ToolboxPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
