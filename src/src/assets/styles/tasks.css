@@ -191,6 +191,58 @@
   gap: 6px;
 }
 
+.board-toolbar .status-filter-buttons {
+  gap: 6px;
+}
+
+.board-toolbar .status-filter-btn {
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.board-toolbar .status-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--text-primary);
+}
+
+.board-toolbar .status-filter-btn.active {
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+  background: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.08);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.status-todo {
+  background: #64748b;
+}
+
+.status-dot.status-doing {
+  background: #4f6bff;
+}
+
+.status-dot.status-done {
+  background: #22c55e;
+}
+
 .priority-chip-group {
   display: inline-flex;
   align-items: center;
@@ -466,6 +518,37 @@
   gap: 6px;
 }
 
+.stats-project {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f6f7ff;
+  border-radius: 12px;
+}
+
+.stats-project-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+}
+
+.stats-project-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.stats-project-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
 .stats-title {
   font-size: 16px;
   font-weight: 700;
@@ -648,6 +731,10 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   min-height: 0;
+}
+
+.kanban-board.single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .kanban-column {

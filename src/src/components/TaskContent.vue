@@ -2,17 +2,6 @@
   <section class="content-area board-page">
     <div class="board-toolbar">
       <div class="toolbar-left">
-        <div class="project-chip" :class="{ empty: !currentProject }">
-          <div class="project-chip-icon" :style="{ backgroundColor: currentProject?.color || '#cbd5f5' }">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4h7l2 2h7v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path>
-            </svg>
-          </div>
-          <div class="project-chip-text">
-            <span class="chip-label">当前项目</span>
-            <span class="chip-name">{{ currentProject?.name || '未选择' }}</span>
-          </div>
-        </div>
         <div class="search-box">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
@@ -28,6 +17,43 @@
       </div>
 
       <div class="toolbar-right">
+        <div class="status-filter-buttons priority-chip-group" role="group" aria-label="筛选任务状态">
+          <button
+            class="status-filter-btn"
+            :class="{ active: currentStatusFilter === 'all' }"
+            @click="currentStatusFilter = 'all'"
+            title="显示全部状态"
+          >
+            全部
+          </button>
+          <button
+            class="status-filter-btn status-todo"
+            :class="{ active: currentStatusFilter === 'todo' }"
+            @click="currentStatusFilter = 'todo'"
+            title="只显示待办"
+          >
+            <span class="status-dot status-todo"></span>
+            待办
+          </button>
+          <button
+            class="status-filter-btn status-doing"
+            :class="{ active: currentStatusFilter === 'doing' }"
+            @click="currentStatusFilter = 'doing'"
+            title="只显示进行中"
+          >
+            <span class="status-dot status-doing"></span>
+            进行中
+          </button>
+          <button
+            class="status-filter-btn status-done"
+            :class="{ active: currentStatusFilter === 'done' }"
+            @click="currentStatusFilter = 'done'"
+            title="只显示已完成"
+          >
+            <span class="status-dot status-done"></span>
+            已完成
+          </button>
+        </div>
         <div class="priority-filter-buttons priority-chip-group">
           <button 
             class="priority-filter-btn" 
@@ -82,9 +108,10 @@
 
     <div class="board-body">
       <div class="board-main">
-        <div class="kanban-board">
+        <div class="kanban-board" :class="{ single: currentStatusFilter !== 'all' }">
           <div 
             class="kanban-column todo"
+            v-if="showTodoColumn"
             :class="{ 'drag-over': activeDropColumn === 'todo' }"
             @dragover.prevent="handleDragOver('todo')"
             @dragleave="activeDropColumn = ''"
@@ -105,6 +132,7 @@
 
           <div 
             class="kanban-column doing"
+            v-if="showDoingColumn"
             :class="{ 'drag-over': activeDropColumn === 'doing' }"
             @dragover.prevent="handleDragOver('doing')"
             @dragleave="activeDropColumn = ''"
@@ -125,6 +153,7 @@
 
           <div 
             class="kanban-column done"
+            v-if="showDoneColumn"
             :class="{ 'drag-over': activeDropColumn === 'done' }"
             @dragover.prevent="handleDragOver('done')"
             @dragleave="activeDropColumn = ''"
@@ -150,6 +179,13 @@
           <div class="stats-panel-header">
             <div class="stats-title">统计概览</div>
             <div class="stats-subtitle">实时任务进度追踪</div>
+            <div class="stats-project">
+              <span class="stats-project-label">当前项目</span>
+              <span class="stats-project-name">
+                <span class="stats-project-dot" :style="{ backgroundColor: currentProject?.color || '#cbd5f5' }"></span>
+                {{ currentProject?.name || '未选择' }}
+              </span>
+            </div>
           </div>
           <div class="stats-ring" :style="{ '--progress': completionPercentage }">
             <div class="stats-ring-inner">
@@ -380,6 +416,7 @@ const newTaskPriority = ref('medium')
 const isGeneratingSummary = ref(false)
 const taskInputRef = ref(null)
 const showAddTaskModal = ref(false)
+const currentStatusFilter = ref('all')
 
 const electronAPI = window.electronAPI
 
@@ -405,6 +442,18 @@ const doingTodos = computed(() => {
 
 const doneTodos = computed(() => {
   return filteredTodos.value.filter(task => getTaskStatus(task) === 'done')
+})
+
+const showTodoColumn = computed(() => {
+  return currentStatusFilter.value === 'all' || currentStatusFilter.value === 'todo'
+})
+
+const showDoingColumn = computed(() => {
+  return currentStatusFilter.value === 'all' || currentStatusFilter.value === 'doing'
+})
+
+const showDoneColumn = computed(() => {
+  return currentStatusFilter.value === 'all' || currentStatusFilter.value === 'done'
 })
 
 const currentProjectTodos = computed(() => {
