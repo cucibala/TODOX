@@ -1409,7 +1409,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 18px;
-  padding: 18px 20px 16px;
+  padding: 12px 14px 10px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -1471,10 +1471,10 @@
 .priority-indicator {
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
+  top: 6px;
+  bottom: 6px;
   width: 4px;
-  border-radius: 18px 0 0 18px;
+  border-radius: 12px 0 0 12px;
 }
 
 .priority-high {
@@ -1501,9 +1501,9 @@
 
 .task-card-header {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
 .task-title {
@@ -1511,6 +1511,7 @@
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.4;
+  width: 100%;
 }
 
 .task-header-actions {
@@ -1519,6 +1520,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  align-self: flex-end;
+  order: -1;
+  margin-top: -2px;
 }
 
 .btn-task-expand {
@@ -2311,11 +2315,17 @@
 }
 
 .btn-pin {
-  color: var(--warning-color);
+  color: var(--text-muted);
 }
 
 .btn-pin:hover {
   background: rgba(237, 137, 54, 0.1);
+  color: var(--warning-color);
+}
+
+.btn-pin.active {
+  color: var(--warning-color);
+  background: rgba(237, 137, 54, 0.12);
 }
 
 .btn-edit {

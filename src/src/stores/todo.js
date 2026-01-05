@@ -46,12 +46,14 @@ export const useTodoStore = defineStore('todo', () => {
       const query = searchQuery.value.toLowerCase()
       filtered = filtered.filter(t => t.text.toLowerCase().includes(query))
     }
+
+    console.log(filtered);
     
     // 排序：置顶 > 完成状态 > 截止日期 > 创建时间
     filtered.sort((a, b) => {
       // 1. 置顶优先（将 undefined 统一处理为 false）
-      const aPinned = a.pinned === true
-      const bPinned = b.pinned === true
+      const aPinned = Boolean(a.pinned)
+      const bPinned = Boolean(b.pinned)
       if (aPinned !== bPinned) {
         return aPinned ? -1 : 1
       }
@@ -192,7 +194,11 @@ export const useTodoStore = defineStore('todo', () => {
   // 加载任务
   async function loadTodos() {
     try {
-      todos.value = await electronAPI.loadTodos()
+      const loadedTodos = await electronAPI.loadTodos()
+      todos.value = loadedTodos.map(todo => ({
+        ...todo,
+        pinned: Boolean(todo.pinned)
+      }))
       console.log(todos.value)
       // 加载后自动清理孤立任务
       await cleanOrphanedTasks()

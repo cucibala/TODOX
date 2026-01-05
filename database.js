@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 9;
+const DATABASE_VERSION = 10;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -78,6 +78,7 @@ class TodoXDatabase {
         project_id TEXT,
         text TEXT NOT NULL,
         completed INTEGER DEFAULT 0,
+        pinned INTEGER DEFAULT 0,
         status TEXT DEFAULT 'todo',
         priority TEXT DEFAULT 'medium',
         due_date TEXT,
@@ -435,6 +436,7 @@ class TodoXDatabase {
     todos.forEach(todo => {
       // 转换布尔值
       todo.completed = Boolean(todo.completed);
+      todo.pinned = Boolean(todo.pinned);
       
       // 加载子任务
       const subtasks = this.db.prepare(`
@@ -492,9 +494,9 @@ class TodoXDatabase {
   addTodo(todo) {
     const stmt = this.db.prepare(`
       INSERT INTO todos (
-        id, project_id, text, completed, status, priority, due_date, 
+        id, project_id, text, completed, pinned, status, priority, due_date, 
         created_at, started_at, completed_at, "order", updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     stmt.run(
@@ -502,6 +504,7 @@ class TodoXDatabase {
       todo.projectId || todo.project_id ? String(todo.projectId || todo.project_id) : null,
       todo.text,
       todo.completed ? 1 : 0,
+      todo.pinned ? 1 : 0,
       todo.status || (todo.completed ? 'done' : 'todo'),
       todo.priority || 'medium',
       todo.dueDate || todo.due_date || null,
@@ -563,6 +566,10 @@ class TodoXDatabase {
     if (updates.completed !== undefined) {
       fields.push('completed = ?');
       values.push(updates.completed ? 1 : 0);
+    }
+    if (updates.pinned !== undefined) {
+      fields.push('pinned = ?');
+      values.push(updates.pinned ? 1 : 0);
     }
     if (updates.priority !== undefined) {
       fields.push('priority = ?');
@@ -1719,6 +1726,17 @@ class TodoXDatabase {
           WHERE (status = 'doing' OR status = 'done')
             AND (started_at IS NULL OR started_at = '')
         `);
+      },
+
+      // 版本 10 - 任务置顶支持
+      10: function() {
+        const todosTableInfo = this.db.prepare('PRAGMA table_info(todos)').all();
+        const todoColumns = todosTableInfo.map(col => col.name);
+
+        if (!todoColumns.includes('pinned')) {
+          this.db.exec('ALTER TABLE todos ADD COLUMN pinned INTEGER DEFAULT 0;');
+          console.log('? 已为 todos 表添加 pinned 字段');
+        }
       },
 
       // 未来的迁移函数在这里添加...

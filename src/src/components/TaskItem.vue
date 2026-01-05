@@ -41,6 +41,18 @@
       <div v-else class="task-card-header">
         <div class="task-title">{{ task.text }}</div>
         <div class="task-header-actions">
+          <button
+            class="btn-pin"
+            :class="{ active: task.pinned }"
+            @click="handleTogglePin"
+            :title="task.pinned ? '取消置顶' : '置顶'"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 17v5"></path>
+              <path d="M9 3h6l-1 6 4 4H6l4-4z"></path>
+              <circle v-if="task.pinned" cx="18" cy="6" r="2" fill="currentColor" stroke="none"></circle>
+            </svg>
+          </button>
           <button class="btn-task-expand" @click="toggleTaskDetails" :title="showDetails ? '收起' : '展开'">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline :points="showDetails ? '6 15 12 9 18 15' : '6 9 12 15 18 9'"></polyline>
@@ -54,9 +66,6 @@
             </svg>
           </button>
           <div v-if="showTaskMenu" class="task-menu" @click.stop>
-            <button class="task-menu-item" @click="handleTogglePin">
-              <span>{{ task.pinned ? '取消置顶' : '置顶' }}</span>
-            </button>
             <button class="task-menu-item" @click="handleStartEdit">编辑</button>
             <button class="task-menu-item" @click="handleAIBreakdown" :disabled="isAIBreakingDown">AI 拆解</button>
             <button class="task-menu-item danger" @click="handleDelete">删除</button>
@@ -67,10 +76,10 @@
       <div v-if="!isEditing" class="task-subtitle" @click="openDetailsForSubtask">
         {{ subtaskSummary }}
       </div>
-
+<!-- 
       <div v-if="task.subtasks && task.subtasks.length > 0" class="task-tags">
         <span class="task-tag">子任务 {{ completedSubtaskCount }}/{{ task.subtasks.length }}</span>
-      </div>
+      </div> -->
 
       <div v-if="task.subtasks && task.subtasks.length > 0" class="task-subtasks-mini">
         <div
@@ -169,7 +178,6 @@
           </svg>
           耗时 {{ duration }}
         </div>
-        <span class="task-priority-badge" :class="`priority-${task.priority}`">{{ priorityLabel }}</span>
       </div>
 
       <!-- 任务图片/视频 -->
@@ -306,7 +314,6 @@
               </svg>
               设置到期时间
             </div>
-            <span class="task-priority-badge" :class="`priority-${task.priority}`">{{ priorityLabel }}</span>
           </div>
           <div v-if="task.images && task.images.length > 0" class="task-images-container task-images-detail">
             <template v-for="(image, index) in task.images" :key="index">
