@@ -52,6 +52,16 @@
                 @keydown.enter.prevent="saveSubtask(task.id, subtask)"
                 @blur="saveSubtask(task.id, subtask)"
               />
+              <button
+                class="tool-subtask-copy"
+                @click="handleCopySubtaskText(subtask.text)"
+                title="复制子任务内容"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
               <button class="tool-subtask-delete" @click="deleteSubtask(task.id, subtask.id)">删除</button>
             </div>
 
@@ -160,6 +170,15 @@ async function deleteSubtask(taskId, subtaskId) {
   const confirmed = await appStore.confirm('确定要删除这个子任务吗？')
   if (!confirmed) return
   await todoStore.deleteSubtask(taskId, subtaskId)
+}
+
+function handleCopySubtaskText(text) {
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    appStore.toast('子任务内容已复制')
+  }).catch(() => {
+    appStore.toast('复制失败')
+  })
 }
 
 function handleNewSubtaskInput(taskId, value) {

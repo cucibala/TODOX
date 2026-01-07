@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell, globalShortcut, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const TodoXDatabase = require('./database');
 
 // 单实例锁定 - 只允许运行一个应用实例
@@ -220,6 +221,14 @@ let quickWindowReadyToShow = false;
 let lastQuickWindowBounds = null;
 const QUICK_INPUT_SIZE = { width: 560, height: 96 };
 const QUICK_INPUT_EXPANDED_HEIGHT = 460;
+const TOOLBOX_HTTP_PORT = 17890;
+const TOOLBOX_HTTP_MAX_BYTES = 15 * 1024 * 1024;
+let toolboxHttpServer = null;
+let toolboxHttpStatus = {
+  running: false,
+  port: TOOLBOX_HTTP_PORT,
+  lastError: ''
+};
 
 function broadcastTodosChanged() {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -228,6 +237,139 @@ function broadcastTodosChanged() {
   if (quickWindow && !quickWindow.isDestroyed()) {
     quickWindow.webContents.send('todos-changed');
   }
+}
+
+function broadcastToolboxHttpStatus() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('toolbox-http-status', { ...toolboxHttpStatus });
+  }
+}
+
+function parseMimeFromDataUrl(dataUrl) {
+  const match = /^data:([^;]+);base64,/.exec(dataUrl);
+  return match ? match[1] : 'image/png';
+}
+
+function buildDataUrl(base64, mime = 'image/png') {
+  return `data:${mime};base64,${base64}`;
+}
+
+function extractDataUrlFromBody(body, contentType) {
+  if (!body) return '';
+  if (contentType.includes('application/json')) {
+    try {
+      const payload = JSON.parse(body);
+      if (payload && typeof payload.dataUrl === 'string' && payload.dataUrl.startsWith('data:')) {
+        return payload.dataUrl;
+      }
+      if (payload && typeof payload.base64 === 'string') {
+        if (payload.base64.startsWith('data:')) {
+          return payload.base64;
+        }
+        return buildDataUrl(payload.base64, payload.mime || 'image/png');
+      }
+    } catch (error) {
+      return '';
+    }
+    return '';
+  }
+
+  const trimmed = body.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  return buildDataUrl(trimmed, 'image/png');
+}
+
+function startToolboxHttpServer() {
+  if (toolboxHttpServer) {
+    return { success: true, ...toolboxHttpStatus };
+  }
+
+  toolboxHttpStatus.lastError = '';
+  toolboxHttpServer = http.createServer((req, res) => {
+    const url = req.url || '/';
+    if (url !== '/set_image') {
+      res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: 'Not found' }));
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: false, error: 'Method not allowed' }));
+      return;
+    }
+
+    const contentType = (req.headers['content-type'] || '').toLowerCase();
+    const chunks = [];
+    let total = 0;
+
+    req.on('data', (chunk) => {
+      total += chunk.length;
+      if (total > TOOLBOX_HTTP_MAX_BYTES) {
+        res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: 'Payload too large' }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf8');
+      const dataUrl = extractDataUrlFromBody(body, contentType);
+      if (!dataUrl) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: 'Invalid image payload' }));
+        return;
+      }
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('toolbox-image-received', {
+          dataUrl,
+          receivedAt: Date.now(),
+          mime: parseMimeFromDataUrl(dataUrl),
+          payloadBytes: total
+        });
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ success: true }));
+    });
+  });
+
+  toolboxHttpServer.on('error', (error) => {
+    toolboxHttpStatus.running = false;
+    toolboxHttpStatus.lastError = error.message;
+    toolboxHttpServer = null;
+    broadcastToolboxHttpStatus();
+  });
+
+  toolboxHttpServer.listen(TOOLBOX_HTTP_PORT, '127.0.0.1', () => {
+    toolboxHttpStatus.running = true;
+    toolboxHttpStatus.lastError = '';
+    broadcastToolboxHttpStatus();
+  });
+
+  return { success: true, ...toolboxHttpStatus };
+}
+
+function stopToolboxHttpServer() {
+  if (!toolboxHttpServer) {
+    toolboxHttpStatus.running = false;
+    return { success: true, ...toolboxHttpStatus };
+  }
+
+  const server = toolboxHttpServer;
+  toolboxHttpServer = null;
+  toolboxHttpStatus.running = false;
+  server.close(() => {
+    broadcastToolboxHttpStatus();
+  });
+
+  return { success: true, ...toolboxHttpStatus };
 }
 
 // 简单的密码加密（Base64 + 混淆）
@@ -729,6 +871,10 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   app.isQuiting = true;
   globalShortcut.unregisterAll();
+  if (toolboxHttpServer) {
+    toolboxHttpServer.close();
+    toolboxHttpServer = null;
+  }
   if (db) {
     db.close();
     console.log('数据库已关闭');
@@ -750,6 +896,31 @@ ipcMain.on('window-maximize', () => {
 
 ipcMain.on('window-close', () => {
   mainWindow.hide();
+});
+
+// IPC 通信处理 - 工具箱 HTTP 服务
+ipcMain.handle('toolbox-http-start', async () => {
+  try {
+    return startToolboxHttpServer();
+  } catch (error) {
+    toolboxHttpStatus.running = false;
+    toolboxHttpStatus.lastError = error.message;
+    return { success: false, ...toolboxHttpStatus };
+  }
+});
+
+ipcMain.handle('toolbox-http-stop', async () => {
+  try {
+    return stopToolboxHttpServer();
+  } catch (error) {
+    toolboxHttpStatus.running = false;
+    toolboxHttpStatus.lastError = error.message;
+    return { success: false, ...toolboxHttpStatus };
+  }
+});
+
+ipcMain.handle('toolbox-http-status', async () => {
+  return { success: true, ...toolboxHttpStatus };
 });
 
 ipcMain.on('quick-input-exit', () => {

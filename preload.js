@@ -34,6 +34,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readImage: (fileName) => ipcRenderer.invoke('read-image', fileName),
   deleteImage: (fileName) => ipcRenderer.invoke('delete-image', fileName),
   saveImageFromClipboard: (base64Data) => ipcRenderer.invoke('save-image-from-clipboard', base64Data),
+
+  // 工具箱 - HTTP 图片接收
+  startToolboxHttp: () => ipcRenderer.invoke('toolbox-http-start'),
+  stopToolboxHttp: () => ipcRenderer.invoke('toolbox-http-stop'),
+  getToolboxHttpStatus: () => ipcRenderer.invoke('toolbox-http-status'),
+  onToolboxHttpStatus: (callback) => ipcRenderer.on('toolbox-http-status', (event, status) => callback(status)),
+  onToolboxImageReceived: (callback) => ipcRenderer.on('toolbox-image-received', (event, payload) => callback(payload)),
   
   // 密码管理
   setPassword: (password) => ipcRenderer.invoke('set-password', password),

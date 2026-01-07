@@ -173,6 +173,71 @@
               <div v-if="activeTab.state.base64Error" class="tool-error">{{ activeTab.state.base64Error }}</div>
             </div>
           </div>
+
+          <div v-else-if="activeTab.type === 'http-image-receiver'">
+            <div class="tool-card-header">
+              <div class="tool-card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12h4l3 8 4-16 3 8h4"></path>
+                </svg>
+                <div>
+                  <h3>{{ activeTab.title }}</h3>
+                  <span>启动本地 HTTP 服务，接收图片并实时预览</span>
+                </div>
+              </div>
+              <span class="tool-tag">接口</span>
+            </div>
+            <div class="tool-card-body">
+              <div class="tool-status">
+                <div class="tool-status-item">
+                  <span class="tool-status-label">服务状态</span>
+                  <span class="tool-status-pill" :class="{ running: activeTab.state.serverRunning }">
+                    {{ activeTab.state.serverRunning ? '运行中' : '已停止' }}
+                  </span>
+                </div>
+                <div class="tool-status-item">
+                  <span class="tool-status-label">监听地址</span>
+                  <span class="tool-status-value">127.0.0.1:{{ activeTab.state.port }}</span>
+                </div>
+                <div v-if="activeTab.state.lastError" class="tool-status-error">
+                  {{ activeTab.state.lastError }}
+                </div>
+              </div>
+
+              <div class="tool-actions">
+                <button class="tool-btn primary" :disabled="activeTab.state.serverRunning" @click="handleStartHttpServer(activeTab)">
+                  启动服务
+                </button>
+                <button class="tool-btn" :disabled="!activeTab.state.serverRunning" @click="handleStopHttpServer(activeTab)">
+                  停止服务
+                </button>
+                <button class="tool-btn" :disabled="!activeTab.state.imageDataUrl" @click="handleClearHttpImage(activeTab)">
+                  清空图片
+                </button>
+              </div>
+
+              <div class="tool-output">
+                <label>调用示例</label>
+                <textarea
+                  :value="buildHttpExample(activeTab.state.port)"
+                  rows="5"
+                  readonly
+                ></textarea>
+              </div>
+
+              <div v-if="activeTab.state.imageDataUrl" class="tool-preview">
+                <img :src="activeTab.state.imageDataUrl" alt="HTTP 图片预览" @error="handleHttpImagePreviewError(activeTab)" />
+              </div>
+              <div v-else class="tool-preview tool-preview-empty">
+                暂无图片，等待 /set_image 上传
+              </div>
+              <div v-if="activeTab.state.receivedAt" class="tool-meta">
+                <span>接收时间：{{ formatReceivedAt(activeTab.state.receivedAt) }}</span>
+                <span v-if="activeTab.state.payloadBytes">大小：{{ formatFileSize(activeTab.state.payloadBytes) }}</span>
+                <span v-if="activeTab.state.mime">类型：{{ activeTab.state.mime }}</span>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
@@ -180,10 +245,11 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '../stores/app'
 
 const appStore = useAppStore()
+const electronAPI = window.electronAPI
 
 const tools = [
   {
@@ -207,6 +273,15 @@ const tools = [
         <line x1="12" y1="22.08" x2="12" y2="12"></line>
       </svg>
     `
+  },
+  {
+    id: 'http-image-receiver',
+    name: 'HTTP 图片接收',
+    icon: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M3 12h4l3 8 4-16 3 8h4"></path>
+      </svg>
+    `
   }
 ]
 
@@ -214,6 +289,7 @@ const tabs = ref([])
 const activeTabId = ref(null)
 const imageInputRefs = ref({})
 let nextTabId = 1
+let latestHttpImagePayload = null
 
 const activeTab = computed(() => tabs.value.find(tab => tab.id === activeTabId.value))
 
@@ -253,8 +329,14 @@ function createTab(tool) {
     id,
     title: tool.name,
     type: tool.id,
-    state: tool.id === 'image-to-base64' ? createImageToBase64State() : createBase64ToImageState()
+    state: createToolState(tool.id)
   }
+}
+
+function createToolState(type) {
+  if (type === 'image-to-base64') return createImageToBase64State()
+  if (type === 'base64-to-image') return createBase64ToImageState()
+  return createHttpImageReceiverState()
 }
 
 function createImageToBase64State() {
@@ -272,6 +354,22 @@ function createBase64ToImageState() {
     base64ImageUrl: '',
     base64Error: ''
   }
+}
+
+function createHttpImageReceiverState() {
+  const state = {
+    serverRunning: false,
+    port: 17890,
+    lastError: '',
+    imageDataUrl: '',
+    receivedAt: 0,
+    payloadBytes: 0,
+    mime: ''
+  }
+  if (latestHttpImagePayload) {
+    Object.assign(state, latestHttpImagePayload)
+  }
+  return state
 }
 
 function setImageInputRef(tabId, element) {
@@ -381,6 +479,46 @@ function handleBase64PreviewError(tab) {
   appStore.toast('图片预览失败', 'warning')
 }
 
+async function handleStartHttpServer(tab) {
+  if (!electronAPI?.startToolboxHttp) {
+    appStore.toast('当前环境不支持启动服务', 'warning')
+    return
+  }
+  const result = await electronAPI.startToolboxHttp()
+  if (result?.success) {
+    applyToolboxHttpStatus(result)
+    appStore.toast('HTTP 服务已启动', 'success')
+  } else {
+    appStore.toast(result?.lastError || '启动失败', 'error')
+  }
+}
+
+async function handleStopHttpServer(tab) {
+  if (!electronAPI?.stopToolboxHttp) {
+    appStore.toast('当前环境不支持停止服务', 'warning')
+    return
+  }
+  const result = await electronAPI.stopToolboxHttp()
+  if (result?.success) {
+    applyToolboxHttpStatus(result)
+    appStore.toast('HTTP 服务已停止', 'success')
+  } else {
+    appStore.toast(result?.lastError || '停止失败', 'error')
+  }
+}
+
+function handleClearHttpImage(tab) {
+  tab.state.imageDataUrl = ''
+  tab.state.receivedAt = 0
+  tab.state.payloadBytes = 0
+  tab.state.mime = ''
+}
+
+function handleHttpImagePreviewError(tab) {
+  appStore.toast('图片预览失败', 'warning')
+  tab.state.imageDataUrl = ''
+}
+
 async function handleCopy(text, message) {
   if (!text) {
     appStore.toast('没有可复制的内容', 'warning')
@@ -449,6 +587,64 @@ function formatFileSize(size) {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
+
+function buildHttpExample(port) {
+  return [
+    `POST http://127.0.0.1:${port}/set_image`,
+    'Content-Type: application/json',
+    '',
+    '{"dataUrl":"data:image/png;base64,..."}',
+    '// 或 {"base64":"...","mime":"image/png"}'
+  ].join('\n')
+}
+
+function formatReceivedAt(timestamp) {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  return date.toLocaleString()
+}
+
+function applyToolboxHttpStatus(status) {
+  tabs.value.forEach((tab) => {
+    if (tab.type !== 'http-image-receiver') return
+    tab.state.serverRunning = !!status.running
+    tab.state.port = status.port || tab.state.port
+    tab.state.lastError = status.lastError || ''
+  })
+}
+
+function applyToolboxImagePayload(payload) {
+  if (!payload?.dataUrl) return
+  const normalized = {
+    imageDataUrl: payload.dataUrl,
+    receivedAt: payload.receivedAt || Date.now(),
+    payloadBytes: payload.payloadBytes || 0,
+    mime: payload.mime || ''
+  }
+  latestHttpImagePayload = normalized
+  tabs.value.forEach((tab) => {
+    if (tab.type !== 'http-image-receiver') return
+    Object.assign(tab.state, normalized)
+  })
+}
+
+async function initToolboxHttpStatus() {
+  if (!electronAPI?.getToolboxHttpStatus) return
+  const result = await electronAPI.getToolboxHttpStatus()
+  if (result?.success) {
+    applyToolboxHttpStatus(result)
+  }
+}
+
+onMounted(() => {
+  initToolboxHttpStatus()
+  electronAPI?.onToolboxHttpStatus?.((status) => {
+    applyToolboxHttpStatus(status)
+  })
+  electronAPI?.onToolboxImageReceived?.((payload) => {
+    applyToolboxImagePayload(payload)
+  })
+})
 </script>
 
 <style scoped>
@@ -746,6 +942,12 @@ function formatFileSize(size) {
   justify-content: center;
 }
 
+.tool-preview-empty {
+  min-height: 160px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .tool-preview img {
   max-width: 100%;
   max-height: 220px;
@@ -824,6 +1026,61 @@ function formatFileSize(size) {
   color: var(--danger-color);
   font-size: 12px;
   font-weight: 600;
+}
+
+.tool-status {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8f9ff;
+  border: 1px dashed rgba(108, 92, 231, 0.2);
+}
+
+.tool-status-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.tool-status-label {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.tool-status-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tool-status-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.tool-status-pill.running {
+  background: rgba(34, 197, 94, 0.16);
+  color: #16a34a;
+}
+
+.tool-status-error {
+  font-size: 12px;
+  color: var(--danger-color);
+  font-weight: 600;
+}
+
+.tool-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 900px) {
