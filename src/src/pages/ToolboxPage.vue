@@ -197,7 +197,7 @@
                 </div>
                 <div class="tool-status-item">
                   <span class="tool-status-label">监听地址</span>
-                  <span class="tool-status-value">127.0.0.1:{{ activeTab.state.port }}</span>
+                  <span class="tool-status-value">{{ formatListenAddress(activeTab.state) }}</span>
                 </div>
                 <div v-if="activeTab.state.lastError" class="tool-status-error">
                   {{ activeTab.state.lastError }}
@@ -219,7 +219,7 @@
               <div class="tool-output">
                 <label>调用示例</label>
                 <textarea
-                  :value="buildHttpExample(activeTab.state.port)"
+                  :value="buildHttpExample(activeTab.state.host, activeTab.state.port)"
                   rows="5"
                   readonly
                 ></textarea>
@@ -359,6 +359,7 @@ function createBase64ToImageState() {
 function createHttpImageReceiverState() {
   const state = {
     serverRunning: false,
+    host: '127.0.0.1',
     port: 17890,
     lastError: '',
     imageDataUrl: '',
@@ -588,9 +589,10 @@ function formatFileSize(size) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function buildHttpExample(port) {
+function buildHttpExample(host, port) {
+  const resolvedHost = host === '0.0.0.0' ? '<本机IP>' : host || '127.0.0.1'
   return [
-    `POST http://127.0.0.1:${port}/set_image`,
+    `POST http://${resolvedHost}:${port}/set_image`,
     'Content-Type: application/json',
     '',
     '{"dataUrl":"data:image/png;base64,..."}',
@@ -608,9 +610,16 @@ function applyToolboxHttpStatus(status) {
   tabs.value.forEach((tab) => {
     if (tab.type !== 'http-image-receiver') return
     tab.state.serverRunning = !!status.running
+    tab.state.host = status.host || tab.state.host
     tab.state.port = status.port || tab.state.port
     tab.state.lastError = status.lastError || ''
   })
+}
+
+function formatListenAddress(state) {
+  const host = state?.host || '127.0.0.1'
+  const displayHost = host === '0.0.0.0' ? '0.0.0.0 (局域网可用)' : host
+  return `${displayHost}:${state?.port || 17890}`
 }
 
 function applyToolboxImagePayload(payload) {

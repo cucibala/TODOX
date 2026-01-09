@@ -13,6 +13,20 @@ export function buildDailyTaskSummary(tasks) {
   }
 }
 
+export function buildSingleTaskSummary(task) {
+  return {
+    text: task.text || '',
+    status: task.status || (task.completed ? 'done' : 'todo'),
+    priority: task.priority || 'medium',
+    createdAt: task.createdAt || null,
+    dueDate: task.dueDate || null,
+    completedAt: task.completedAt || null,
+    subtasksTotal: task.subtasks?.length || 0,
+    subtasksCompleted: task.subtasks?.filter(st => st.completed).length || 0,
+    progressCount: task.progress?.length || 0
+  }
+}
+
 export function parseJsonArrayFromText(text) {
   const trimmed = (text || '').trim()
   if (!trimmed) return []

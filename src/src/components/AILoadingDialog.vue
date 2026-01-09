@@ -42,7 +42,7 @@ const appStore = useAppStore()
   justify-content: center;
   z-index: 10001;
   animation: fadeIn 0.2s ease;
-  backdrop-filter: blur(6px);
+  backdrop-filter: none;
 }
 
 @keyframes fadeIn {

@@ -2,7 +2,7 @@
 // 参考：https://www.volcengine.com/docs/82379/1399008
 import { assertOkResponse, postChatCompletions, postChatCompletionsJson } from './llm_http.js'
 import { consumeChatCompletionsSSE } from './llm_stream.js'
-import { buildDailyTaskSummary, parseJsonArrayFromText } from './llm_utils.js'
+import { buildDailyTaskSummary, buildSingleTaskSummary, parseJsonArrayFromText } from './llm_utils.js'
 
 /**
  * 豆包 API 客户端
@@ -162,6 +162,29 @@ export class DoubaoClient {
         content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
       }
     ], { model, maxTokens: 500 })
+    return response.choices[0]?.message?.content || ''
+  }
+
+  /**
+   * 生成单个任务总结
+   * @param {Object} task - 任务对象
+   * @param {string} model - 模型ID（可选）
+   * @returns {Promise<string>} 总结内容
+   */
+  async generateTaskSummary(task, model = null) {
+    model = model || this.defaultModel
+    const taskSummary = buildSingleTaskSummary(task)
+
+    const response = await this.chatCompletions([
+      {
+        role: 'system',
+        content: '你是一个专业的任务管理助手，擅长归纳单个任务的进展与下一步建议。请用中文回复。'
+      },
+      {
+        role: 'user',
+        content: `请根据以下任务信息，生成一份简洁的任务总结（80-120字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 当前完成进度概览\n2. 重点进展与风险点\n3. 下一步建议`
+      }
+    ], { model, maxTokens: 350 })
     return response.choices[0]?.message?.content || ''
   }
 }

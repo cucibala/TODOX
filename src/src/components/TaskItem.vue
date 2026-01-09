@@ -53,6 +53,30 @@
               <circle v-if="task.pinned" cx="18" cy="6" r="2" fill="currentColor" stroke="none"></circle>
             </svg>
           </button>
+          <button
+            class="btn-ai-breakdown"
+            @click="handleAIBreakdown"
+            :disabled="isAIBreakingDown"
+            title="AI 拆解"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 6h16"></path>
+              <path d="M4 12h16"></path>
+              <path d="M4 18h10"></path>
+              <circle cx="18" cy="18" r="2"></circle>
+            </svg>
+          </button>
+          <button
+            class="btn-ai-task-summary"
+            @click="handleAISummary"
+            :disabled="isGeneratingTaskSummary"
+            title="AI 总结"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 17 9 11 13 15 21 7"></polyline>
+              <polyline points="14 7 21 7 21 14"></polyline>
+            </svg>
+          </button>
           <button class="btn-task-expand" @click="toggleTaskDetails" :title="showDetails ? '收起' : '展开'">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline :points="showDetails ? '6 15 12 9 18 15' : '6 9 12 15 18 9'"></polyline>
@@ -67,7 +91,6 @@
           </button>
           <div v-if="showTaskMenu" class="task-menu" @click.stop>
             <button class="task-menu-item" @click="handleStartEdit">编辑</button>
-            <button class="task-menu-item" @click="handleAIBreakdown" :disabled="isAIBreakingDown">AI 拆解</button>
             <button class="task-menu-item danger" @click="handleDelete">删除</button>
           </div>
         </div>
@@ -659,7 +682,8 @@ import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
-import { aiBreakdownTask } from '../utils/deepseek'
+import { aiBreakdownTask, generateTaskSummary } from '../utils/deepseek'
+import { DoubaoClient } from '../utils/doubao'
 
 const props = defineProps({
   task: {
@@ -692,6 +716,7 @@ const dueDateInputRef = ref(null)
 
 // AI 拆解状态
 const isAIBreakingDown = ref(false)
+const isGeneratingTaskSummary = ref(false)
 
 // 子任务拖拽状态
 const draggedSubtaskId = ref(null)
@@ -1124,6 +1149,72 @@ async function handleAIBreakdown() {
     appStore.toast('AI 拆解失败：' + error.message)
   } finally {
     isAIBreakingDown.value = false
+  }
+}
+
+function buildTaskSummaryPayload() {
+  return {
+    text: props.task.text,
+    completed: props.task.completed,
+    status: props.task.status,
+    priority: props.task.priority,
+    createdAt: props.task.createdAt,
+    dueDate: props.task.dueDate,
+    completedAt: props.task.completedAt,
+    subtasks: (props.task.subtasks || []).map(subtask => ({
+      text: subtask.text,
+      completed: subtask.completed,
+      requiresInput: subtask.requiresInput
+    })),
+    progress: (props.task.progress || []).map(item => ({
+      text: item.text,
+      createdAt: item.createdAt
+    }))
+  }
+}
+
+async function handleAISummary() {
+  if (isGeneratingTaskSummary.value) return
+  showTaskMenu.value = false
+  let summary = ''
+
+  try {
+    isGeneratingTaskSummary.value = true
+    appStore.showAILoadingDialog = true
+    const summaryTask = buildTaskSummaryPayload()
+
+    const hasDeepSeekResult = await electronAPI.hasDeepSeekKey()
+    if (hasDeepSeekResult.success && hasDeepSeekResult.hasKey) {
+      const deepSeekKeyResult = await electronAPI.getDeepSeekKey()
+      if (deepSeekKeyResult.success && deepSeekKeyResult.key) {
+        summary = await generateTaskSummary(summaryTask, deepSeekKeyResult.key)
+      }
+    }
+
+    if (!summary) {
+      const doubaoConfigResult = await electronAPI.getDoubaoConfig()
+      if (doubaoConfigResult && doubaoConfigResult.success && doubaoConfigResult.key) {
+        const doubaoClient = new DoubaoClient(
+          doubaoConfigResult.key,
+          doubaoConfigResult.endpoint,
+          doubaoConfigResult.model
+        )
+        summary = await doubaoClient.generateTaskSummary(summaryTask)
+      }
+    }
+
+    if (!summary) {
+      appStore.toast('请先在设置中配置 AI 密钥')
+      return
+    }
+
+    appStore.aiSummaryContent = summary
+    appStore.showAISummaryDialog = true
+  } catch (error) {
+    appStore.toast('AI 总结失败：' + error.message)
+  } finally {
+    isGeneratingTaskSummary.value = false
+    appStore.showAILoadingDialog = false
   }
 }
 

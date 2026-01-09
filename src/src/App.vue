@@ -40,7 +40,9 @@
       <ChatPage v-else-if="currentPage === 'chat'" />
 
       <!-- 工具箱页面 -->
-      <ToolboxPage v-else-if="currentPage === 'tools'" />
+      <KeepAlive>
+        <ToolboxPage v-if="currentPage === 'tools'" />
+      </KeepAlive>
 
     </main>
 

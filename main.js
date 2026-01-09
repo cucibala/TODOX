@@ -222,10 +222,12 @@ let lastQuickWindowBounds = null;
 const QUICK_INPUT_SIZE = { width: 560, height: 96 };
 const QUICK_INPUT_EXPANDED_HEIGHT = 460;
 const TOOLBOX_HTTP_PORT = 17890;
+const TOOLBOX_HTTP_HOST = '0.0.0.0';
 const TOOLBOX_HTTP_MAX_BYTES = 15 * 1024 * 1024;
 let toolboxHttpServer = null;
 let toolboxHttpStatus = {
   running: false,
+  host: TOOLBOX_HTTP_HOST,
   port: TOOLBOX_HTTP_PORT,
   lastError: ''
 };
@@ -347,7 +349,7 @@ function startToolboxHttpServer() {
     broadcastToolboxHttpStatus();
   });
 
-  toolboxHttpServer.listen(TOOLBOX_HTTP_PORT, '127.0.0.1', () => {
+  toolboxHttpServer.listen(TOOLBOX_HTTP_PORT, TOOLBOX_HTTP_HOST, () => {
     toolboxHttpStatus.running = true;
     toolboxHttpStatus.lastError = '';
     broadcastToolboxHttpStatus();

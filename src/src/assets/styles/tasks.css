@@ -2301,6 +2301,7 @@
 .btn-pin,
 .btn-edit,
 .btn-ai-breakdown,
+.btn-ai-task-summary,
 .btn-delete {
   width: 32px;
   height: 32px;
@@ -2345,12 +2346,23 @@
   background: linear-gradient(135deg, rgba(138, 157, 251, 0.2) 0%, rgba(138, 157, 251, 0.1) 100%);
 }
 
-.btn-ai-breakdown:disabled {
+.btn-ai-task-summary {
+  color: var(--success-color);
+  background: linear-gradient(135deg, rgba(72, 187, 120, 0.12) 0%, rgba(72, 187, 120, 0.06) 100%);
+}
+
+.btn-ai-task-summary:hover {
+  background: linear-gradient(135deg, rgba(72, 187, 120, 0.2) 0%, rgba(72, 187, 120, 0.12) 100%);
+}
+
+.btn-ai-breakdown:disabled,
+.btn-ai-task-summary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.btn-ai-breakdown:disabled:hover {
+.btn-ai-breakdown:disabled:hover,
+.btn-ai-task-summary:disabled:hover {
   transform: none;
 }
 
@@ -2365,6 +2377,7 @@
 .btn-pin svg,
 .btn-edit svg,
 .btn-ai-breakdown svg,
+.btn-ai-task-summary svg,
 .btn-delete svg {
   width: 16px;
   height: 16px;

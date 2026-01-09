@@ -21,7 +21,7 @@
   position: absolute;
   inset: -40% -15% -35% -15%;
   background: var(--titlebar-gradient-soft);
-  filter: blur(10px);
+  filter: none;
   opacity: 0.85;
   pointer-events: none;
   animation: titlebar-flow-soft var(--titlebar-gradient-soft-duration) ease-in-out infinite alternate;

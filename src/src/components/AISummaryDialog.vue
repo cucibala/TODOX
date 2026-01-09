@@ -51,7 +51,7 @@ function handleClose() {
   justify-content: center;
   z-index: 10000;
   animation: fadeIn 0.2s ease;
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;
 }
 
 @keyframes fadeIn {

@@ -11,7 +11,7 @@
   justify-content: center;
   z-index: 10000;
   animation: fadeIn 0.2s ease;
-  backdrop-filter: blur(4px);
+  backdrop-filter: none;
 }
 
 .app-container.quick-input-mode .dialog-overlay {
@@ -240,7 +240,7 @@
   position: absolute;
   inset: -40% -15% -35% -15%;
   background: var(--titlebar-gradient-soft);
-  filter: blur(10px);
+  filter: none;
   opacity: 0.85;
   pointer-events: none;
   animation: none;

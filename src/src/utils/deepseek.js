@@ -1,7 +1,7 @@
 // DeepSeek API 工具类
 import { assertOkResponse, postChatCompletions, postChatCompletionsJson } from './llm_http.js'
 import { consumeChatCompletionsSSE } from './llm_stream.js'
-import { buildDailyTaskSummary, parseJsonArrayFromText } from './llm_utils.js'
+import { buildDailyTaskSummary, buildSingleTaskSummary, parseJsonArrayFromText } from './llm_utils.js'
 
 /**
  * DeepSeek API 客户端
@@ -150,5 +150,28 @@ export async function generateDailySummary(tasks, apiKey) {
       content: `请根据以下今日任务数据，生成一份简洁的每日总结（150-200字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 任务完成情况概览\n2. 工作重点和成就\n3. 需要改进的地方\n4. 明日建议`
     }
   ], { maxTokens: 500 })
+  return response.choices?.[0]?.message?.content || ''
+}
+
+/**
+ * 生成单个任务总结
+ * @param {Object} task - 任务对象
+ * @param {string} apiKey - API 密钥
+ * @returns {Promise<string>} 总结内容
+ */
+export async function generateTaskSummary(task, apiKey) {
+  const client = new DeepSeekClient(apiKey)
+  const taskSummary = buildSingleTaskSummary(task)
+
+  const response = await client.chatCompletions([
+    {
+      role: 'system',
+      content: '你是一个专业的任务管理助手，擅长归纳单个任务的进展与下一步建议。请用中文回复。'
+    },
+    {
+      role: 'user',
+      content: `请根据以下任务信息，生成一份简洁的任务总结（80-120字）：\n\n${JSON.stringify(taskSummary, null, 2)}\n\n总结应包括：\n1. 当前完成进度概览\n2. 重点进展与风险点\n3. 下一步建议`
+    }
+  ], { maxTokens: 350 })
   return response.choices?.[0]?.message?.content || ''
 }
