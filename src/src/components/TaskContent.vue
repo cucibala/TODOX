@@ -17,6 +17,34 @@
       </div>
 
       <div class="toolbar-right">
+        <div class="view-toggle">
+          <span class="view-toggle-label">视角</span>
+          <button
+            class="view-toggle-btn"
+            :class="{ active: dataMode === 'local' }"
+            @click="setViewMode('local')"
+          >
+            本地
+          </button>
+          <button
+            class="view-toggle-btn"
+            :class="{ active: dataMode === 'server' }"
+            @click="setViewMode('server')"
+          >
+            服务端
+          </button>
+          <button
+            v-if="isServerMode && !hasSession"
+            class="view-toggle-join"
+            @click="openJoinOrgModal"
+          >
+            加入组织
+          </button>
+          <div v-if="isServerMode && hasSession" class="view-toggle-session">
+            <span class="view-toggle-org">{{ orgAccount || orgId }}</span>
+            <span class="view-toggle-member">{{ memberName }}（{{ memberRoleLabel }}）</span>
+          </div>
+        </div>
         <div class="status-filter-buttons priority-chip-group" role="group" aria-label="筛选任务状态">
           <button
             class="status-filter-btn"
@@ -121,7 +149,7 @@
               <div class="column-title">待办</div>
               <div class="column-meta">
                 <span class="column-count">{{ todoTodos.length }}</span>
-                <button class="column-add" @click="focusAddTask" title="添加任务">+</button>
+                <button class="column-add" :disabled="!canCreateTask" @click="focusAddTask" title="添加任务">+</button>
               </div>
             </div>
             <div class="column-body">
@@ -142,7 +170,7 @@
               <div class="column-title">进行中</div>
               <div class="column-meta">
                 <span class="column-count">{{ doingTodos.length }}</span>
-                <button class="column-add" @click="focusAddTask" title="添加任务">+</button>
+                <button class="column-add" :disabled="!canCreateTask" @click="focusAddTask" title="添加任务">+</button>
               </div>
             </div>
             <div class="column-body">
@@ -163,7 +191,7 @@
               <div class="column-title">已完成</div>
               <div class="column-meta">
                 <span class="column-count">{{ doneTodos.length }}</span>
-                <button class="column-add" @click="focusAddTask" title="添加任务">+</button>
+                <button class="column-add" :disabled="!canCreateTask" @click="focusAddTask" title="添加任务">+</button>
               </div>
             </div>
             <div class="column-body">
@@ -262,7 +290,7 @@
       </aside>
     </div>
 
-    <button class="floating-add-btn" @click="openAddTaskModal" title="添加任务">
+    <button class="floating-add-btn" :disabled="!canCreateTask" @click="openAddTaskModal" title="添加任务">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19"></line>
         <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -318,6 +346,16 @@
                   class="date-input"
                   title="截止日期（可选）"
                 />
+                <select
+                  v-if="isServerMode && isAdmin"
+                  v-model="selectedAssigneeId"
+                  class="assignee-select"
+                >
+                  <option value="">未分配</option>
+                  <option v-for="member in members" :key="member.id" :value="String(member.id)">
+                    {{ member.name }}（{{ member.role === 'ADMIN' ? '管理员' : '成员' }}）
+                  </option>
+                </select>
                 <div class="priority-chip-group priority-select-chips" role="group" aria-label="选择任务优先级">
                   <button
                     type="button"
@@ -357,7 +395,7 @@
                     <polyline points="21 15 16 10 5 21"></polyline>
                   </svg>
                 </button>
-                <button type="submit" class="btn-add">
+                <button type="submit" class="btn-add" :disabled="!canCreateTask">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -389,26 +427,65 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showJoinOrgModal" class="join-org-modal" @click.self="closeJoinOrgModal">
+      <div class="join-org-dialog">
+        <div class="join-org-header">
+          <div class="join-org-title">加入组织</div>
+          <button class="join-org-close" @click="closeJoinOrgModal" title="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="join-org-body">
+          <label class="join-org-label">服务端地址</label>
+          <input v-model="joinBaseUrl" type="text" class="join-org-input" placeholder="http://localhost:8081" />
+
+          <label class="join-org-label">组织账号</label>
+          <input v-model="joinAccount" type="text" class="join-org-input" placeholder="请输入组织账号" />
+
+          <label class="join-org-label">组织密码</label>
+          <input v-model="joinPassword" type="password" class="join-org-input" placeholder="请输入组织密码" />
+
+          <label class="join-org-label">成员姓名</label>
+          <input v-model="joinMemberName" type="text" class="join-org-input" placeholder="用于分配任务" />
+
+          <div class="join-org-hint">组织账号密码需管理员在数据库中配置</div>
+        </div>
+        <div class="join-org-actions">
+          <button class="join-org-cancel" @click="closeJoinOrgModal">取消</button>
+          <button class="join-org-confirm" :disabled="isJoining" @click="handleJoinOrg">
+            {{ isJoining ? '加入中...' : '加入组织' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </section>
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
+import { useOrgStore } from '../stores/org'
 import TaskItem from './TaskItem.vue'
 import ImagePreview from './ImagePreview.vue'
 import { generateDailySummary } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
+import { uploadMediaDataUrl } from '../utils/media'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
 const projectStore = useProjectStore()
+const orgStore = useOrgStore()
 
 const { todos, searchQuery, filteredTodos, currentImages, currentPriorityFilter } = storeToRefs(todoStore)
 const { hasProjects, currentProjectId, currentProject } = storeToRefs(projectStore)
+const { dataMode, isServerMode, isAdmin, hasSession, members, serverBaseUrl, orgAccount, memberName, memberRole, orgId } = storeToRefs(orgStore)
 
 const newTaskText = ref('')
 const newTaskDueDate = ref('')
@@ -417,6 +494,13 @@ const isGeneratingSummary = ref(false)
 const taskInputRef = ref(null)
 const showAddTaskModal = ref(false)
 const currentStatusFilter = ref('all')
+const showJoinOrgModal = ref(false)
+const joinBaseUrl = ref(serverBaseUrl.value)
+const joinAccount = ref('')
+const joinPassword = ref('')
+const joinMemberName = ref('')
+const isJoining = ref(false)
+const selectedAssigneeId = ref('')
 
 const electronAPI = window.electronAPI
 
@@ -501,6 +585,14 @@ const completionPercentage = computed(() => {
   return Math.round((currentCompletedCount.value / currentTotalCount.value) * 100)
 })
 
+const canCreateTask = computed(() => !isServerMode.value || isAdmin.value)
+
+const memberRoleLabel = computed(() => {
+  if (memberRole.value === 'ADMIN') return '管理员'
+  if (memberRole.value === 'USER') return '成员'
+  return '未知'
+})
+
 const activeDropColumn = ref('')
 
 function handleDrop(event, status) {
@@ -523,16 +615,23 @@ function adjustTextareaHeight(event) {
 }
 
 async function handleAddTask() {
+  if (!canCreateTask.value) {
+    appStore.toast('只有管理员可以创建任务')
+    return
+  }
+  const assigneeId = selectedAssigneeId.value ? Number(selectedAssigneeId.value) : null
   const result = await todoStore.addTask(
     newTaskText.value,
     newTaskPriority.value,
-    newTaskDueDate.value
+    newTaskDueDate.value,
+    assigneeId
   )
   
   if (result.success) {
     newTaskText.value = ''
     newTaskDueDate.value = ''
     newTaskPriority.value = 'medium'
+    selectedAssigneeId.value = ''
     // 重置 textarea 高度
     const textarea = document.querySelector('.task-textarea')
     if (textarea) {
@@ -586,8 +685,8 @@ async function handlePaste(event) {
         reader.readAsDataURL(file)
       })
       
-      // 保存文件到应用数据目录
-      const result = await electronAPI.saveImageFromClipboard(base64Data)
+      // 保存文件到应用数据目录或服务端
+      const result = await uploadMediaDataUrl(base64Data)
       if (result.success) {
         // 添加到当前图片列表
         todoStore.currentImages.push(result.fileName)
@@ -701,10 +800,18 @@ async function handleGenerateSummary() {
 }
 
 function focusAddTask() {
+  if (!canCreateTask.value) {
+    appStore.toast('只有管理员可以创建任务')
+    return
+  }
   taskInputRef.value?.focus()
 }
 
 async function openAddTaskModal() {
+  if (!canCreateTask.value) {
+    appStore.toast('只有管理员可以创建任务')
+    return
+  }
   showAddTaskModal.value = true
   await nextTick()
   taskInputRef.value?.focus()
@@ -713,5 +820,60 @@ async function openAddTaskModal() {
 function closeAddTaskModal() {
   showAddTaskModal.value = false
 }
+
+function setViewMode(mode) {
+  orgStore.setMode(mode)
+}
+
+function openJoinOrgModal() {
+  joinBaseUrl.value = serverBaseUrl.value
+  joinAccount.value = orgAccount.value || ''
+  joinMemberName.value = memberName.value || ''
+  joinPassword.value = ''
+  showJoinOrgModal.value = true
+}
+
+function closeJoinOrgModal() {
+  showJoinOrgModal.value = false
+}
+
+async function handleJoinOrg() {
+  if (!joinAccount.value.trim() || !joinPassword.value.trim() || !joinMemberName.value.trim()) {
+    appStore.toast('请完整填写组织账号、密码和成员姓名')
+    return
+  }
+  isJoining.value = true
+  try {
+    await orgStore.joinOrg({
+      baseUrl: joinBaseUrl.value.trim(),
+      account: joinAccount.value.trim(),
+      password: joinPassword.value.trim(),
+      name: joinMemberName.value.trim()
+    })
+    await orgStore.loadMembers()
+    await projectStore.loadProjects()
+    await todoStore.loadTodos()
+    showJoinOrgModal.value = false
+    appStore.toast('加入组织成功')
+  } catch (error) {
+    appStore.toast(error.message || '加入组织失败')
+  } finally {
+    isJoining.value = false
+  }
+}
+
+watch(() => dataMode.value, async () => {
+  await projectStore.loadProjects()
+  await todoStore.loadTodos()
+  if (isServerMode.value && hasSession.value) {
+    await orgStore.loadMembers()
+  }
+})
+
+watch(() => hasSession.value, async (value) => {
+  if (isServerMode.value && value) {
+    await orgStore.loadMembers()
+  }
+})
 </script>
 

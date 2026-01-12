@@ -1,0 +1,70 @@
+package com.x.todox.service;
+
+import com.x.todox.dto.JoinOrgRequest;
+import com.x.todox.dto.JoinOrgResponse;
+import com.x.todox.dto.OrgMemberResponse;
+import com.x.todox.entity.OrgMember;
+import com.x.todox.entity.Organization;
+import com.x.todox.enums.MemberRole;
+import com.x.todox.repository.OrgMemberRepository;
+import com.x.todox.repository.OrganizationRepository;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class OrganizationService {
+
+    private final OrganizationRepository organizationRepository;
+    private final OrgMemberRepository orgMemberRepository;
+    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    public OrganizationService(OrganizationRepository organizationRepository,
+                               OrgMemberRepository orgMemberRepository) {
+        this.organizationRepository = organizationRepository;
+        this.orgMemberRepository = orgMemberRepository;
+    }
+
+    @Transactional
+    public JoinOrgResponse joinOrganization(JoinOrgRequest request) {
+        Organization organization = organizationRepository.findByAccount(request.getOrgAccount())
+            .orElseThrow(() -> new IllegalArgumentException("组织账号不存在"));
+
+        if (!passwordEncoder.matches(request.getOrgPassword(), organization.getPasswordHash())) {
+            throw new IllegalArgumentException("组织账号或密码错误");
+        }
+
+        OrgMember member = new OrgMember();
+        member.setOrganization(organization);
+        member.setName(request.getMemberName());
+        member.setRole(MemberRole.USER);
+        orgMemberRepository.save(member);
+
+        return new JoinOrgResponse(
+            organization.getId(),
+            member.getId(),
+            member.getName(),
+            member.getRole()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrgMemberResponse> listMembers(Long orgId, Long requesterId) {
+        OrgMember requester = orgMemberRepository.findByIdAndOrganizationId(requesterId, orgId)
+            .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
+
+        return orgMemberRepository.findByOrganizationId(orgId).stream()
+            .map(member -> {
+                OrgMemberResponse response = new OrgMemberResponse();
+                response.setId(member.getId());
+                response.setOrgId(member.getOrganization().getId());
+                response.setName(member.getName());
+                response.setRole(member.getRole());
+                response.setCreatedAt(member.getCreatedAt());
+                return response;
+            })
+            .collect(Collectors.toList());
+    }
+}

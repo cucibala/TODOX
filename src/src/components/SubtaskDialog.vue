@@ -177,6 +177,7 @@ import { ref, watch, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
+import { selectMedia, uploadMediaDataUrl, removeMedia } from '../utils/media'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
@@ -189,8 +190,6 @@ const subtaskWeight = ref('3')
 const requiresInput = ref(false)
 const inputRef = ref(null)
 const subtaskImages = ref([])
-
-const electronAPI = window.electronAPI
 
 watch(showSubtaskDialog, (show) => {
   if (show) {
@@ -234,17 +233,13 @@ async function handleConfirm() {
 
 // 选择图片
 async function handleSelectImage() {
-  const result = await electronAPI.selectImage()
+  const result = await selectMedia()
   if (result.success && result.fileName) {
-    // 读取图片为 base64 用于预览
-    const imageResult = await electronAPI.readImage(result.fileName)
-    if (imageResult.success) {
-      subtaskImages.value.push({
-        fileName: result.fileName,
-        base64: imageResult.data
-      })
-      appStore.toast('图片已添加')
-    }
+    subtaskImages.value.push({
+      fileName: result.fileName,
+      base64: result.previewSrc
+    })
+    appStore.toast('图片已添加')
   }
 }
 
@@ -265,12 +260,12 @@ async function handlePaste(event) {
       reader.onload = async (e) => {
         const base64Data = e.target.result
         
-        // 保存图片到应用数据目录
-        const result = await electronAPI.saveImageFromClipboard(base64Data)
+        // 保存图片到应用数据目录或服务端
+        const result = await uploadMediaDataUrl(base64Data)
         if (result.success) {
           subtaskImages.value.push({
             fileName: result.fileName,
-            base64: base64Data
+            base64: result.previewSrc
           })
           appStore.toast('图片已粘贴')
         } else {
@@ -288,7 +283,7 @@ function handleRemoveImage(index) {
   const imageData = subtaskImages.value[index]
   if (imageData?.fileName) {
     // 异步删除图片文件
-    electronAPI.deleteImage(imageData.fileName)
+    removeMedia(imageData.fileName)
   }
   subtaskImages.value.splice(index, 1)
 }

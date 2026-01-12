@@ -2,8 +2,18 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAppStore } from './app'
 import { useTodoStore } from './todo'
+import { useOrgStore } from './org'
 import { encrypt, decrypt } from '../utils/crypto'
 import { generateId } from '../utils/tools'
+import {
+  fetchProjectOverview,
+  createProject,
+  updateProject as updateProjectRemote,
+  deleteProject as deleteProjectRemote,
+  createProjectGroup,
+  updateProjectGroup as updateProjectGroupRemote,
+  deleteProjectGroup as deleteProjectGroupRemote
+} from '../utils/server_api'
 
 export const useProjectStore = defineStore('project', () => {
   // 状态
@@ -13,6 +23,26 @@ export const useProjectStore = defineStore('project', () => {
   
   // 获取 electronAPI
   const electronAPI = window.electronAPI
+  const orgStore = useOrgStore()
+
+  function getServerProjectKey() {
+    return `todox_current_project_${orgStore.orgId || 'unknown'}`
+  }
+
+  function loadServerCurrentProjectId() {
+    const key = getServerProjectKey()
+    const saved = localStorage.getItem(key)
+    return saved || null
+  }
+
+  function saveServerCurrentProjectId(projectId) {
+    const key = getServerProjectKey()
+    if (!projectId) {
+      localStorage.removeItem(key)
+      return
+    }
+    localStorage.setItem(key, String(projectId))
+  }
   
   // 计算属性
   const currentProject = computed(() => {
@@ -21,16 +51,16 @@ export const useProjectStore = defineStore('project', () => {
   
   const hasProjects = computed(() => projects.value.length > 0)
   
-function normalizeProject(project) {
-  if (!project) return null
-  return {
-    ...project,
-    groupId: project.groupId ?? project.group_id ?? null,
-    priority: project.priority || 'medium',
-    createdAt: project.createdAt || project.created_at,
-    updatedAt: project.updatedAt || project.updated_at
+  function normalizeProject(project) {
+    if (!project) return null
+    return {
+      ...project,
+      groupId: project.groupId ?? project.group_id ?? null,
+      priority: project.priority || 'medium',
+      createdAt: project.createdAt || project.created_at,
+      updatedAt: project.updatedAt || project.updated_at
+    }
   }
-}
   
   function normalizeProjectGroup(group) {
     if (!group) return null
@@ -53,6 +83,27 @@ function normalizeProject(project) {
   // 加载项目
   async function loadProjects() {
     try {
+      if (orgStore.isServerMode) {
+        if (!orgStore.hasSession) {
+          projects.value = []
+          projectGroups.value = []
+          currentProjectId.value = null
+          return
+        }
+        const data = await fetchProjectOverview(
+          orgStore.serverBaseUrl,
+          orgStore.orgId,
+          orgStore.memberId
+        )
+        projects.value = (data.projects || []).map(normalizeProject)
+        projectGroups.value = (data.projectGroups || []).map(normalizeProjectGroup)
+        const savedProjectId = loadServerCurrentProjectId()
+        const matched = projects.value.find(p => String(p.id) === String(savedProjectId))
+        currentProjectId.value = matched ? matched.id : (projects.value[0]?.id || null)
+        saveServerCurrentProjectId(currentProjectId.value)
+        return
+      }
+
       const data = await electronAPI.loadProjects()
       projects.value = (data.projects || []).map(normalizeProject)
       projectGroups.value = (data.projectGroups || []).map(normalizeProjectGroup)
@@ -70,6 +121,32 @@ function normalizeProject(project) {
     if (!name) return
     
     const appStore = useAppStore()
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) {
+        appStore.toast('请先加入组织')
+        return
+      }
+      if (!orgStore.isAdmin) {
+        appStore.toast('只有管理员可以创建项目')
+        return
+      }
+      const response = await createProject(orgStore.serverBaseUrl, {
+        orgId: orgStore.orgId,
+        creatorId: orgStore.memberId,
+        name,
+        color,
+        groupId: groupId ? String(groupId) : null,
+        priority: priority || 'medium'
+      })
+      const project = normalizeProject(response)
+      projects.value.push(project)
+      if (projects.value.length === 1) {
+        currentProjectId.value = project.id
+        saveServerCurrentProjectId(project.id)
+      }
+      appStore.toast(`项目"${name}"创建成功`)
+      return project
+    }
     const project = {
       id: generateId(),
       name,
@@ -106,6 +183,27 @@ function normalizeProject(project) {
       return
     }
 
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) {
+        appStore.toast('请先加入组织')
+        return
+      }
+      if (!orgStore.isAdmin) {
+        appStore.toast('只有管理员可以创建分组')
+        return
+      }
+      const response = await createProjectGroup(orgStore.serverBaseUrl, {
+        orgId: orgStore.orgId,
+        creatorId: orgStore.memberId,
+        name: trimmedName,
+        order: getNextGroupOrder()
+      })
+      const group = normalizeProjectGroup(response)
+      projectGroups.value.push(group)
+      appStore.toast(`分组"${trimmedName}"创建成功`)
+      return group
+    }
+
     const group = {
       id: generateId(),
       name: trimmedName,
@@ -124,6 +222,21 @@ function normalizeProject(project) {
     const group = projectGroups.value.find(item => String(item.id) === String(groupId))
     if (!group) return
 
+    const appStore = useAppStore()
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) return
+      if (!orgStore.isAdmin) {
+        appStore.toast('只有管理员可以编辑分组')
+        return
+      }
+      const response = await updateProjectGroupRemote(orgStore.serverBaseUrl, groupId, {
+        updaterId: orgStore.memberId,
+        ...updates
+      })
+      Object.assign(group, normalizeProjectGroup(response))
+      return
+    }
+
     Object.assign(group, updates)
     await electronAPI.updateProjectGroup(groupId, JSON.parse(JSON.stringify(updates)))
   }
@@ -134,9 +247,22 @@ function normalizeProject(project) {
     const group = projectGroups.value.find(item => String(item.id) === String(groupId))
     if (!group) return
 
+    if (orgStore.isServerMode && !orgStore.isAdmin) {
+      appStore.toast('只有管理员可以删除分组')
+      return
+    }
+
     const message = `确定要删除分组"${group.name}"吗？分组内项目将移动到未分组。`
     const confirmed = await appStore.confirm(message)
     if (!confirmed) return
+
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) return
+      await deleteProjectGroupRemote(orgStore.serverBaseUrl, groupId, orgStore.memberId)
+      await loadProjects()
+      appStore.toast(`分组"${group.name}"已删除`)
+      return
+    }
 
     projects.value = projects.value.map(project => {
       if (String(project.groupId ?? '') === String(groupId)) {
@@ -157,12 +283,27 @@ function normalizeProject(project) {
     const project = projects.value.find(item => String(item.id) === String(projectId))
     if (!project) return
 
+    const appStore = useAppStore()
     const normalizedUpdates = { ...updates }
     if (normalizedUpdates.groupId !== undefined) {
       normalizedUpdates.groupId = normalizedUpdates.groupId ? String(normalizedUpdates.groupId) : null
     }
     if (normalizedUpdates.priority !== undefined) {
       normalizedUpdates.priority = normalizedUpdates.priority || 'medium'
+    }
+
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) return
+      if (!orgStore.isAdmin) {
+        appStore.toast('只有管理员可以编辑项目')
+        return
+      }
+      const response = await updateProjectRemote(orgStore.serverBaseUrl, projectId, {
+        updaterId: orgStore.memberId,
+        ...normalizedUpdates
+      })
+      Object.assign(project, normalizeProject(response))
+      return
     }
 
     Object.assign(project, normalizedUpdates)
@@ -183,7 +324,11 @@ function normalizeProject(project) {
   // 选择项目
   async function selectProject(projectId) {
     currentProjectId.value = projectId
-    await electronAPI.setCurrentProject(projectId)
+    if (orgStore.isServerMode) {
+      saveServerCurrentProjectId(projectId)
+    } else {
+      await electronAPI.setCurrentProject(projectId)
+    }
     
     const project = projects.value.find(p => p.id === projectId)
     if (project) {
@@ -199,6 +344,11 @@ function normalizeProject(project) {
     
     const project = projects.value.find(p => p.id === projectId)
     if (!project) return
+
+    if (orgStore.isServerMode && !orgStore.isAdmin) {
+      appStore.toast('只有管理员可以删除项目')
+      return
+    }
     
     // 检查项目下是否有任务
     const projectTodos = todoStore.todos.filter(t => t.projectId === projectId)
@@ -209,6 +359,15 @@ function normalizeProject(project) {
     
     const confirmed = await appStore.confirm(message)
     if (!confirmed) return
+
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) return
+      await deleteProjectRemote(orgStore.serverBaseUrl, projectId, orgStore.memberId)
+      await loadProjects()
+      await todoStore.loadTodos()
+      appStore.toast(`项目"${project.name}"已删除`)
+      return
+    }
     
     // 删除项目下的所有任务及其图片（逐条删除）
     for (const task of projectTodos) {
@@ -245,6 +404,11 @@ function normalizeProject(project) {
   async function exportProject(projectId, password = null) {
     const appStore = useAppStore()
     const todoStore = useTodoStore()
+
+    if (orgStore.isServerMode) {
+      appStore.toast('服务端视角暂不支持项目导出')
+      return { success: false }
+    }
     
     const project = projects.value.find(p => p.id === projectId)
     if (!project) {
@@ -304,6 +468,11 @@ function normalizeProject(project) {
   async function importProject(password = null) {
     const appStore = useAppStore()
     const todoStore = useTodoStore()
+
+    if (orgStore.isServerMode) {
+      appStore.toast('服务端视角暂不支持项目导入')
+      return { success: false }
+    }
     
     try {
       // 调用 Electron API 选择并读取文件

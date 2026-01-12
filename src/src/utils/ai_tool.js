@@ -181,8 +181,7 @@ async function createRemainingDays(context, project, totalDays, currentDay, desc
         progressRecords: []
       }
       
-      context.todoStore.todos.push(task)
-      await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
+      await context.todoStore.addTaskObject(task)
       
       currentDay++
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -338,27 +337,14 @@ let addTask = new AIFunction(
       progressRecords: []
     }
     
-    if (position === 'beginning') {
-      this.todoStore.todos.unshift(newTask)
-    } else if (position === 'after' && afterTaskId) {
-      const afterIndex = this.todoStore.todos.findIndex(t => t.id === afterTaskId)
-      if (afterIndex !== -1) {
-        this.todoStore.todos.splice(afterIndex + 1, 0, newTask)
-      } else {
-        this.todoStore.todos.push(newTask)
-      }
-    } else {
-      this.todoStore.todos.push(newTask)
-    }
-    
-    await window.electronAPI.addTodo(JSON.parse(JSON.stringify(newTask)))
+    const persistedTask = await this.todoStore.addTaskObject(newTask, { position, afterTaskId })
     
     if (onProgress) onProgress(`🎉 成功为项目"${project.name}"添加新任务！`)
     
     return {
       success: true,
-      taskId: newTask.id,
-      taskText: newTask.text,
+      taskId: persistedTask?.id || newTask.id,
+      taskText: persistedTask?.text || newTask.text,
       projectId: project.id,
       projectName: project.name,
       subtasksCount: newTask.subtasks.length
@@ -498,7 +484,7 @@ ${operation !== 'replace' ? '⚠️ 重要：必须保留已完成子任务的 c
     })
     
     // 批量替换子任务到数据库（遵循 Electron IPC 传参规则）
-    await window.electronAPI.replaceSubtasks(task.id, JSON.parse(JSON.stringify(task.subtasks)))
+    await this.todoStore.replaceSubtasksForTask(task.id, task.subtasks)
     
     const changeDesc = operation === 'add' ? `新增 ${newSubtasks.length - oldSubtasksCount} 个子任务`
       : operation === 'delete' ? `删除 ${oldSubtasksCount - newSubtasks.length} 个子任务`
@@ -670,18 +656,7 @@ ${recentExamples.length ? `现有任务示例：\n- ${recentExamples.join('\n- '
     
     if (onProgress) onProgress(`正在保存 ${addedTasks.length} 个任务到数据库...`)
     
-    // 优先使用批量 IPC 以提升计划生成/导入速度
-    if (window.electronAPI.addTodosBatch) {
-      const result = await window.electronAPI.addTodosBatch(JSON.parse(JSON.stringify(addedTasks)))
-      if (!result?.success) throw new Error(result?.error || '批量保存任务失败')
-    } else {
-      for (const task of addedTasks) {
-        await window.electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
-      }
-    }
-    
-    // 写入本地 store（与数据库保持一致）
-    this.todoStore.todos.push(...addedTasks)
+    await this.todoStore.addTasksBatch(addedTasks)
     
     if (onProgress) onProgress(`成功为项目"${project.name}"添加 ${addedTasks.length} 个新任务！`)
     
@@ -1246,11 +1221,11 @@ const allFunctions = [
     }
     
     // 更新单个子任务到数据库（遵循 Electron IPC 传参规则）
-    await window.electronAPI.updateSubtask(subtask.id, JSON.parse(JSON.stringify({
-      text: subtask.text,
-      weight: subtask.weight,
-      requiresInput: subtask.requiresInput
-    })))
+      await this.todoStore.updateSubtask(task.id, subtask.id, {
+        text: subtask.text,
+        weight: subtask.weight,
+        requiresInput: subtask.requiresInput
+      })
     
     const changes = []
     if (updates.text !== undefined) changes.push(`文本: "${oldText}" → "${updates.text}"`)

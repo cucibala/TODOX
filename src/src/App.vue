@@ -109,12 +109,14 @@ import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
 import { useChatStore } from './stores/chat'
 import { useDocumentStore } from './stores/document'
+import { useOrgStore } from './stores/org'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
 const projectStore = useProjectStore()
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
+const orgStore = useOrgStore()
 
 const { showLockScreen, currentPage, isAppReady, isQuickInputMode } = storeToRefs(appStore)
 const isInitialLock = ref(false)
@@ -141,6 +143,7 @@ onMounted(async () => {
   try {
     // 初始化应用
     await appStore.init()
+    orgStore.loadFromStorage()
     
     // 并行加载数据以提升速度
     await Promise.all([

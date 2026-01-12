@@ -18,6 +18,7 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { resolveMediaSource } from '../utils/media'
 
 const props = defineProps({
   fileName: {
@@ -28,8 +29,6 @@ const props = defineProps({
 
 const mediaSrc = ref('')
 const isVideo = ref(false)
-const electronAPI = window.electronAPI
-
 // 判断是否为视频文件
 function checkIsVideo(fileName) {
   if (!fileName) return false
@@ -41,16 +40,10 @@ function checkIsVideo(fileName) {
 async function loadMedia() {
   if (props.fileName) {
     isVideo.value = checkIsVideo(props.fileName)
-    
-    const result = await electronAPI.readImage(props.fileName)
+    const result = await resolveMediaSource(props.fileName)
     if (result.success) {
-      if (result.isVideo && result.path) {
-        // 视频使用文件路径
-        mediaSrc.value = `todox-file://${result.path}`
-      } else if (result.data) {
-        // 图片使用 base64
-        mediaSrc.value = result.data
-      }
+      mediaSrc.value = result.src
+      isVideo.value = Boolean(result.isVideo)
     }
   }
 }

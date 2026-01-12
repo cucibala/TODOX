@@ -1,8 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useProjectStore } from './project'
+import { useOrgStore } from './org'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
 import { generateId, generateSubId } from '../utils/tools'
+import {
+  listTasks,
+  createTask as createTaskRemote,
+  updateTask as updateTaskRemote,
+  deleteTask as deleteTaskRemote,
+  addSubtask as addSubtaskRemote,
+  updateSubtask as updateSubtaskRemote,
+  deleteSubtask as deleteSubtaskRemote,
+  replaceSubtasks as replaceSubtasksRemote,
+  addProgress as addProgressRemote,
+  updateProgress as updateProgressRemote,
+  deleteProgress as deleteProgressRemote
+} from '../utils/server_api'
+import { selectMedia, uploadMediaDataUrl, removeMedia } from '../utils/media'
 
 export const useTodoStore = defineStore('todo', () => {
   // 状态
@@ -17,7 +32,99 @@ export const useTodoStore = defineStore('todo', () => {
   
   // 获取 electronAPI
   const electronAPI = window.electronAPI
+  const orgStore = useOrgStore()
   let hasTodosListener = false
+
+  function normalizeSubtask(subtask) {
+    if (!subtask) return null
+    return {
+      ...subtask,
+      id: String(subtask.id),
+      order: subtask.order ?? subtask.orderIndex ?? 0,
+      completed: Boolean(subtask.completed),
+      requiresInput: Boolean(subtask.requiresInput)
+    }
+  }
+
+  function normalizeTodo(todo) {
+    if (!todo) return null
+    const normalizedStatus = typeof todo.status === 'string' ? todo.status.toLowerCase() : todo.status
+    const normalizedPriority = typeof todo.priority === 'string' ? todo.priority.toLowerCase() : todo.priority
+    return {
+      ...todo,
+      id: String(todo.id),
+      projectId: todo.projectId ?? null,
+      pinned: Boolean(todo.pinned),
+      completed: Boolean(todo.completed),
+      status: normalizedStatus,
+      priority: normalizedPriority,
+      images: Array.isArray(todo.images) ? todo.images : [],
+      progress: Array.isArray(todo.progress) ? todo.progress : [],
+      subtasks: Array.isArray(todo.subtasks)
+        ? todo.subtasks.map(normalizeSubtask).filter(Boolean)
+        : []
+    }
+  }
+
+  function toServerStatus(status) {
+    return status ? String(status).toUpperCase() : 'TODO'
+  }
+
+  function toServerPriority(priority) {
+    return priority ? String(priority).toUpperCase() : 'MEDIUM'
+  }
+
+  function hasOwn(source, key) {
+    return Object.prototype.hasOwnProperty.call(source, key)
+  }
+
+  function buildTaskUpdatePayload(updates) {
+    const payload = { updaterId: orgStore.memberId }
+    if (hasOwn(updates, 'assigneeId')) payload.assigneeId = updates.assigneeId
+    if (hasOwn(updates, 'projectId')) payload.projectId = updates.projectId
+    if (hasOwn(updates, 'text')) payload.text = updates.text
+    if (hasOwn(updates, 'completed')) payload.completed = updates.completed
+    if (hasOwn(updates, 'pinned')) payload.pinned = updates.pinned
+    if (hasOwn(updates, 'status')) payload.status = toServerStatus(updates.status)
+    if (hasOwn(updates, 'priority')) payload.priority = toServerPriority(updates.priority)
+    if (hasOwn(updates, 'dueDate')) payload.dueDate = updates.dueDate ?? ''
+    if (hasOwn(updates, 'startedAt')) payload.startedAt = updates.startedAt ?? ''
+    if (hasOwn(updates, 'completedAt')) payload.completedAt = updates.completedAt ?? ''
+    if (hasOwn(updates, 'order')) payload.order = updates.order
+    if (hasOwn(updates, 'images')) payload.images = updates.images
+    return payload
+  }
+
+  function buildSubtaskPayload(updates) {
+    const payload = { updaterId: orgStore.memberId }
+    if (hasOwn(updates, 'text')) payload.text = updates.text
+    if (hasOwn(updates, 'completed')) payload.completed = updates.completed
+    if (hasOwn(updates, 'weight')) payload.weight = updates.weight
+    if (hasOwn(updates, 'requiresInput')) payload.requiresInput = updates.requiresInput
+    if (hasOwn(updates, 'inputValue')) payload.inputValue = updates.inputValue
+    if (hasOwn(updates, 'order')) payload.order = updates.order
+    if (hasOwn(updates, 'completedAt')) payload.completedAt = updates.completedAt ?? ''
+    if (hasOwn(updates, 'images')) payload.images = updates.images
+    return payload
+  }
+
+  function buildProgressPayload(updates) {
+    const payload = { updaterId: orgStore.memberId }
+    if (hasOwn(updates, 'text')) payload.text = updates.text
+    if (hasOwn(updates, 'images')) payload.images = updates.images
+    return payload
+  }
+
+  function applyTaskResponse(response) {
+    const normalized = normalizeTodo(response)
+    if (!normalized) return
+    const task = todos.value.find(t => String(t.id) === String(normalized.id))
+    if (task) {
+      Object.assign(task, normalized)
+      return
+    }
+    todos.value.unshift(normalized)
+  }
   
   // 计算属性
   const filteredTodos = computed(() => {
@@ -194,6 +301,22 @@ export const useTodoStore = defineStore('todo', () => {
   // 加载任务
   async function loadTodos() {
     try {
+      if (orgStore.isServerMode) {
+        if (!orgStore.hasSession) {
+          todos.value = []
+          return
+        }
+        const assigneeId = orgStore.isAdmin ? null : orgStore.memberId
+        const loadedTodos = await listTasks(
+          orgStore.serverBaseUrl,
+          orgStore.orgId,
+          orgStore.memberId,
+          assigneeId
+        )
+        todos.value = (loadedTodos || []).map(normalizeTodo)
+        return
+      }
+
       const loadedTodos = await electronAPI.loadTodos()
       todos.value = loadedTodos.map(todo => ({
         ...todo,
@@ -210,6 +333,7 @@ export const useTodoStore = defineStore('todo', () => {
   
   // 清理孤立任务（项目已被删除的任务）
   async function cleanOrphanedTasks() {
+    if (orgStore.isServerMode) return
     const projectStore = useProjectStore()
     const validProjectIds = projectStore.projects.map(p => p.id)
     
@@ -231,7 +355,7 @@ export const useTodoStore = defineStore('todo', () => {
   }
   
   // 添加任务
-  async function addTask(text, priority, dueDate) {
+  async function addTask(text, priority, dueDate, assigneeId = null) {
     const projectStore = useProjectStore()
     
     if (!projectStore.currentProjectId) {
@@ -244,6 +368,31 @@ export const useTodoStore = defineStore('todo', () => {
     
     const finalDueDate = dueDate || null
     
+    if (orgStore.isServerMode) {
+      if (!orgStore.hasSession) {
+        return { success: false, error: '请先加入组织' }
+      }
+      if (!orgStore.isAdmin) {
+        return { success: false, error: '只有管理员可以创建任务' }
+      }
+      const response = await createTaskRemote(orgStore.serverBaseUrl, {
+        orgId: orgStore.orgId,
+        creatorId: orgStore.memberId,
+        assigneeId: assigneeId || null,
+        projectId: projectStore.currentProjectId,
+        text: text.trim(),
+        completed: false,
+        status: toServerStatus('todo'),
+        priority: toServerPriority(priority || 'medium'),
+        dueDate: finalDueDate || '',
+        images: [...currentImages.value],
+        subtasks: []
+      })
+      todos.value.unshift(normalizeTodo(response))
+      currentImages.value = []
+      return { success: true }
+    }
+
     const task = {
       id: generateId(),
       text: text.trim(),
@@ -259,13 +408,13 @@ export const useTodoStore = defineStore('todo', () => {
       pinned: false,
       subtasks: []
     }
-    
+
     // 添加到本地状态
     todos.value.unshift(task)
-    
+
     // 清空当前图片
     currentImages.value = []
-    
+
     // 单条插入数据库
     await electronAPI.addTodo(JSON.parse(JSON.stringify(task)))
     return { success: true }
@@ -285,13 +434,23 @@ export const useTodoStore = defineStore('todo', () => {
         task.startedAt = task.startedAt || new Date().toISOString()
         task.status = 'doing'
       }
-      // 单条更新数据库
-      await electronAPI.updateTodo(id, {
+      const updatePayload = {
         completed: task.completed,
         completedAt: task.completedAt,
         status: task.status,
         startedAt: task.startedAt
-      })
+      }
+      if (orgStore.isServerMode) {
+        const response = await updateTaskRemote(
+          orgStore.serverBaseUrl,
+          id,
+          buildTaskUpdatePayload(updatePayload)
+        )
+        applyTaskResponse(response)
+        return
+      }
+      // 单条更新数据库
+      await electronAPI.updateTodo(id, updatePayload)
     }
   }
 
@@ -337,6 +496,15 @@ export const useTodoStore = defineStore('todo', () => {
     if (nextStatus === 'doing' && task.dueDate) {
       updatePayload.dueDate = task.dueDate
     }
+    if (orgStore.isServerMode) {
+      const response = await updateTaskRemote(
+        orgStore.serverBaseUrl,
+        id,
+        buildTaskUpdatePayload(updatePayload)
+      )
+      applyTaskResponse(response)
+      return
+    }
     await electronAPI.updateTodo(id, updatePayload)
   }
   
@@ -345,6 +513,15 @@ export const useTodoStore = defineStore('todo', () => {
     const task = todos.value.find(t => t.id === id)
     if (task) {
       task.pinned = !task.pinned
+      if (orgStore.isServerMode) {
+        const response = await updateTaskRemote(
+          orgStore.serverBaseUrl,
+          id,
+          buildTaskUpdatePayload({ pinned: task.pinned })
+        )
+        applyTaskResponse(response)
+        return
+      }
       // 单条更新数据库
       await electronAPI.updateTodo(id, { pinned: task.pinned })
     }
@@ -356,18 +533,18 @@ export const useTodoStore = defineStore('todo', () => {
     if (task) {
       // 删除任务的所有图片
       if (task.image) {
-        await electronAPI.deleteImage(task.image)
+        await removeMedia(task.image)
       }
       if (task.images && task.images.length > 0) {
         for (const image of task.images) {
-          await electronAPI.deleteImage(image)
+          await removeMedia(image)
         }
       }
       if (task.progress) {
         for (const progress of task.progress) {
           if (progress.images) {
             for (const image of progress.images) {
-              await electronAPI.deleteImage(image)
+              await removeMedia(image)
             }
           }
         }
@@ -376,7 +553,7 @@ export const useTodoStore = defineStore('todo', () => {
         for (const subtask of task.subtasks) {
           if (subtask.images) {
             for (const image of subtask.images) {
-              await electronAPI.deleteImage(image)
+              await removeMedia(image)
             }
           }
         }
@@ -388,6 +565,10 @@ export const useTodoStore = defineStore('todo', () => {
   // 删除任务
   async function deleteTask(id) {
     await deleteTaskWithImages(id)
+    if (orgStore.isServerMode) {
+      await deleteTaskRemote(orgStore.serverBaseUrl, id, orgStore.memberId)
+      return
+    }
     // 单条删除数据库（级联删除子任务和进度）
     await electronAPI.deleteTodo(id)
   }
@@ -426,6 +607,15 @@ export const useTodoStore = defineStore('todo', () => {
         }
       }
       Object.assign(task, updates)
+      if (orgStore.isServerMode) {
+        const response = await updateTaskRemote(
+          orgStore.serverBaseUrl,
+          id,
+          buildTaskUpdatePayload(updates)
+        )
+        applyTaskResponse(response)
+        return
+      }
       // 单条更新数据库
       await electronAPI.updateTodo(id, JSON.parse(JSON.stringify(updates)))
     }
@@ -434,7 +624,7 @@ export const useTodoStore = defineStore('todo', () => {
   // 选择图片
   async function selectImage() {
     try {
-      const result = await electronAPI.selectImage()
+      const result = await selectMedia()
       if (result.success && result.fileName) {
         currentImages.value.push(result.fileName)
         return { success: true }
@@ -463,7 +653,27 @@ export const useTodoStore = defineStore('todo', () => {
       if (!task.subtasks) {
         task.subtasks = []
       }
-      
+
+      if (orgStore.isServerMode) {
+        const response = await addSubtaskRemote(
+          orgStore.serverBaseUrl,
+          taskId,
+          orgStore.memberId,
+          {
+            text: text.trim(),
+            weight,
+            completed: false,
+            requiresInput,
+            inputValue: '',
+            images: images || []
+          }
+        )
+        if (response) {
+          task.subtasks.unshift(normalizeSubtask(response))
+        }
+        return
+      }
+
       const subtask = {
         id: generateId(),
         text: text.trim(),
@@ -474,10 +684,10 @@ export const useTodoStore = defineStore('todo', () => {
         images: images || [],
         createdAt: new Date().toISOString()
       }
-      
+
       // 使用 unshift 将新子任务添加到数组开头
       task.subtasks.unshift(subtask)
-      
+
       // 单条插入数据库
       await electronAPI.addSubtask(taskId, JSON.parse(JSON.stringify(subtask)))
     }
@@ -502,12 +712,25 @@ export const useTodoStore = defineStore('todo', () => {
         } else {
           subtask.completedAt = null
         }
-        
-        // 单条更新数据库
-        await electronAPI.updateSubtask(subtaskId, {
+
+        const updatePayload = {
           completed: subtask.completed,
           completedAt: subtask.completedAt
-        })
+        }
+        if (orgStore.isServerMode) {
+          const response = await updateSubtaskRemote(
+            orgStore.serverBaseUrl,
+            subtaskId,
+            buildSubtaskPayload(updatePayload)
+          )
+          if (response) {
+            Object.assign(subtask, normalizeSubtask(response))
+          }
+          return { success: true }
+        }
+
+        // 单条更新数据库
+        await electronAPI.updateSubtask(subtaskId, updatePayload)
         
         return { success: true }
       }
@@ -524,11 +747,16 @@ export const useTodoStore = defineStore('todo', () => {
       // 删除子任务图片
       if (subtask && subtask.images) {
         for (const image of subtask.images) {
-          await electronAPI.deleteImage(image)
+          await removeMedia(image)
         }
       }
       
       task.subtasks = task.subtasks.filter(st => st.id !== subtaskId)
+
+      if (orgStore.isServerMode) {
+        await deleteSubtaskRemote(orgStore.serverBaseUrl, subtaskId, orgStore.memberId)
+        return
+      }
       
       // 单条删除数据库
       await electronAPI.deleteSubtask(subtaskId)
@@ -563,7 +791,31 @@ export const useTodoStore = defineStore('todo', () => {
     // 更新每个子任务的 order 字段
     for (let i = 0; i < task.subtasks.length; i++) {
       task.subtasks[i].order = i
+      if (orgStore.isServerMode) {
+        continue
+      }
       await electronAPI.updateSubtask(task.subtasks[i].id, { order: i })
+    }
+
+    if (orgStore.isServerMode) {
+      const payload = {
+        updaterId: orgStore.memberId,
+        subtasks: task.subtasks.map((subtask, index) => ({
+          id: subtask.id,
+          text: subtask.text,
+          completed: subtask.completed,
+          weight: subtask.weight,
+          requiresInput: subtask.requiresInput,
+          inputValue: subtask.inputValue,
+          order: index,
+          completedAt: subtask.completedAt || '',
+          images: subtask.images || []
+        }))
+      }
+      const response = await replaceSubtasksRemote(orgStore.serverBaseUrl, taskId, payload)
+      if (Array.isArray(response)) {
+        task.subtasks = response.map(normalizeSubtask)
+      }
     }
   }
   
@@ -599,12 +851,24 @@ export const useTodoStore = defineStore('todo', () => {
         createdAt: new Date().toISOString(),
         images: [...progressImages]
       }
-      
+      if (orgStore.isServerMode) {
+        const response = await addProgressRemote(orgStore.serverBaseUrl, taskId, {
+          updaterId: orgStore.memberId,
+          text: progressText.trim(),
+          images: [...progressImages]
+        })
+        if (response) {
+          task.progress.push({ ...response, id: String(response.id) })
+        }
+        currentProgressImages.value[taskId] = []
+        return
+      }
+
       task.progress.push(record)
-      
+
       // 清空当前任务的进度图片
       currentProgressImages.value[taskId] = []
-      
+
       // 单条插入数据库
       await electronAPI.addProgress(taskId, JSON.parse(JSON.stringify(record)))
     }
@@ -618,11 +882,16 @@ export const useTodoStore = defineStore('todo', () => {
       const progress = task.progress.find(p => p.id === progressId)
       if (progress && progress.images) {
         for (const image of progress.images) {
-          await electronAPI.deleteImage(image)
+          await removeMedia(image)
         }
       }
       
       task.progress = task.progress.filter(p => p.id !== progressId)
+
+      if (orgStore.isServerMode) {
+        await deleteProgressRemote(orgStore.serverBaseUrl, progressId, orgStore.memberId)
+        return
+      }
       
       // 单条删除数据库
       await electronAPI.deleteProgress(progressId)
@@ -635,6 +904,17 @@ export const useTodoStore = defineStore('todo', () => {
       const progress = task.progress.find(p => p.id === progressId)
       if (progress) {
         progress.text = newText
+        if (orgStore.isServerMode) {
+          const response = await updateProgressRemote(
+            orgStore.serverBaseUrl,
+            progressId,
+            buildProgressPayload({ text: newText })
+          )
+          if (response) {
+            progress.text = response.text
+          }
+          return
+        }
         
         // 单条更新数据库
         await electronAPI.updateProgress(progressId, { text: newText })
@@ -649,10 +929,144 @@ export const useTodoStore = defineStore('todo', () => {
       const subtask = task.subtasks.find(st => st.id === subtaskId)
       if (subtask) {
         Object.assign(subtask, updates)
+        if (orgStore.isServerMode) {
+          const response = await updateSubtaskRemote(
+            orgStore.serverBaseUrl,
+            subtaskId,
+            buildSubtaskPayload(updates)
+          )
+          if (response) {
+            Object.assign(subtask, normalizeSubtask(response))
+          }
+          return
+        }
         // 单条更新数据库
         await electronAPI.updateSubtask(subtaskId, JSON.parse(JSON.stringify(updates)))
       }
     }
+  }
+
+  async function addTaskObject(task, options = {}) {
+    if (!task || !task.text || !task.projectId) {
+      return null
+    }
+    const position = options.position || 'end'
+    const afterTaskId = options.afterTaskId
+
+    if (orgStore.isServerMode) {
+      const response = await createTaskRemote(orgStore.serverBaseUrl, {
+        orgId: orgStore.orgId,
+        creatorId: orgStore.memberId,
+        assigneeId: task.assigneeId || null,
+        projectId: task.projectId,
+        text: task.text,
+        completed: Boolean(task.completed),
+        status: toServerStatus(task.status || (task.completed ? 'done' : 'todo')),
+        priority: toServerPriority(task.priority || 'medium'),
+        dueDate: task.dueDate || '',
+        images: task.images || [],
+        subtasks: (task.subtasks || []).map((subtask, index) => ({
+          id: subtask.id,
+          text: subtask.text,
+          completed: Boolean(subtask.completed),
+          weight: subtask.weight || 3,
+          requiresInput: Boolean(subtask.requiresInput),
+          inputValue: subtask.inputValue || '',
+          order: subtask.order ?? index,
+          completedAt: subtask.completedAt || '',
+          createdAt: subtask.createdAt || ''
+        }))
+      })
+      const normalized = normalizeTodo(response)
+      if (!normalized) return null
+      if (position === 'beginning') {
+        todos.value.unshift(normalized)
+      } else if (position === 'after' && afterTaskId) {
+        const afterIndex = todos.value.findIndex(t => t.id === afterTaskId)
+        if (afterIndex !== -1) {
+          todos.value.splice(afterIndex + 1, 0, normalized)
+        } else {
+          todos.value.push(normalized)
+        }
+      } else {
+        todos.value.push(normalized)
+      }
+      return normalized
+    }
+
+    const newTask = { ...task }
+    if (!newTask.id) {
+      newTask.id = generateId()
+    }
+    if (!newTask.createdAt) {
+      newTask.createdAt = new Date().toISOString()
+    }
+    if (position === 'beginning') {
+      todos.value.unshift(newTask)
+    } else if (position === 'after' && afterTaskId) {
+      const afterIndex = todos.value.findIndex(t => t.id === afterTaskId)
+      if (afterIndex !== -1) {
+        todos.value.splice(afterIndex + 1, 0, newTask)
+      } else {
+        todos.value.push(newTask)
+      }
+    } else {
+      todos.value.push(newTask)
+    }
+    await electronAPI.addTodo(JSON.parse(JSON.stringify(newTask)))
+    return newTask
+  }
+
+  async function addTasksBatch(tasks) {
+    if (!Array.isArray(tasks) || tasks.length === 0) return []
+    const added = []
+    if (orgStore.isServerMode) {
+      for (const task of tasks) {
+        const result = await addTaskObject(task)
+        if (result) added.push(result)
+      }
+      return added
+    }
+    if (window.electronAPI.addTodosBatch) {
+      await electronAPI.addTodosBatch(JSON.parse(JSON.stringify(tasks)))
+      todos.value.push(...tasks)
+      return tasks
+    }
+    for (const task of tasks) {
+      await addTaskObject(task)
+    }
+    return tasks
+  }
+
+  async function replaceSubtasksForTask(taskId, subtasks) {
+    const task = todos.value.find(t => t.id === taskId)
+    if (!task) return []
+
+    task.subtasks = Array.isArray(subtasks) ? subtasks : []
+    if (orgStore.isServerMode) {
+      const payload = {
+        updaterId: orgStore.memberId,
+        subtasks: task.subtasks.map((subtask, index) => ({
+          id: subtask.id,
+          text: subtask.text,
+          completed: Boolean(subtask.completed),
+          weight: subtask.weight || 3,
+          requiresInput: Boolean(subtask.requiresInput),
+          inputValue: subtask.inputValue || '',
+          order: subtask.order ?? index,
+          completedAt: subtask.completedAt || '',
+          createdAt: subtask.createdAt || ''
+        }))
+      }
+      const response = await replaceSubtasksRemote(orgStore.serverBaseUrl, taskId, payload)
+      if (Array.isArray(response)) {
+        task.subtasks = response.map(normalizeSubtask)
+      }
+      return task.subtasks
+    }
+
+    await electronAPI.replaceSubtasks(taskId, JSON.parse(JSON.stringify(task.subtasks)))
+    return task.subtasks
   }
 
   return {
@@ -702,7 +1116,10 @@ export const useTodoStore = defineStore('todo', () => {
     getTaskProgress,
     addProgress,
     deleteProgress,
-    updateProgress
+    updateProgress,
+    addTaskObject,
+    addTasksBatch,
+    replaceSubtasksForTask
   }
 })
 

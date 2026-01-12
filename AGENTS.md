@@ -8,6 +8,7 @@ This repository contains **TodoX**, a desktop task manager built with **Electron
 - `preload.js`: `contextBridge` surface exposed to the renderer (`window.electronAPI`).
 - `database.js`: SQLite schema + migrations/versioning.
 - `assets/`: app icons and packaged static assets.
+- `server/`: Spring Boot backend (JPA + MySQL) for org/project/task APIs and media storage.
 - `src/`: Vue/Vite project
   - `src/src/`: renderer source (`components/`, `pages/`, `stores/`, `utils/`, `assets/`).
   - `vite.config.js`: outputs build artifacts to `dist-vue/`.
@@ -21,6 +22,7 @@ This repository contains **TodoX**, a desktop task manager built with **Electron
 - Dev (two terminals):
   - Terminal A: `cd src && npm run dev` (Vite at `http://localhost:5173`).
   - Terminal B: `npm run dev` (Electron loads the Vite URL).
+- Server dev: `cd server && mvn spring-boot:run` (configure MySQL in `server/src/main/resources/application.yml`).
 - Production run: `npm start` (builds `dist-vue/` then runs Electron).
 - Package: `npm run build:win` / `npm run build:mac` / `npm run build:linux` (or `npm run build`).
 
@@ -47,4 +49,4 @@ No dedicated unit/e2e framework is configured. Validate changes with:
 ## Security & Configuration Tips
 
 - Never commit API keys or secrets; keep local config in `.env`/app settings and exclude it from commits.
-
+- Server org passwords are stored as BCrypt hashes; admins must insert the hash into the database.

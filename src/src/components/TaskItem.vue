@@ -82,14 +82,14 @@
               <polyline :points="showDetails ? '6 15 12 9 18 15' : '6 9 12 15 18 9'"></polyline>
             </svg>
           </button>
-          <button class="btn-task-menu" @click="toggleTaskMenu" title="更多">
+          <button v-if="canManageTask" class="btn-task-menu" @click="toggleTaskMenu" title="更多">
             <svg viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="5" r="1.8"></circle>
               <circle cx="12" cy="12" r="1.8"></circle>
               <circle cx="12" cy="19" r="1.8"></circle>
             </svg>
           </button>
-          <div v-if="showTaskMenu" class="task-menu" @click.stop>
+          <div v-if="showTaskMenu && canManageTask" class="task-menu" @click.stop>
             <button class="task-menu-item" @click="handleStartEdit">编辑</button>
             <button class="task-menu-item danger" @click="handleDelete">删除</button>
           </div>
@@ -129,6 +129,10 @@
       <!-- 元信息 -->
       <div class="task-meta">
         <div class="task-time">{{ formatDate(task.createdAt) }}</div>
+        <div v-if="assigneeLabel" class="task-assignee">
+          <span class="task-assignee-label">负责人</span>
+          <span class="task-assignee-name">{{ assigneeLabel }}</span>
+        </div>
         
         <!-- 到期时间显示/编辑 -->
         <div v-if="!isEditingDueDate && task.dueDate" 
@@ -242,7 +246,7 @@
       <div class="task-detail-header">
         <div class="task-detail-title">任务详情</div>
         <div class="task-detail-header-actions">
-          <button class="task-detail-edit" @click="handleStartEdit" title="编辑任务">
+          <button v-if="canManageTask" class="task-detail-edit" @click="handleStartEdit" title="编辑任务">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 20h9"></path>
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
@@ -285,6 +289,10 @@
           <div v-else class="task-detail-name">{{ task.text }}</div>
           <div class="task-meta">
             <div class="task-time">{{ formatDate(task.createdAt) }}</div>
+            <div v-if="assigneeLabel" class="task-assignee">
+              <span class="task-assignee-label">负责人</span>
+              <span class="task-assignee-name">{{ assigneeLabel }}</span>
+            </div>
             <div v-if="!isEditingDueDate && task.dueDate" 
               class="task-due-date" 
               :class="getDueDateStatus(task.dueDate)"
@@ -681,9 +689,11 @@
 import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
+import { useOrgStore } from '../stores/org'
 import { formatDate, formatDueDate, getDueDateStatus, calculateTaskDuration } from '../utils/date'
 import { aiBreakdownTask, generateTaskSummary } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
+import { resolveMediaSource, selectMedia, uploadMediaDataUrl } from '../utils/media'
 
 const props = defineProps({
   task: {
@@ -694,6 +704,7 @@ const props = defineProps({
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
+const orgStore = useOrgStore()
 const electronAPI = window.electronAPI
 
 // 图片缓存 - 存储图片的 base64 数据
@@ -769,6 +780,16 @@ const priorityLabel = computed(() => {
   return '低'
 })
 
+const canManageTask = computed(() => !orgStore.isServerMode || orgStore.isAdmin)
+
+const assigneeLabel = computed(() => {
+  if (!orgStore.isServerMode) return ''
+  const assigneeId = props.task.assigneeId
+  if (!assigneeId) return '未分配'
+  const matched = (orgStore.members || []).find(member => String(member.id) === String(assigneeId))
+  return matched ? matched.name : String(assigneeId)
+})
+
 const completedSubtaskCount = computed(() => {
   if (!props.task.subtasks || props.task.subtasks.length === 0) return 0
   return props.task.subtasks.filter(st => st.completed).length
@@ -835,6 +856,7 @@ function isVideo(fileName) {
 }
 
 function toggleTaskMenu(event) {
+  if (!canManageTask.value) return
   event.stopPropagation()
   showTaskMenu.value = !showTaskMenu.value
 }
@@ -875,15 +897,10 @@ async function loadImage(fileName) {
   if (imageCache.value[fileName]) {
     return // 已加载，跳过
   }
-  
-  const result = await electronAPI.readImage(fileName)
+
+  const result = await resolveMediaSource(fileName)
   if (result.success) {
-    // 视频文件使用文件路径，图片使用 base64
-    if (result.isVideo && result.path) {
-      imageCache.value[fileName] = `todox-file://${result.path}`
-    } else if (result.data) {
-      imageCache.value[fileName] = result.data
-    }
+    imageCache.value[fileName] = result.src
   }
 }
 
@@ -892,14 +909,10 @@ async function loadProgressImage(fileName) {
   if (progressImageCache.value[fileName]) {
     return // 已加载，跳过
   }
-  
-  const result = await electronAPI.readImage(fileName)
+
+  const result = await resolveMediaSource(fileName)
   if (result.success) {
-    if (result.isVideo && result.path) {
-      progressImageCache.value[fileName] = `todox-file://${result.path}`
-    } else if (result.data) {
-      progressImageCache.value[fileName] = result.data
-    }
+    progressImageCache.value[fileName] = result.src
   }
 }
 
@@ -908,14 +921,10 @@ async function loadSubtaskImage(fileName) {
   if (subtaskImageCache.value[fileName]) {
     return // 已加载，跳过
   }
-  
-  const result = await electronAPI.readImage(fileName)
+
+  const result = await resolveMediaSource(fileName)
   if (result.success) {
-    if (result.isVideo && result.path) {
-      subtaskImageCache.value[fileName] = `todox-file://${result.path}`
-    } else if (result.data) {
-      subtaskImageCache.value[fileName] = result.data
-    }
+    subtaskImageCache.value[fileName] = result.src
   }
 }
 
@@ -984,6 +993,10 @@ async function handleTogglePin() {
 
 // 开始编辑
 function handleStartEdit() {
+  if (!canManageTask.value) {
+    appStore.toast('只有管理员可以编辑任务')
+    return
+  }
   isEditing.value = true
   editText.value = props.task.text
   showTaskMenu.value = false
@@ -1032,6 +1045,11 @@ async function handleCopyProgressText(text) {
 }
 
 async function handleDelete() {
+  if (!canManageTask.value) {
+    appStore.toast('只有管理员可以删除任务')
+    showTaskMenu.value = false
+    return
+  }
   const confirmed = await appStore.confirm('确定要删除这个任务吗？')
   if (confirmed) {
     await todoStore.deleteTask(props.task.id)
@@ -1401,7 +1419,7 @@ function handleCancelProgressEdit() {
 }
 
 async function handleSelectProgressImage() {
-  const result = await electronAPI.selectImage()
+  const result = await selectMedia()
   if (result.success && result.fileName) {
     // 确保响应式对象存在
     if (!todoStore.currentProgressImages[props.task.id]) {
@@ -1411,12 +1429,10 @@ async function handleSelectProgressImage() {
     // 添加文件名到列表（用于保存）
     todoStore.currentProgressImages[props.task.id].push(result.fileName)
     
-    // 读取图片为 base64 用于预览
-    const imageResult = await electronAPI.readImage(result.fileName)
-    if (imageResult.success) {
-      progressImagePreviews.value[result.fileName] = imageResult.data
-      appStore.toast('图片已添加')
+    if (result.previewSrc) {
+      progressImagePreviews.value[result.fileName] = result.previewSrc
     }
+    appStore.toast('图片已添加')
   }
 }
 
@@ -1453,38 +1469,31 @@ async function handleProgressPaste(event) {
 
   // 处理所有文件
   let successCount = 0
-  for (const { file, isVideo } of filesToProcess) {
-    try {
-      // 读取文件为 base64
-      const base64Data = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = (e) => resolve(e.target.result)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      
-      // 保存文件到应用数据目录
-      const result = await electronAPI.saveImageFromClipboard(base64Data)
-      if (result.success) {
-        // 添加到当前进度图片列表
-        todoStore.currentProgressImages[props.task.id].push(result.fileName)
-        
-        // 添加预览数据
-        if (result.isVideo) {
-          // 视频使用本地文件路径预览
-          const localPath = result.imagePath || result.fileName
-          progressImagePreviews.value[result.fileName] = `todox-file://${localPath}`
-        } else {
-          // 图片使用 base64 预览
-          progressImagePreviews.value[result.fileName] = base64Data
+      for (const { file } of filesToProcess) {
+        try {
+          // 读取文件为 base64
+          const base64Data = await new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = (e) => resolve(e.target.result)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+          
+        // 保存文件到应用数据目录或服务端
+        const result = await uploadMediaDataUrl(base64Data)
+        if (result.success) {
+          // 添加到当前进度图片列表
+          todoStore.currentProgressImages[props.task.id].push(result.fileName)
+          
+          // 添加预览数据
+          progressImagePreviews.value[result.fileName] = result.previewSrc || base64Data
+          
+          successCount++
         }
-        
-        successCount++
+      } catch (error) {
+        console.error('处理文件失败:', error)
       }
-    } catch (error) {
-      console.error('处理文件失败:', error)
     }
-  }
 
   if (successCount > 0) {
     if (successCount === 1) {
@@ -1515,7 +1524,7 @@ function handleRemoveProgressImage(index) {
 async function handleSubtaskInputChange(subtaskId) {
   const subtask = props.task.subtasks?.find(st => st.id === subtaskId)
   if (subtask) {
-    await electronAPI.updateSubtask(subtaskId, { inputValue: subtask.inputValue })
+    await todoStore.updateSubtask(props.task.id, subtaskId, { inputValue: subtask.inputValue })
   }
 }
 
