@@ -16,3 +16,6 @@ spring:
 
 todox:
   storage-path: storage
+  admin:
+    username: admin
+    password-hash: "$2a$10$0X0LNHjXNDKvqsICtu7hl.4qUVtKaQRr3ov3mwT7G/EkOBcKKrQBC"

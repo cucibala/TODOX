@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TodoX 管理员登录</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: linear-gradient(140deg, #f4f6ff 0%, #e8f0ff 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #1f2937;
+      }
+      .card {
+        width: min(420px, 92vw);
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 18px 40px rgba(31, 41, 55, 0.16);
+        padding: 28px;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .subtitle {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 20px;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .field label {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .field input {
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        padding: 10px 12px;
+        font-size: 14px;
+        outline: none;
+        transition: border 0.2s ease;
+      }
+      .field input:focus {
+        border-color: #4f7cff;
+      }
+      .actions {
+        margin-top: 8px;
+      }
+      .btn {
+        width: 100%;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #3b66ff;
+        color: #fff;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 20px rgba(59, 102, 255, 0.2);
+      }
+      .hint {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .message {
+        margin-top: 12px;
+        font-size: 12px;
+        color: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="title">TodoX 管理后台</div>
+      <div class="subtitle">请使用管理员账号登录</div>
+      <form id="login-form">
+        <div class="field">
+          <label for="username">管理员账号</label>
+          <input id="username" name="username" type="text" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="password">管理员密码</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="actions">
+          <button class="btn" type="submit">登录</button>
+        </div>
+        <div class="message" id="message"></div>
+      </form>
+      <div class="hint">账号密码在服务端配置（`todox.admin`）</div>
+    </div>
+
+    <script>
+      const form = document.getElementById('login-form');
+      const messageEl = document.getElementById('message');
+
+      function setMessage(text) {
+        messageEl.textContent = text || '';
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setMessage('');
+
+        const payload = {
+          username: form.username.value.trim(),
+          password: form.password.value
+        };
+
+        try {
+          const response = await fetch('/api/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            let errorMessage = '登录失败';
+            if (text) {
+              try {
+                const data = JSON.parse(text);
+                errorMessage = data.message || errorMessage;
+              } catch (err) {
+                errorMessage = text;
+              }
+            }
+            setMessage(errorMessage);
+            return;
+          }
+
+          window.location.href = '/admin/orgs';
+        } catch (error) {
+          setMessage('无法连接服务端');
+        }
+      });
+    </script>
+  </body>
+</html>

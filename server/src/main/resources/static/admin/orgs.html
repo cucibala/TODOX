@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TodoX 创建组织</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: #f5f7fb;
+        min-height: 100vh;
+        color: #1f2937;
+      }
+      header {
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      header .title {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      header .user {
+        font-size: 13px;
+        color: #6b7280;
+      }
+      header button {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .container {
+        max-width: 680px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 16px 32px rgba(31, 41, 55, 0.1);
+        padding: 24px;
+      }
+      .subtitle {
+        margin: 6px 0 18px;
+        font-size: 13px;
+        color: #6b7280;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+      }
+      .field label {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .field input {
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        padding: 10px 12px;
+        font-size: 14px;
+        outline: none;
+        transition: border 0.2s ease;
+      }
+      .field input:focus {
+        border-color: #4f7cff;
+      }
+      .btn {
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #3b66ff;
+        color: #fff;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 20px rgba(59, 102, 255, 0.18);
+      }
+      .message {
+        margin-top: 12px;
+        font-size: 12px;
+      }
+      .message.error {
+        color: #dc2626;
+      }
+      .message.success {
+        color: #16a34a;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <div class="title">创建组织</div>
+        <div class="user" id="admin-user"></div>
+      </div>
+      <button id="logout-btn" type="button">退出登录</button>
+    </header>
+
+    <div class="container">
+      <div class="card">
+        <div class="title">组织账号配置</div>
+        <div class="subtitle">创建后组织账号/密码用于成员加入</div>
+        <form id="org-form">
+          <div class="field">
+            <label for="name">组织名称</label>
+            <input id="name" name="name" type="text" required />
+          </div>
+          <div class="field">
+            <label for="account">组织账号</label>
+            <input id="account" name="account" type="text" required />
+          </div>
+          <div class="field">
+            <label for="password">组织密码</label>
+            <input id="password" name="password" type="password" required />
+          </div>
+          <button class="btn" type="submit">创建组织</button>
+          <div class="message" id="message"></div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      const messageEl = document.getElementById('message');
+      const adminUserEl = document.getElementById('admin-user');
+      const logoutBtn = document.getElementById('logout-btn');
+      const form = document.getElementById('org-form');
+
+      function setMessage(text, type) {
+        messageEl.textContent = text || '';
+        messageEl.className = 'message' + (type ? ' ' + type : '');
+      }
+
+      async function checkSession() {
+        const response = await fetch('/api/admin/session');
+        if (!response.ok) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        const data = await response.json();
+        if (!data.loggedIn) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        adminUserEl.textContent = data.username ? `管理员：${data.username}` : '';
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setMessage('');
+
+        const payload = {
+          name: form.name.value.trim(),
+          account: form.account.value.trim(),
+          password: form.password.value
+        };
+
+        try {
+          const response = await fetch('/api/admin/orgs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            let errorMessage = '创建失败';
+            if (text) {
+              try {
+                const data = JSON.parse(text);
+                errorMessage = data.message || errorMessage;
+              } catch (err) {
+                errorMessage = text;
+              }
+            }
+            setMessage(errorMessage, 'error');
+            return;
+          }
+
+          const data = await response.json();
+          setMessage(`组织已创建：${data.name}（账号：${data.account}）`, 'success');
+          form.reset();
+        } catch (error) {
+          setMessage('无法连接服务端', 'error');
+        }
+      });
+
+      logoutBtn.addEventListener('click', async () => {
+        await fetch('/api/admin/logout', { method: 'POST' });
+        window.location.href = '/admin/login';
+      });
+
+      checkSession().catch(() => {
+        window.location.href = '/admin/login';
+      });
+    </script>
+  </body>
+</html>
