@@ -7,11 +7,11 @@
             <circle cx="11" cy="11" r="8"></circle>
             <path d="m21 21-4.35-4.35"></path>
           </svg>
-          <input 
-            v-model="searchQuery" 
-            type="text" 
-            class="search-input" 
-            placeholder="搜索任务、标签或成员..." 
+          <input
+            v-model="searchQuery"
+            type="text"
+            class="search-input"
+            placeholder="搜索任务、标签或成员..."
           />
         </div>
       </div>
@@ -83,16 +83,16 @@
           </button>
         </div>
         <div class="priority-filter-buttons priority-chip-group">
-          <button 
-            class="priority-filter-btn" 
+          <button
+            class="priority-filter-btn"
             :class="{ active: currentPriorityFilter === 'all' }"
             @click="todoStore.currentPriorityFilter = 'all'"
             title="全部优先级"
           >
             全部
           </button>
-          <button 
-            class="priority-filter-btn priority-high" 
+          <button
+            class="priority-filter-btn priority-high"
             :class="{ active: currentPriorityFilter === 'high' }"
             @click="todoStore.currentPriorityFilter = 'high'"
             title="高优先级"
@@ -100,8 +100,8 @@
             <span class="priority-dot priority-high"></span>
             高
           </button>
-          <button 
-            class="priority-filter-btn priority-medium" 
+          <button
+            class="priority-filter-btn priority-medium"
             :class="{ active: currentPriorityFilter === 'medium' }"
             @click="todoStore.currentPriorityFilter = 'medium'"
             title="中优先级"
@@ -109,8 +109,8 @@
             <span class="priority-dot priority-medium"></span>
             中
           </button>
-          <button 
-            class="priority-filter-btn priority-low" 
+          <button
+            class="priority-filter-btn priority-low"
             :class="{ active: currentPriorityFilter === 'low' }"
             @click="todoStore.currentPriorityFilter = 'low'"
             title="低优先级"
@@ -120,8 +120,8 @@
           </button>
         </div>
 
-        <button 
-          class="btn-stats" 
+        <button
+          class="btn-stats"
           @click="handleGenerateSummary"
           :disabled="isGeneratingSummary"
         >
@@ -137,7 +137,7 @@
     <div class="board-body">
       <div class="board-main">
         <div class="kanban-board" :class="{ single: currentStatusFilter !== 'all' }">
-          <div 
+          <div
             class="kanban-column todo"
             v-if="showTodoColumn"
             :class="{ 'drag-over': activeDropColumn === 'todo' }"
@@ -158,7 +158,7 @@
             </div>
           </div>
 
-          <div 
+          <div
             class="kanban-column doing"
             v-if="showDoingColumn"
             :class="{ 'drag-over': activeDropColumn === 'doing' }"
@@ -179,7 +179,7 @@
             </div>
           </div>
 
-          <div 
+          <div
             class="kanban-column done"
             v-if="showDoneColumn"
             :class="{ 'drag-over': activeDropColumn === 'done' }"
@@ -317,19 +317,19 @@
             </svg>
             <span>请先创建一个项目，然后再添加任务</span>
           </div>
-          <form 
-            @submit.prevent="handleAddTask" 
-            :style="{ 
+          <form
+            @submit.prevent="handleAddTask"
+            :style="{
               opacity: (!hasProjects || !currentProjectId) ? '0.5' : '1',
               pointerEvents: (!hasProjects || !currentProjectId) ? 'none' : 'auto'
             }"
           >
             <div class="input-group">
               <div class="input-row">
-                <textarea 
-                  v-model="newTaskText" 
-                  class="task-input task-textarea" 
-                  placeholder="添加新任务（支持粘贴图片/视频）..." 
+                <textarea
+                  v-model="newTaskText"
+                  class="task-input task-textarea"
+                  placeholder="添加新任务（支持粘贴图片/视频）..."
                   autocomplete="off"
                   required
                   rows="1"
@@ -340,9 +340,9 @@
                 ></textarea>
               </div>
               <div class="input-row input-row-actions">
-                <input 
-                  v-model="newTaskDueDate" 
-                  type="date" 
+                <input
+                  v-model="newTaskDueDate"
+                  type="date"
                   class="date-input"
                   title="截止日期（可选）"
                 />
@@ -405,15 +405,15 @@
               </div>
             </div>
             <div v-if="currentImages.length > 0" class="image-preview-container">
-              <div 
-                v-for="(fileName, index) in currentImages" 
-                :key="index" 
+              <div
+                v-for="(fileName, index) in currentImages"
+                :key="index"
                 class="image-preview-wrapper"
               >
                 <ImagePreview :fileName="fileName" />
-                <button 
-                  type="button" 
-                  class="btn-remove-image" 
+                <button
+                  type="button"
+                  class="btn-remove-image"
                   @click="todoStore.removeCurrentImage(index)"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -472,8 +472,8 @@ import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useProjectStore } from '../stores/project'
 import { useOrgStore } from '../stores/org'
-import TaskItem from './TaskItem.vue'
-import ImagePreview from './ImagePreview.vue'
+import TaskItem from '../components/TaskItem.vue'
+import ImagePreview from '../components/ImagePreview.vue'
 import { generateDailySummary } from '../utils/deepseek'
 import { DoubaoClient } from '../utils/doubao'
 import { uploadMediaDataUrl } from '../utils/media'
@@ -626,7 +626,7 @@ async function handleAddTask() {
     newTaskDueDate.value,
     assigneeId
   )
-  
+
   if (result.success) {
     newTaskText.value = ''
     newTaskDueDate.value = ''
@@ -684,7 +684,7 @@ async function handlePaste(event) {
         reader.onerror = reject
         reader.readAsDataURL(file)
       })
-      
+
       // 保存文件到应用数据目录或服务端
       const result = await uploadMediaDataUrl(base64Data)
       if (result.success) {
@@ -716,7 +716,7 @@ async function handleGenerateSummary() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const todayTimestamp = today.getTime()
-    
+
     const todayTasks = todoStore.todos.filter(task => {
       if (!task.createdAt) return false
       const taskDate = new Date(task.createdAt)
@@ -761,7 +761,7 @@ async function handleGenerateSummary() {
       console.error('DeepSeek 检查或生成失败，尝试豆包:', error)
     }
 
-    // 2. 如果 DeepSeek 失败或未配置，尝试使用豆包
+    // 2. 如果 DeepSeek 失败或未配置,尝试使用豆包
     if (!summary) {
       try {
         const doubaoConfigResult = await electronAPI.getDoubaoConfig()
