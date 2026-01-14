@@ -24,7 +24,7 @@
       <!-- 首页 -->
       <template v-else-if="currentPage === 'home'">
         <!-- 侧边栏 -->
-        <Sidebar />
+        <Sidebar :class="{ 'sidebar-collapsed': appStore.isSidebarCollapsed }" />
 
         <!-- 任务列表区域 -->
         <TaskContent />

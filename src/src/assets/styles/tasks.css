@@ -33,6 +33,45 @@
   min-width: 260px;
 }
 
+/* 侧边栏切换按钮 */
+.btn-toggle-sidebar {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.btn-toggle-sidebar:hover {
+  background: #f6f7ff;
+  border-color: #6b5ce7;
+  color: #6b5ce7;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(107, 92, 231, 0.15);
+}
+
+.btn-toggle-sidebar:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(107, 92, 231, 0.1);
+}
+
+.btn-toggle-sidebar svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.2s ease;
+}
+
+.btn-toggle-sidebar:hover svg {
+  transform: scale(1.05);
+}
+
 .project-chip {
   display: flex;
   align-items: center;

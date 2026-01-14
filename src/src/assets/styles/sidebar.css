@@ -7,6 +7,16 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 侧边栏收起状态 */
+.sidebar.sidebar-collapsed {
+  width: 0;
+  padding: 0;
+  border-right: none;
+  min-width: 0;
 }
 
 /* 侧栏进度卡片 */

@@ -56,6 +56,9 @@ export const useAppStore = defineStore('app', () => {
   // AI 总结内容
   const aiSummaryContent = ref('')
 
+  // 侧边栏折叠状态
+  const isSidebarCollapsed = ref(false)
+
   // 获取 electronAPI
   const electronAPI = window.electronAPI
 
@@ -267,6 +270,7 @@ export const useAppStore = defineStore('app', () => {
     confirmMessage,
     viewerImageSrc,
     aiSummaryContent,
+    isSidebarCollapsed,
 
     // 方法
     init,

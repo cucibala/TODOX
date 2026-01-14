@@ -2,6 +2,16 @@
   <section class="content-area board-page">
     <div class="board-toolbar">
       <div class="toolbar-left">
+        <button
+          class="btn-toggle-sidebar"
+          @click="toggleSidebar"
+          :title="appStore.isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+        </button>
         <div class="search-box">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
@@ -605,6 +615,11 @@ function handleDrop(event, status) {
 
 function handleDragOver(status) {
   activeDropColumn.value = status
+}
+
+// 切换侧边栏展开/收起
+function toggleSidebar() {
+  appStore.isSidebarCollapsed = !appStore.isSidebarCollapsed
 }
 
 // 自动调整 textarea 高度
