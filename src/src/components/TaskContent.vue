@@ -17,7 +17,7 @@
       </div>
 
       <div class="toolbar-right">
-        <div class="view-toggle">
+        <!-- <div class="view-toggle">
           <span class="view-toggle-label">视角</span>
           <button
             class="view-toggle-btn"
@@ -44,7 +44,7 @@
             <span class="view-toggle-org">{{ orgAccount || orgId }}</span>
             <span class="view-toggle-member">{{ memberName }}（{{ memberRoleLabel }}）</span>
           </div>
-        </div>
+        </div> -->
         <div class="status-filter-buttons priority-chip-group" role="group" aria-label="筛选任务状态">
           <button
             class="status-filter-btn"
