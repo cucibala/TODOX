@@ -53,21 +53,19 @@
             <div class="tool-card-header">
               <div class="tool-card-title">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                  <polyline points="21 15 16 10 5 21"></polyline>
+                  <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                  <polyline points="13 2 13 9 20 9"></polyline>
                 </svg>
                 <div>
                   <h3>{{ activeTab.title }}</h3>
-                  <span>选择图片后生成 Base64 字符串</span>
+                  <span>选择任意文件后生成 Base64 字符串</span>
                 </div>
               </div>
-              <span class="tool-tag">图片</span>
+              <span class="tool-tag">文件</span>
             </div>
             <div class="tool-card-body" tabindex="0" @paste="(event) => handlePasteImage(event, activeTab)">
               <input
                 type="file"
-                accept="image/*"
                 class="tool-hidden-input"
                 :ref="(el) => setImageInputRef(activeTab.id, el)"
                 @change="(event) => handleImageChange(event, activeTab)"
@@ -78,19 +76,35 @@
                 @drop.prevent="(event) => handleDropImage(event, activeTab)"
               >
                 <div class="tool-upload-info">
-                  <div class="tool-upload-title">选择图片文件</div>
-                  <div class="tool-upload-desc">支持 PNG / JPG / GIF / WebP，可拖放或粘贴</div>
+                  <div class="tool-upload-title">选择文件</div>
+                  <div class="tool-upload-desc">支持任意文件类型，可拖放或粘贴文件</div>
                   <div v-if="activeTab.state.imageName" class="tool-file-meta">
                     <span>{{ activeTab.state.imageName }}</span>
                     <span>{{ activeTab.state.imageSize }}</span>
+                    <span v-if="activeTab.state.fileType">{{ activeTab.state.fileType }}</span>
                   </div>
                 </div>
-                <button class="tool-btn primary" @click="handlePickImage(activeTab)">选择图片</button>
+                <button class="tool-btn primary" @click="handlePickImage(activeTab)">选择文件</button>
                 <button class="tool-btn" :disabled="!activeTab.state.imageDataUrl" @click="handleClearImageToBase64(activeTab)">清空</button>
               </div>
 
               <div v-if="activeTab.state.imageDataUrl" class="tool-preview">
-                <img :src="activeTab.state.imageDataUrl" alt="图片预览" @error="handleImagePreviewError" />
+                <img v-if="activeTab.state.isImage" :src="activeTab.state.imageDataUrl" alt="图片预览" @error="handleImagePreviewError" />
+                <div v-else class="tool-file-info">
+                  <div class="file-info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                      <polyline points="13 2 13 9 20 9"></polyline>
+                    </svg>
+                  </div>
+                  <div class="file-info-details">
+                    <div class="file-info-name">{{ activeTab.state.imageName }}</div>
+                    <div class="file-info-meta">
+                      <span>{{ activeTab.state.imageSize }}</span>
+                      <span v-if="activeTab.state.fileType">{{ activeTab.state.fileType }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="tool-output">
@@ -254,12 +268,11 @@ const electronAPI = window.electronAPI
 const tools = [
   {
     id: 'image-to-base64',
-    name: '图片转 Base64',
+    name: '文件转 Base64',
     icon: `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-        <circle cx="8.5" cy="8.5" r="1.5"></circle>
-        <polyline points="21 15 16 10 5 21"></polyline>
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+        <polyline points="13 2 13 9 20 9"></polyline>
       </svg>
     `
   },
@@ -344,7 +357,9 @@ function createImageToBase64State() {
     imageName: '',
     imageSize: '',
     imageBase64: '',
-    imageDataUrl: ''
+    imageDataUrl: '',
+    isImage: false,
+    fileType: ''
   }
 }
 
@@ -392,47 +407,49 @@ function handleImageChange(event, tab) {
 function handleDropImage(event, tab) {
   const file = event.dataTransfer?.files?.[0]
   if (!file) return
-  if (!file.type.startsWith('image/')) {
-    appStore.toast('请拖放图片文件', 'warning')
-    return
-  }
   processImageFile(tab, file)
 }
 
 function handlePasteImage(event, tab) {
-  const items = event.clipboardData?.items
-  if (!items) return
-  let imageFile = null
-  for (const item of items) {
-    if (item.type.startsWith('image/')) {
-      imageFile = item.getAsFile()
-      break
+  const clipboard = event.clipboardData
+  if (!clipboard) return
+  let file = null
+  if (clipboard.files?.length) {
+    file = clipboard.files[0]
+  } else if (clipboard.items?.length) {
+    for (const item of clipboard.items) {
+      if (item.kind === 'file') {
+        file = item.getAsFile()
+        break
+      }
     }
   }
-  if (!imageFile) {
-    appStore.toast('剪贴板中没有图片', 'warning')
+  if (!file) {
+    appStore.toast('剪贴板中没有文件（可粘贴图片/文件）', 'warning')
     return
   }
   event.preventDefault()
-  processImageFile(tab, imageFile)
+  processImageFile(tab, file)
 }
 
 function processImageFile(tab, file) {
-  tab.state.imageName = file.name || 'clipboard-image'
+  tab.state.imageName = file.name || 'file'
   tab.state.imageSize = formatFileSize(file.size)
+  tab.state.fileType = file.type || '未知类型'
+  tab.state.isImage = file.type.startsWith('image/')
 
   const reader = new FileReader()
   reader.onload = (e) => {
     const dataUrl = e.target?.result || ''
     if (typeof dataUrl !== 'string') {
-      appStore.toast('图片读取失败')
+      appStore.toast('文件读取失败')
       return
     }
     tab.state.imageDataUrl = dataUrl
     tab.state.imageBase64 = stripDataUrl(dataUrl)
   }
   reader.onerror = () => {
-    appStore.toast('图片读取失败')
+    appStore.toast('文件读取失败')
   }
   reader.readAsDataURL(file)
 }
@@ -442,6 +459,8 @@ function handleClearImageToBase64(tab) {
   tab.state.imageSize = ''
   tab.state.imageBase64 = ''
   tab.state.imageDataUrl = ''
+  tab.state.isImage = false
+  tab.state.fileType = ''
   const input = imageInputRefs.value[tab.id]
   if (input) {
     input.value = ''
@@ -962,6 +981,52 @@ onMounted(() => {
   max-height: 220px;
   border-radius: 10px;
   object-fit: contain;
+}
+
+.tool-file-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  width: 100%;
+}
+
+.file-info-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(108, 92, 231, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.file-info-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #5f6be4;
+}
+
+.file-info-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-info-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+.file-info-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
 }
 
 .tool-output label,
