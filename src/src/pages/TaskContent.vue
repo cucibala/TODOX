@@ -27,34 +27,6 @@
       </div>
 
       <div class="toolbar-right">
-        <!-- <div class="view-toggle">
-          <span class="view-toggle-label">视角</span>
-          <button
-            class="view-toggle-btn"
-            :class="{ active: dataMode === 'local' }"
-            @click="setViewMode('local')"
-          >
-            本地
-          </button>
-          <button
-            class="view-toggle-btn"
-            :class="{ active: dataMode === 'server' }"
-            @click="setViewMode('server')"
-          >
-            服务端
-          </button>
-          <button
-            v-if="isServerMode && !hasSession"
-            class="view-toggle-join"
-            @click="openJoinOrgModal"
-          >
-            加入组织
-          </button>
-          <div v-if="isServerMode && hasSession" class="view-toggle-session">
-            <span class="view-toggle-org">{{ orgAccount || orgId }}</span>
-            <span class="view-toggle-member">{{ memberName }}（{{ memberRoleLabel }}）</span>
-          </div>
-        </div> -->
         <div class="status-filter-buttons priority-chip-group" role="group" aria-label="筛选任务状态">
           <button
             class="status-filter-btn"
@@ -437,41 +409,6 @@
         </div>
       </div>
     </div>
-
-    <div v-if="showJoinOrgModal" class="join-org-modal" @click.self="closeJoinOrgModal">
-      <div class="join-org-dialog">
-        <div class="join-org-header">
-          <div class="join-org-title">加入组织</div>
-          <button class="join-org-close" @click="closeJoinOrgModal" title="关闭">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-        </div>
-        <div class="join-org-body">
-          <label class="join-org-label">服务端地址</label>
-          <input v-model="joinBaseUrl" type="text" class="join-org-input" placeholder="http://localhost:8081" />
-
-          <label class="join-org-label">组织账号</label>
-          <input v-model="joinAccount" type="text" class="join-org-input" placeholder="请输入组织账号" />
-
-          <label class="join-org-label">组织密码</label>
-          <input v-model="joinPassword" type="password" class="join-org-input" placeholder="请输入组织密码" />
-
-          <label class="join-org-label">成员姓名</label>
-          <input v-model="joinMemberName" type="text" class="join-org-input" placeholder="用于分配任务" />
-
-          <div class="join-org-hint">组织账号密码需管理员在数据库中配置</div>
-        </div>
-        <div class="join-org-actions">
-          <button class="join-org-cancel" @click="closeJoinOrgModal">取消</button>
-          <button class="join-org-confirm" :disabled="isJoining" @click="handleJoinOrg">
-            {{ isJoining ? '加入中...' : '加入组织' }}
-          </button>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -504,12 +441,6 @@ const isGeneratingSummary = ref(false)
 const taskInputRef = ref(null)
 const showAddTaskModal = ref(false)
 const currentStatusFilter = ref('all')
-const showJoinOrgModal = ref(false)
-const joinBaseUrl = ref(serverBaseUrl.value)
-const joinAccount = ref('')
-const joinPassword = ref('')
-const joinMemberName = ref('')
-const isJoining = ref(false)
 const selectedAssigneeId = ref('')
 
 const electronAPI = window.electronAPI
@@ -596,12 +527,6 @@ const completionPercentage = computed(() => {
 })
 
 const canCreateTask = computed(() => !isServerMode.value || isAdmin.value)
-
-const memberRoleLabel = computed(() => {
-  if (memberRole.value === 'ADMIN') return '管理员'
-  if (memberRole.value === 'USER') return '成员'
-  return '未知'
-})
 
 const activeDropColumn = ref('')
 
@@ -834,47 +759,6 @@ async function openAddTaskModal() {
 
 function closeAddTaskModal() {
   showAddTaskModal.value = false
-}
-
-function setViewMode(mode) {
-  orgStore.setMode(mode)
-}
-
-function openJoinOrgModal() {
-  joinBaseUrl.value = serverBaseUrl.value
-  joinAccount.value = orgAccount.value || ''
-  joinMemberName.value = memberName.value || ''
-  joinPassword.value = ''
-  showJoinOrgModal.value = true
-}
-
-function closeJoinOrgModal() {
-  showJoinOrgModal.value = false
-}
-
-async function handleJoinOrg() {
-  if (!joinAccount.value.trim() || !joinPassword.value.trim() || !joinMemberName.value.trim()) {
-    appStore.toast('请完整填写组织账号、密码和成员姓名')
-    return
-  }
-  isJoining.value = true
-  try {
-    await orgStore.joinOrg({
-      baseUrl: joinBaseUrl.value.trim(),
-      account: joinAccount.value.trim(),
-      password: joinPassword.value.trim(),
-      name: joinMemberName.value.trim()
-    })
-    await orgStore.loadMembers()
-    await projectStore.loadProjects()
-    await todoStore.loadTodos()
-    showJoinOrgModal.value = false
-    appStore.toast('加入组织成功')
-  } catch (error) {
-    appStore.toast(error.message || '加入组织失败')
-  } finally {
-    isJoining.value = false
-  }
 }
 
 watch(() => dataMode.value, async () => {

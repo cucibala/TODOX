@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TaskRepository extends JpaRepository<Task, String> {
     List<Task> findByOrganizationId(Long orgId);
-    List<Task> findByOrganizationIdAndAssigneeId(Long orgId, Long assigneeId);
+    List<Task> findByOrganizationIdAndAssigneeId(Long orgId, String assigneeId);
     List<Task> findByOrganizationIdAndProjectId(Long orgId, String projectId);
 }

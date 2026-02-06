@@ -1,16 +1,16 @@
 package com.x.todox.dto;
 
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 
 public class ProjectGroupUpdateRequest {
 
-    @NotNull
-    private Long updaterId;
+    @NotBlank
+    private String updaterId;
 
     private String name;
     private Integer order;
 
-    public Long getUpdaterId() {
+    public String getUpdaterId() {
         return updaterId;
     }
 
@@ -22,7 +22,7 @@ public class ProjectGroupUpdateRequest {
         return order;
     }
 
-    public void setUpdaterId(Long updaterId) {
+    public void setUpdaterId(String updaterId) {
         this.updaterId = updaterId;
     }
 

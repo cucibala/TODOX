@@ -1469,12 +1469,11 @@
 }
 
 .task-item.completed {
-  opacity: 0.7;
+  /* 已完成任务保持正常显示 */
 }
 
 .task-item.completed .task-title {
-  text-decoration: line-through;
-  color: var(--text-muted);
+  /* 已完成任务保持正常颜色 */
 }
 
 .task-item.pinned {
@@ -1551,6 +1550,8 @@
   color: var(--text-primary);
   line-height: 1.4;
   width: 100%;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .task-header-actions {
@@ -1695,8 +1696,7 @@
 }
 
 .task-subtask-mini.completed .subtask-mini-text {
-  text-decoration: line-through;
-  opacity: 0.6;
+  /* 已完成子任务保持正常显示 */
 }
 
 .subtask-mini-checkbox {
@@ -1996,6 +1996,12 @@
   transform: translateY(-1px);
 }
 
+/* 已完成任务的到期时间不显示hover效果 */
+.task-item.completed .task-due-date:hover {
+  background: var(--bg-hover);
+  transform: none;
+}
+
 .task-due-date.overdue {
   color: var(--danger-color);
   background: rgba(245, 101, 101, 0.1);
@@ -2011,6 +2017,26 @@
 }
 
 .task-due-date.today:hover {
+  background: rgba(237, 137, 54, 0.15);
+}
+
+/* 提前完成 - 绿色 */
+.task-due-date.completed-early {
+  color: var(--success-color);
+  background: rgba(76, 175, 80, 0.1);
+}
+
+.task-due-date.completed-early:hover {
+  background: rgba(76, 175, 80, 0.15);
+}
+
+/* 逾期完成 - 橙色 */
+.task-due-date.completed-late {
+  color: var(--warning-color);
+  background: rgba(237, 137, 54, 0.1);
+}
+
+.task-due-date.completed-late:hover {
   background: rgba(237, 137, 54, 0.15);
 }
 
@@ -2295,6 +2321,8 @@
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .detail-section-title {
@@ -2526,6 +2554,14 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* 子任务文本 */
+.subtask-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  flex: 1;
+  min-width: 0;
 }
 
 /* 子任务内联输入框 */

@@ -459,8 +459,7 @@
 }
 
 .subtask-text.completed {
-  text-decoration: line-through;
-  color: var(--text-muted);
+  /* 已完成子任务保持正常颜色 */
 }
 
 .subtask-time-info {

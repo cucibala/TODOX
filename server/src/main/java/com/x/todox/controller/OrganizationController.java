@@ -2,6 +2,7 @@ package com.x.todox.controller;
 
 import com.x.todox.dto.JoinOrgRequest;
 import com.x.todox.dto.JoinOrgResponse;
+import com.x.todox.dto.MemberPasswordUpdateRequest;
 import com.x.todox.dto.OrgMemberResponse;
 import com.x.todox.service.OrganizationService;
 import java.util.List;
@@ -34,7 +35,14 @@ public class OrganizationController {
 
     @GetMapping("/{orgId}/members")
     public List<OrgMemberResponse> listMembers(@PathVariable("orgId") Long orgId,
-                                               @RequestParam("requesterId") @NotNull Long requesterId) {
+                                               @RequestParam("requesterId") @NotNull String requesterId) {
         return organizationService.listMembers(orgId, requesterId);
+    }
+
+    @PostMapping("/{orgId}/members/{memberId}/password")
+    public void updateMemberPassword(@PathVariable("orgId") Long orgId,
+                                     @PathVariable("memberId") String memberId,
+                                     @Valid @RequestBody MemberPasswordUpdateRequest request) {
+        organizationService.updateMemberPassword(orgId, memberId, request.getOldPassword(), request.getNewPassword());
     }
 }

@@ -8,8 +8,8 @@ public class ImageUploadRequest {
     @NotNull
     private Long orgId;
 
-    @NotNull
-    private Long memberId;
+    @NotBlank
+    private String memberId;
 
     @NotBlank
     private String dataUrl;
@@ -18,7 +18,7 @@ public class ImageUploadRequest {
         return orgId;
     }
 
-    public Long getMemberId() {
+    public String getMemberId() {
         return memberId;
     }
 
@@ -30,7 +30,7 @@ public class ImageUploadRequest {
         this.orgId = orgId;
     }
 
-    public void setMemberId(Long memberId) {
+    public void setMemberId(String memberId) {
         this.memberId = memberId;
     }
 

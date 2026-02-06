@@ -48,7 +48,7 @@ public class ProjectService {
     }
 
     @Transactional(readOnly = true)
-    public ProjectOverviewResponse getOverview(Long orgId, Long requesterId) {
+    public ProjectOverviewResponse getOverview(Long orgId, String requesterId) {
         requireMember(orgId, requesterId);
         List<ProjectGroupResponse> groups = projectGroupRepository.findByOrganizationId(orgId).stream()
             .map(this::toGroupResponse)
@@ -93,7 +93,7 @@ public class ProjectService {
     }
 
     @Transactional
-    public void deleteProjectGroup(String groupId, Long updaterId) {
+    public void deleteProjectGroup(String groupId, String updaterId) {
         ProjectGroup group = projectGroupRepository.findById(groupId)
             .orElseThrow(() -> new IllegalArgumentException("分组不存在"));
         OrgMember updater = requireMember(group.getOrganization().getId(), updaterId);
@@ -168,7 +168,7 @@ public class ProjectService {
     }
 
     @Transactional
-    public void deleteProject(String projectId, Long updaterId) {
+    public void deleteProject(String projectId, String updaterId) {
         Project project = projectRepository.findById(projectId)
             .orElseThrow(() -> new IllegalArgumentException("项目不存在"));
         OrgMember updater = requireMember(project.getOrganization().getId(), updaterId);
@@ -178,7 +178,7 @@ public class ProjectService {
         projectRepository.delete(project);
     }
 
-    private OrgMember requireMember(Long orgId, Long memberId) {
+    private OrgMember requireMember(Long orgId, String memberId) {
         return orgMemberRepository.findByIdAndOrganizationId(memberId, orgId)
             .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
     }

@@ -1,15 +1,15 @@
 package com.x.todox.dto;
 
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 
 public class ProjectGroupCreateRequest {
 
     @NotNull
     private Long orgId;
 
-    @NotNull
-    private Long creatorId;
+    @NotBlank
+    private String creatorId;
 
     @NotBlank
     private String name;
@@ -20,7 +20,7 @@ public class ProjectGroupCreateRequest {
         return orgId;
     }
 
-    public Long getCreatorId() {
+    public String getCreatorId() {
         return creatorId;
     }
 
@@ -36,7 +36,7 @@ public class ProjectGroupCreateRequest {
         this.orgId = orgId;
     }
 
-    public void setCreatorId(Long creatorId) {
+    public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
     }
 

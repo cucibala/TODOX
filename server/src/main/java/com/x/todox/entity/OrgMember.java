@@ -6,8 +6,6 @@ import javax.persistence.Entity;
 import javax.persistence.EnumType;
 import javax.persistence.Enumerated;
 import javax.persistence.FetchType;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
 import javax.persistence.ManyToOne;
@@ -21,8 +19,7 @@ import com.x.todox.util.TimeUtil;
 public class OrgMember {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "org_id", nullable = false)
@@ -34,6 +31,9 @@ public class OrgMember {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private MemberRole role;
+
+    @Column(name = "password_hash")
+    private String passwordHash;
 
     @Column(name = "created_at", nullable = false)
     private String createdAt;
@@ -57,7 +57,7 @@ public class OrgMember {
         this.updatedAt = TimeUtil.nowIso();
     }
 
-    public Long getId() {
+    public String getId() {
         return id;
     }
 
@@ -73,6 +73,10 @@ public class OrgMember {
         return role;
     }
 
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
     public String getCreatedAt() {
         return createdAt;
     }
@@ -81,7 +85,7 @@ public class OrgMember {
         return updatedAt;
     }
 
-    public void setId(Long id) {
+    public void setId(String id) {
         this.id = id;
     }
 
@@ -95,6 +99,10 @@ public class OrgMember {
 
     public void setRole(MemberRole role) {
         this.role = role;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public void setCreatedAt(String createdAt) {

@@ -8,32 +8,32 @@ public class JoinOrgRequest {
     private String orgAccount;
 
     @NotBlank
-    private String orgPassword;
+    private String memberId;
 
     @NotBlank
-    private String memberName;
+    private String memberPassword;
 
     public String getOrgAccount() {
         return orgAccount;
     }
 
-    public String getOrgPassword() {
-        return orgPassword;
+    public String getMemberId() {
+        return memberId;
     }
 
-    public String getMemberName() {
-        return memberName;
+    public String getMemberPassword() {
+        return memberPassword;
     }
 
     public void setOrgAccount(String orgAccount) {
         this.orgAccount = orgAccount;
     }
 
-    public void setOrgPassword(String orgPassword) {
-        this.orgPassword = orgPassword;
+    public void setMemberId(String memberId) {
+        this.memberId = memberId;
     }
 
-    public void setMemberName(String memberName) {
-        this.memberName = memberName;
+    public void setMemberPassword(String memberPassword) {
+        this.memberPassword = memberPassword;
     }
 }

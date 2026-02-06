@@ -11,10 +11,10 @@ public class TaskCreateRequest {
     @NotNull
     private Long orgId;
 
-    @NotNull
-    private Long creatorId;
+    @NotBlank
+    private String creatorId;
 
-    private Long assigneeId;
+    private String assigneeId;
     private String projectId;
 
     @NotBlank
@@ -35,11 +35,11 @@ public class TaskCreateRequest {
         return orgId;
     }
 
-    public Long getCreatorId() {
+    public String getCreatorId() {
         return creatorId;
     }
 
-    public Long getAssigneeId() {
+    public String getAssigneeId() {
         return assigneeId;
     }
 
@@ -95,11 +95,11 @@ public class TaskCreateRequest {
         this.orgId = orgId;
     }
 
-    public void setCreatorId(Long creatorId) {
+    public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
     }
 
-    public void setAssigneeId(Long assigneeId) {
+    public void setAssigneeId(String assigneeId) {
         this.assigneeId = assigneeId;
     }
 

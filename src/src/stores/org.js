@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { joinOrganization, listOrgMembers } from '../utils/server_api'
+import { joinOrganization, listOrgMembers, updateMemberPassword } from '../utils/server_api'
 
 const STORAGE_KEY = 'todox_org_session'
 const DEFAULT_BASE_URL = 'http://localhost:8081'
@@ -58,14 +58,14 @@ export const useOrgStore = defineStore('org', () => {
     persist()
   }
 
-  async function joinOrg({ baseUrl, account, password, name }) {
+  async function joinOrg({ baseUrl, account, memberId: memberIdInput, password }) {
     if (baseUrl) {
       serverBaseUrl.value = baseUrl
     }
     const response = await joinOrganization(serverBaseUrl.value, {
       orgAccount: account,
-      orgPassword: password,
-      memberName: name
+      memberId: memberIdInput,
+      memberPassword: password
     })
     orgId.value = response.orgId
     memberId.value = response.memberId
@@ -96,6 +96,16 @@ export const useOrgStore = defineStore('org', () => {
     persist()
   }
 
+  async function changePassword({ oldPassword, newPassword }) {
+    if (!hasSession.value) {
+      throw new Error('未登录成员')
+    }
+    await updateMemberPassword(serverBaseUrl.value, orgId.value, memberId.value, {
+      oldPassword,
+      newPassword
+    })
+  }
+
   return {
     dataMode,
     serverBaseUrl,
@@ -113,6 +123,7 @@ export const useOrgStore = defineStore('org', () => {
     setServerBaseUrl,
     joinOrg,
     loadMembers,
-    clearSession
+    clearSession,
+    changePassword
   }
 })

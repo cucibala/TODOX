@@ -19,6 +19,105 @@
   min-width: 0;
 }
 
+/* 视角切换区域 */
+.view-toggle-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.view-toggle-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+.view-toggle-btn {
+  flex: 1;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-toggle-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.view-toggle-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  font-weight: 600;
+}
+
+.view-toggle-join {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--primary-color);
+  background: rgba(107, 92, 231, 0.1);
+  border: 1px solid var(--primary-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-toggle-join:hover {
+  background: rgba(107, 92, 231, 0.2);
+}
+
+.view-toggle-session {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+}
+
+.view-toggle-org {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.view-toggle-member {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.view-toggle-manage {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-toggle-manage:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
 /* 侧栏进度卡片 */
 .progress-card {
   background: #f6f7ff;
@@ -429,8 +528,7 @@
 }
 
 .task-item-mini.completed .task-text {
-  text-decoration: line-through;
-  opacity: 0.7;
+  /* 已完成任务保持正常显示 */
 }
 
 .task-check-icon {
@@ -1314,5 +1412,278 @@
   height: 18px;
   color: var(--primary-color);
   flex-shrink: 0;
+}
+
+/* 加入组织弹窗 */
+.join-org-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  animation: fadeIn 0.2s ease;
+}
+
+.join-org-dialog {
+  width: min(520px, 92vw);
+  background: var(--bg-secondary);
+  border-radius: 18px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  animation: modalPop 0.18s ease;
+}
+
+.join-org-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f6f7ff;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.join-org-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.join-org-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.join-org-close:hover {
+  color: var(--text-primary);
+}
+
+.join-org-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.join-org-body {
+  padding: 18px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.join-org-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.join-org-input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  font-size: 14px;
+}
+
+.join-org-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.join-org-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.join-org-actions {
+  padding: 14px 20px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.join-org-cancel,
+.join-org-confirm {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.join-org-cancel {
+  background: #fff;
+  color: var(--text-secondary);
+}
+
+.join-org-cancel:hover {
+  background: var(--bg-hover);
+}
+
+.join-org-confirm {
+  background: #2f5af3;
+  color: #fff;
+  border-color: #2f5af3;
+}
+
+.join-org-confirm:hover {
+  background: #2648d9;
+}
+
+.join-org-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 账号管理弹窗 */
+.account-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  animation: fadeIn 0.2s ease;
+}
+
+.account-dialog {
+  width: min(460px, 92vw);
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  animation: modalPop 0.18s ease;
+}
+
+.account-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f6f7ff;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.account-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.account-close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.account-close:hover {
+  color: var(--text-primary);
+}
+
+.account-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.account-body {
+  padding: 16px 20px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.account-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  align-items: center;
+}
+
+.account-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.account-value {
+  color: var(--text-primary);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+
+.account-actions {
+  padding: 14px 20px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.account-cancel,
+.account-secondary,
+.account-logout {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.account-cancel {
+  background: #fff;
+  color: var(--text-secondary);
+}
+
+.account-cancel:hover {
+  background: var(--bg-hover);
+}
+
+.account-logout {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+}
+
+.account-logout:hover {
+  background: #dc2626;
+}
+
+.account-logout:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.account-secondary {
+  background: #ffffff;
+  color: var(--text-secondary);
+}
+
+.account-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.account-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.account-input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  font-size: 14px;
+}
+
+.account-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
 }
 

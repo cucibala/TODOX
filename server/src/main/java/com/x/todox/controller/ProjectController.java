@@ -34,7 +34,7 @@ public class ProjectController {
 
     @GetMapping("/overview")
     public ProjectOverviewResponse getOverview(@RequestParam("orgId") @NotNull Long orgId,
-                                               @RequestParam("requesterId") @NotNull Long requesterId) {
+                                               @RequestParam("requesterId") @NotNull String requesterId) {
         return projectService.getOverview(orgId, requesterId);
     }
 
@@ -51,7 +51,7 @@ public class ProjectController {
 
     @DeleteMapping("/groups/{id}")
     public void deleteGroup(@PathVariable("id") String id,
-                            @RequestParam("updaterId") @NotNull Long updaterId) {
+                            @RequestParam("updaterId") @NotNull String updaterId) {
         projectService.deleteProjectGroup(id, updaterId);
     }
 
@@ -68,7 +68,7 @@ public class ProjectController {
 
     @DeleteMapping("/{id}")
     public void deleteProject(@PathVariable("id") String id,
-                              @RequestParam("updaterId") @NotNull Long updaterId) {
+                              @RequestParam("updaterId") @NotNull String updaterId) {
         projectService.deleteProject(id, updaterId);
     }
 }

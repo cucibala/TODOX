@@ -2,19 +2,18 @@ package com.x.todox.dto;
 
 import java.util.List;
 import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
 
 public class ProgressCreateRequest {
 
-    @NotNull
-    private Long updaterId;
+    @NotBlank
+    private String updaterId;
 
     @NotBlank
     private String text;
 
     private List<String> images;
 
-    public Long getUpdaterId() {
+    public String getUpdaterId() {
         return updaterId;
     }
 
@@ -26,7 +25,7 @@ public class ProgressCreateRequest {
         return images;
     }
 
-    public void setUpdaterId(Long updaterId) {
+    public void setUpdaterId(String updaterId) {
         this.updaterId = updaterId;
     }
 

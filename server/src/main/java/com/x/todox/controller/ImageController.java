@@ -49,7 +49,7 @@ public class ImageController {
     @GetMapping("/{fileName}")
     public ResponseEntity<Resource> getImage(@PathVariable("fileName") String fileName,
                                              @RequestParam("orgId") @NotNull Long orgId,
-                                             @RequestParam("memberId") @NotNull Long memberId) {
+                                             @RequestParam("memberId") @NotNull String memberId) {
         requireMember(orgId, memberId);
         File file = imageStorageService.getImageFile(orgId, fileName);
         if (file == null) {
@@ -65,13 +65,13 @@ public class ImageController {
     @DeleteMapping("/{fileName}")
     public void deleteImage(@PathVariable("fileName") String fileName,
                             @RequestParam("orgId") @NotNull Long orgId,
-                            @RequestParam("memberId") @NotNull Long memberId) {
+                            @RequestParam("memberId") @NotNull String memberId) {
         requireMember(orgId, memberId);
         imageStorageService.deleteImageFile(orgId, fileName);
         imageAttachmentService.deleteImageRecordsByFileName(orgId, fileName);
     }
 
-    private void requireMember(Long orgId, Long memberId) {
+    private void requireMember(Long orgId, String memberId) {
         orgMemberRepository.findByIdAndOrganizationId(memberId, orgId)
             .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
     }

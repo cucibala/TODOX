@@ -8,8 +8,8 @@ public class TaskResponse {
 
     private String id;
     private Long orgId;
-    private Long creatorId;
-    private Long assigneeId;
+    private String creatorId;
+    private String assigneeId;
     private String projectId;
     private String text;
     private boolean completed;
@@ -34,11 +34,11 @@ public class TaskResponse {
         return orgId;
     }
 
-    public Long getCreatorId() {
+    public String getCreatorId() {
         return creatorId;
     }
 
-    public Long getAssigneeId() {
+    public String getAssigneeId() {
         return assigneeId;
     }
 
@@ -110,11 +110,11 @@ public class TaskResponse {
         this.orgId = orgId;
     }
 
-    public void setCreatorId(Long creatorId) {
+    public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
     }
 
-    public void setAssigneeId(Long assigneeId) {
+    public void setAssigneeId(String assigneeId) {
         this.assigneeId = assigneeId;
     }
 

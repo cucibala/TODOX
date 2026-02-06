@@ -49,21 +49,21 @@ public class TaskController {
 
     @DeleteMapping("/{id}")
     public void deleteTask(@PathVariable("id") String id,
-                           @RequestParam("updaterId") @NotNull Long updaterId) {
+                           @RequestParam("updaterId") @NotNull String updaterId) {
         taskService.deleteTask(id, updaterId);
     }
 
     @GetMapping
     public List<TaskResponse> listTasks(@RequestParam("orgId") @NotNull Long orgId,
-                                        @RequestParam("requesterId") @NotNull Long requesterId,
-                                        @RequestParam(value = "assigneeId", required = false) Long assigneeId) {
+                                        @RequestParam("requesterId") @NotNull String requesterId,
+                                        @RequestParam(value = "assigneeId", required = false) String assigneeId) {
         return taskService.listTasks(orgId, requesterId, assigneeId);
     }
 
     @PostMapping("/{id}/subtasks")
     public SubtaskResponse addSubtask(@PathVariable("id") String taskId,
                                       @Valid @RequestBody SubtaskCreateRequest request,
-                                      @RequestParam("updaterId") @NotNull Long updaterId) {
+                                      @RequestParam("updaterId") @NotNull String updaterId) {
         return taskService.addSubtask(taskId, request, updaterId);
     }
 
@@ -81,7 +81,7 @@ public class TaskController {
 
     @DeleteMapping("/subtasks/{id}")
     public void deleteSubtask(@PathVariable("id") String subtaskId,
-                              @RequestParam("updaterId") @NotNull Long updaterId) {
+                              @RequestParam("updaterId") @NotNull String updaterId) {
         taskService.deleteSubtask(subtaskId, updaterId);
     }
 
@@ -99,7 +99,7 @@ public class TaskController {
 
     @DeleteMapping("/progress/{id}")
     public void deleteProgress(@PathVariable("id") String progressId,
-                               @RequestParam("updaterId") @NotNull Long updaterId) {
+                               @RequestParam("updaterId") @NotNull String updaterId) {
         taskService.deleteProgress(progressId, updaterId);
     }
 }

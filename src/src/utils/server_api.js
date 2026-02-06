@@ -47,6 +47,14 @@ export function listOrgMembers(baseUrl, orgId, requesterId) {
   })
 }
 
+export function updateMemberPassword(baseUrl, orgId, memberId, payload) {
+  const safeMemberId = encodeURIComponent(memberId)
+  return requestJson(baseUrl, `/api/orgs/${orgId}/members/${safeMemberId}/password`, {
+    method: 'POST',
+    body: payload
+  })
+}
+
 export function fetchProjectOverview(baseUrl, orgId, requesterId) {
   return requestJson(baseUrl, '/api/projects/overview', {
     query: { orgId, requesterId }

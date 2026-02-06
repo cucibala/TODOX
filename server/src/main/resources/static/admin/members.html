@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TodoX 组织成员管理</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: #f5f7fb;
+        min-height: 100vh;
+        color: #1f2937;
+      }
+      header {
+        background: #ffffff;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .nav {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .nav a {
+        text-decoration: none;
+        font-size: 12px;
+        color: #6b7280;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+      }
+      .nav a.active {
+        color: #1f2937;
+        background: #f3f4f6;
+        border-color: #e5e7eb;
+        font-weight: 600;
+      }
+      header .title {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      header .user {
+        font-size: 13px;
+        color: #6b7280;
+      }
+      header button {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .container {
+        max-width: 960px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 16px 32px rgba(31, 41, 55, 0.1);
+        padding: 20px 24px;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 16px;
+      }
+      .create-form {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .create-form label {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .create-form input,
+      .create-form select {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        font-size: 13px;
+        outline: none;
+        margin-top: 6px;
+      }
+      .create-actions {
+        display: flex;
+        align-items: flex-end;
+      }
+      .btn-primary {
+        border: none;
+        border-radius: 10px;
+        padding: 9px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #3b66ff;
+        color: #fff;
+      }
+      .toolbar .left {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .toolbar label {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      .toolbar select {
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid #e5e7eb;
+        font-size: 13px;
+        outline: none;
+        min-width: 220px;
+      }
+      .count {
+        font-size: 12px;
+        color: #6b7280;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 8px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      th {
+        font-size: 12px;
+        color: #6b7280;
+        font-weight: 600;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        background: #eef2ff;
+        color: #4338ca;
+      }
+      .badge.admin {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .role-select {
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        font-size: 12px;
+        background: #fff;
+      }
+      .btn-danger {
+        border: 1px solid #ef4444;
+        background: #ef4444;
+        color: #fff;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .btn-danger:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-link {
+        border: none;
+        background: transparent;
+        color: #2563eb;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .message {
+        font-size: 12px;
+        color: #dc2626;
+        margin-top: 10px;
+      }
+      .message.success {
+        color: #16a34a;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
+      }
+      .modal.hidden {
+        display: none;
+      }
+      .modal-card {
+        width: min(360px, 92vw);
+        background: #ffffff;
+        border-radius: 14px;
+        box-shadow: 0 16px 32px rgba(31, 41, 55, 0.18);
+        padding: 18px;
+      }
+      .modal-title {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+      .modal-text {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 16px;
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      .btn-ghost {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .empty {
+        text-align: center;
+        color: #9ca3af;
+        font-size: 13px;
+        padding: 24px 0;
+      }
+      @media (max-width: 720px) {
+        .toolbar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+        .create-form {
+          grid-template-columns: 1fr;
+        }
+        table {
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <div class="title">组织成员管理</div>
+        <div class="user" id="admin-user"></div>
+      </div>
+      <div class="header-right">
+        <nav class="nav">
+          <a href="/admin/orgs">组织管理</a>
+          <a href="/admin/projects">组织项目</a>
+          <a class="active" href="/admin/members">组织成员</a>
+        </nav>
+        <button id="logout-btn" type="button">退出登录</button>
+      </div>
+    </header>
+
+    <div class="container">
+      <div class="card">
+        <div class="create-form">
+          <div>
+            <label for="member-id">成员账号</label>
+            <input id="member-id" type="text" placeholder="例如：zelong" />
+          </div>
+          <div>
+            <label for="member-name">成员姓名</label>
+            <input id="member-name" type="text" placeholder="例如：张三" />
+          </div>
+          <div>
+            <label for="member-role">成员角色</label>
+            <select id="member-role">
+              <option value="USER">成员</option>
+              <option value="ADMIN">管理员</option>
+            </select>
+          </div>
+          <div>
+            <label for="member-password">成员密码</label>
+            <input id="member-password" type="text" placeholder="设置登录密码" />
+          </div>
+          <div class="create-actions">
+            <button class="btn-primary" id="create-member-btn" type="button">新增成员</button>
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="left">
+            <label for="org-select">选择组织</label>
+            <select id="org-select"></select>
+          </div>
+          <div class="count" id="member-count"></div>
+        </div>
+        <div id="message" class="message"></div>
+        <div id="table-wrapper"></div>
+      </div>
+    </div>
+
+    <div id="confirm-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-title" id="confirm-title">确认操作</div>
+        <div class="modal-text" id="confirm-text"></div>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="confirm-cancel" type="button">取消</button>
+          <button class="btn-danger" id="confirm-ok" type="button">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="password-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-title">重置成员密码</div>
+        <div class="modal-text">
+          <label for="reset-password-input">新密码</label>
+          <input id="reset-password-input" type="text" style="width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 10px; border: 1px solid #e5e7eb;" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn-ghost" id="reset-cancel" type="button">取消</button>
+          <button class="btn-primary" id="reset-confirm" type="button">确认</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const adminUserEl = document.getElementById('admin-user');
+      const logoutBtn = document.getElementById('logout-btn');
+      const orgSelect = document.getElementById('org-select');
+      const messageEl = document.getElementById('message');
+      const tableWrapper = document.getElementById('table-wrapper');
+      const countEl = document.getElementById('member-count');
+      const memberIdInput = document.getElementById('member-id');
+      const memberNameInput = document.getElementById('member-name');
+      const memberRoleSelect = document.getElementById('member-role');
+      const memberPasswordInput = document.getElementById('member-password');
+      const createMemberBtn = document.getElementById('create-member-btn');
+      const confirmModal = document.getElementById('confirm-modal');
+      const confirmText = document.getElementById('confirm-text');
+      const confirmCancel = document.getElementById('confirm-cancel');
+      const confirmOk = document.getElementById('confirm-ok');
+      const passwordModal = document.getElementById('password-modal');
+      const resetPasswordInput = document.getElementById('reset-password-input');
+      const resetCancel = document.getElementById('reset-cancel');
+      const resetConfirm = document.getElementById('reset-confirm');
+      let confirmHandler = null;
+      let currentMembers = [];
+      let passwordTarget = null;
+
+      function setMessage(text, type) {
+        messageEl.textContent = text || '';
+        messageEl.className = 'message' + (type ? ' ' + type : '');
+      }
+
+      function setCount(count) {
+        countEl.textContent = Number.isFinite(count) ? `共 ${count} 名成员` : '';
+      }
+
+      function renderTable(items) {
+        currentMembers = items || [];
+        const adminCount = currentMembers.filter(item => item.role === 'ADMIN').length;
+        if (!items || items.length === 0) {
+          tableWrapper.innerHTML = '<div class="empty">暂无成员数据</div>';
+          setCount(0);
+          return;
+        }
+        setCount(items.length);
+        const rows = items.map(item => {
+          const roleClass = item.role === 'ADMIN' ? 'badge admin' : 'badge';
+          const roleLabel = item.role === 'ADMIN' ? '管理员' : '成员';
+          const lockAdmin = item.role === 'ADMIN' && adminCount <= 1;
+          return `
+            <tr>
+              <td>${item.id || '-'}</td>
+              <td>${item.name || '-'}</td>
+              <td>
+                <span class="${roleClass}">${roleLabel}</span>
+                <select class="role-select" data-member-id="${item.id}" data-org-id="${item.orgId}" data-role="${item.role}"
+                  ${lockAdmin ? 'disabled' : ''}>
+                  <option value="ADMIN" ${item.role === 'ADMIN' ? 'selected' : ''}>管理员</option>
+                  <option value="USER" ${item.role === 'USER' ? 'selected' : ''}>成员</option>
+                </select>
+              </td>
+              <td>${item.createdAt || '-'}</td>
+              <td>
+                <button class="btn-danger" data-action="delete" data-member-id="${item.id}" data-org-id="${item.orgId}"
+                  ${lockAdmin ? 'disabled' : ''}>删除</button>
+                <button class="btn-link" data-action="reset" data-member-id="${item.id}" data-org-id="${item.orgId}">
+                  重置密码
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+        tableWrapper.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 18%;">成员账号</th>
+                <th>姓名</th>
+                <th style="width: 26%;">角色</th>
+                <th style="width: 24%;">创建时间</th>
+                <th style="width: 12%;">操作</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      async function checkSession() {
+        const response = await fetch('/api/admin/session');
+        if (!response.ok) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        const data = await response.json();
+        if (!data.loggedIn) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        adminUserEl.textContent = data.username ? `管理员：${data.username}` : '';
+      }
+
+      async function loadOrganizations() {
+        const response = await fetch('/api/admin/orgs');
+        if (!response.ok) {
+          setMessage('无法加载组织列表');
+          return [];
+        }
+        return response.json();
+      }
+
+      function renderOrgOptions(orgs) {
+        orgSelect.innerHTML = '';
+        if (!orgs || orgs.length === 0) {
+          const option = document.createElement('option');
+          option.value = '';
+          option.textContent = '暂无组织';
+          orgSelect.appendChild(option);
+          orgSelect.disabled = true;
+          return;
+        }
+        orgSelect.disabled = false;
+        orgs.forEach(org => {
+          const option = document.createElement('option');
+          option.value = org.id;
+          option.textContent = `${org.name}（${org.account}）`;
+          orgSelect.appendChild(option);
+        });
+      }
+
+      async function loadMembers(orgId) {
+        if (!orgId) {
+          renderTable([]);
+          return;
+        }
+        setMessage('');
+        try {
+          const response = await fetch(`/api/admin/orgs/${orgId}/members`);
+          if (!response.ok) {
+            setMessage('无法加载成员列表');
+            renderTable([]);
+            return;
+          }
+          const data = await response.json();
+          renderTable(data);
+        } catch (error) {
+          setMessage('无法连接服务端');
+          renderTable([]);
+        }
+      }
+
+      function openConfirm(text, onConfirm) {
+        confirmText.textContent = text;
+        confirmHandler = onConfirm;
+        confirmModal.classList.remove('hidden');
+      }
+
+      function closeConfirm() {
+        confirmHandler = null;
+        confirmModal.classList.add('hidden');
+      }
+
+      confirmCancel.addEventListener('click', () => closeConfirm());
+      confirmModal.addEventListener('click', (event) => {
+        if (event.target === confirmModal) {
+          closeConfirm();
+        }
+      });
+      confirmOk.addEventListener('click', async () => {
+        if (confirmHandler) {
+          await confirmHandler();
+        }
+        closeConfirm();
+      });
+
+      function openPasswordModal(memberId, orgId) {
+        passwordTarget = { memberId, orgId };
+        resetPasswordInput.value = '';
+        passwordModal.classList.remove('hidden');
+      }
+
+      function closePasswordModal() {
+        passwordTarget = null;
+        passwordModal.classList.add('hidden');
+      }
+
+      resetCancel.addEventListener('click', () => closePasswordModal());
+      passwordModal.addEventListener('click', (event) => {
+        if (event.target === passwordModal) {
+          closePasswordModal();
+        }
+      });
+      resetConfirm.addEventListener('click', async () => {
+        if (!passwordTarget) return;
+        const password = resetPasswordInput.value.trim();
+        if (!password) {
+          setMessage('请填写新密码');
+          return;
+        }
+        setMessage('');
+        try {
+          const safeMemberId = encodeURIComponent(passwordTarget.memberId);
+          const response = await fetch(`/api/admin/orgs/${passwordTarget.orgId}/members/${safeMemberId}/password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            setMessage(text || '重置失败');
+            return;
+          }
+          closePasswordModal();
+          setMessage('密码已重置');
+        } catch (error) {
+          setMessage('无法连接服务端');
+        }
+      });
+
+      logoutBtn.addEventListener('click', async () => {
+        await fetch('/api/admin/logout', { method: 'POST' });
+        window.location.href = '/admin/login';
+      });
+
+      tableWrapper.addEventListener('change', async (event) => {
+        const target = event.target;
+        if (!target.classList.contains('role-select')) return;
+        const memberId = target.dataset.memberId;
+        const orgId = target.dataset.orgId;
+        const nextRole = target.value;
+        const prevRole = target.dataset.role;
+
+        setMessage('');
+        try {
+          const safeMemberId = encodeURIComponent(memberId);
+          const response = await fetch(`/api/admin/orgs/${orgId}/members/${safeMemberId}/role`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: nextRole })
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            setMessage(text || '更新失败');
+            target.value = prevRole;
+            return;
+          }
+          await loadMembers(orgSelect.value);
+        } catch (error) {
+          setMessage('无法连接服务端');
+          target.value = prevRole;
+        }
+      });
+
+      tableWrapper.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!target.dataset) return;
+        const memberId = target.dataset.memberId;
+        const orgId = target.dataset.orgId;
+        if (target.dataset.action === 'delete') {
+          if (target.disabled) return;
+          const member = currentMembers.find(item => String(item.id) === String(memberId));
+          const name = member ? member.name : '该成员';
+          openConfirm(`确定删除 ${name} 吗？`, async () => {
+            setMessage('');
+            try {
+            const safeMemberId = encodeURIComponent(memberId);
+            const response = await fetch(`/api/admin/orgs/${orgId}/members/${safeMemberId}`, {
+              method: 'DELETE'
+            });
+              if (!response.ok) {
+                const text = await response.text();
+                setMessage(text || '删除失败');
+                return;
+              }
+              await loadMembers(orgSelect.value);
+            } catch (error) {
+              setMessage('无法连接服务端');
+            }
+          });
+          return;
+        }
+        if (target.dataset.action === 'reset') {
+          openPasswordModal(memberId, orgId);
+        }
+      });
+
+      orgSelect.addEventListener('change', () => {
+        loadMembers(orgSelect.value);
+      });
+
+      createMemberBtn.addEventListener('click', async () => {
+        const orgId = orgSelect.value;
+        if (!orgId) {
+          setMessage('请先选择组织');
+          return;
+        }
+        const memberId = memberIdInput.value.trim();
+        const name = memberNameInput.value.trim();
+        const role = memberRoleSelect.value;
+        const password = memberPasswordInput.value.trim();
+        if (!memberId || !name || !password) {
+          setMessage('请填写成员账号、姓名和密码');
+          return;
+        }
+        setMessage('');
+        try {
+          const response = await fetch(`/api/admin/orgs/${orgId}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: memberId, name, role, password })
+          });
+          if (!response.ok) {
+            const text = await response.text();
+            setMessage(text || '新增失败');
+            return;
+          }
+          const data = await response.json();
+          memberIdInput.value = '';
+          memberNameInput.value = '';
+          memberPasswordInput.value = '';
+          setMessage(`已创建成员，ID：${data.id}`, 'success');
+          await loadMembers(orgSelect.value);
+        } catch (error) {
+          setMessage('无法连接服务端');
+        }
+      });
+
+      async function init() {
+        await checkSession();
+        const orgs = await loadOrganizations();
+        renderOrgOptions(orgs);
+        if (orgs && orgs.length > 0) {
+          orgSelect.value = orgs[0].id;
+          loadMembers(orgs[0].id);
+        } else {
+          renderTable([]);
+        }
+      }
+
+      init().catch(() => {
+        window.location.href = '/admin/login';
+      });
+    </script>
+  </body>
+</html>

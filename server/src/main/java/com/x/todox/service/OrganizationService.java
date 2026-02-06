@@ -5,7 +5,6 @@ import com.x.todox.dto.JoinOrgResponse;
 import com.x.todox.dto.OrgMemberResponse;
 import com.x.todox.entity.OrgMember;
 import com.x.todox.entity.Organization;
-import com.x.todox.enums.MemberRole;
 import com.x.todox.repository.OrgMemberRepository;
 import com.x.todox.repository.OrganizationRepository;
 import java.util.List;
@@ -32,15 +31,14 @@ public class OrganizationService {
         Organization organization = organizationRepository.findByAccount(request.getOrgAccount())
             .orElseThrow(() -> new IllegalArgumentException("组织账号不存在"));
 
-        if (!passwordEncoder.matches(request.getOrgPassword(), organization.getPasswordHash())) {
-            throw new IllegalArgumentException("组织账号或密码错误");
+        OrgMember member = orgMemberRepository.findByIdAndOrganizationId(request.getMemberId(), organization.getId())
+            .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
+        if (member.getPasswordHash() == null || member.getPasswordHash().isEmpty()) {
+            throw new IllegalArgumentException("成员密码未设置");
         }
-
-        OrgMember member = new OrgMember();
-        member.setOrganization(organization);
-        member.setName(request.getMemberName());
-        member.setRole(MemberRole.USER);
-        orgMemberRepository.save(member);
+        if (!passwordEncoder.matches(request.getMemberPassword(), member.getPasswordHash())) {
+            throw new IllegalArgumentException("成员账号或密码错误");
+        }
 
         return new JoinOrgResponse(
             organization.getId(),
@@ -51,7 +49,7 @@ public class OrganizationService {
     }
 
     @Transactional(readOnly = true)
-    public List<OrgMemberResponse> listMembers(Long orgId, Long requesterId) {
+    public List<OrgMemberResponse> listMembers(Long orgId, String requesterId) {
         OrgMember requester = orgMemberRepository.findByIdAndOrganizationId(requesterId, orgId)
             .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
 
@@ -66,5 +64,19 @@ public class OrganizationService {
                 return response;
             })
             .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void updateMemberPassword(Long orgId, String memberId, String oldPassword, String newPassword) {
+        OrgMember member = orgMemberRepository.findByIdAndOrganizationId(memberId, orgId)
+            .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
+        if (member.getPasswordHash() == null || member.getPasswordHash().isEmpty()) {
+            throw new IllegalArgumentException("成员密码未设置");
+        }
+        if (!passwordEncoder.matches(oldPassword, member.getPasswordHash())) {
+            throw new IllegalArgumentException("原密码不正确");
+        }
+        member.setPasswordHash(passwordEncoder.encode(newPassword));
+        orgMemberRepository.save(member);
     }
 }

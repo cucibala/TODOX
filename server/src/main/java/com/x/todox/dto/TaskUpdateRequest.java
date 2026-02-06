@@ -3,14 +3,14 @@ package com.x.todox.dto;
 import com.x.todox.enums.TaskPriority;
 import com.x.todox.enums.TaskStatus;
 import java.util.List;
-import javax.validation.constraints.NotNull;
+import javax.validation.constraints.NotBlank;
 
 public class TaskUpdateRequest {
 
-    @NotNull
-    private Long updaterId;
+    @NotBlank
+    private String updaterId;
 
-    private Long assigneeId;
+    private String assigneeId;
     private String projectId;
     private String text;
     private Boolean completed;
@@ -23,11 +23,11 @@ public class TaskUpdateRequest {
     private Integer order;
     private List<String> images;
 
-    public Long getUpdaterId() {
+    public String getUpdaterId() {
         return updaterId;
     }
 
-    public Long getAssigneeId() {
+    public String getAssigneeId() {
         return assigneeId;
     }
 
@@ -74,11 +74,11 @@ public class TaskUpdateRequest {
     public List<String> getImages() {
         return images;
     }
-    public void setUpdaterId(Long updaterId) {
+    public void setUpdaterId(String updaterId) {
         this.updaterId = updaterId;
     }
 
-    public void setAssigneeId(Long assigneeId) {
+    public void setAssigneeId(String assigneeId) {
         this.assigneeId = assigneeId;
     }
 

@@ -1,14 +1,25 @@
 package com.x.todox.dto;
 
-import com.x.todox.enums.MemberRole;
-
-public class OrgMemberResponse {
+public class AdminMemberSummaryResponse {
 
     private String id;
     private Long orgId;
     private String name;
-    private MemberRole role;
+    private String role;
     private String createdAt;
+    private String updatedAt;
+
+    public AdminMemberSummaryResponse() {
+    }
+
+    public AdminMemberSummaryResponse(String id, Long orgId, String name, String role, String createdAt, String updatedAt) {
+        this.id = id;
+        this.orgId = orgId;
+        this.name = name;
+        this.role = role;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
 
     public String getId() {
         return id;
@@ -22,12 +33,16 @@ public class OrgMemberResponse {
         return name;
     }
 
-    public MemberRole getRole() {
+    public String getRole() {
         return role;
     }
 
     public String getCreatedAt() {
         return createdAt;
+    }
+
+    public String getUpdatedAt() {
+        return updatedAt;
     }
 
     public void setId(String id) {
@@ -42,11 +57,15 @@ public class OrgMemberResponse {
         this.name = name;
     }
 
-    public void setRole(MemberRole role) {
+    public void setRole(String role) {
         this.role = role;
     }
 
     public void setCreatedAt(String createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public void setUpdatedAt(String updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }

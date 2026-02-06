@@ -5,11 +5,11 @@ import com.x.todox.enums.MemberRole;
 public class JoinOrgResponse {
 
     private Long orgId;
-    private Long memberId;
+    private String memberId;
     private String memberName;
     private MemberRole role;
 
-    public JoinOrgResponse(Long orgId, Long memberId, String memberName, MemberRole role) {
+    public JoinOrgResponse(Long orgId, String memberId, String memberName, MemberRole role) {
         this.orgId = orgId;
         this.memberId = memberId;
         this.memberName = memberName;
@@ -20,7 +20,7 @@ public class JoinOrgResponse {
         return orgId;
     }
 
-    public Long getMemberId() {
+    public String getMemberId() {
         return memberId;
     }
 
@@ -36,7 +36,7 @@ public class JoinOrgResponse {
         this.orgId = orgId;
     }
 
-    public void setMemberId(Long memberId) {
+    public void setMemberId(String memberId) {
         this.memberId = memberId;
     }
 

@@ -1,5 +1,6 @@
 <template>
   <div 
+    ref="taskItemRef"
     class="task-item" 
     :class="{ completed: task.completed, pinned: task.pinned, dragging: isDragging }"
     :data-task-id="task.id"
@@ -135,11 +136,12 @@
         </div>
         
         <!-- 到期时间显示/编辑 -->
-        <div v-if="!isEditingDueDate && task.dueDate" 
-          class="task-due-date" 
-          :class="getDueDateStatus(task.dueDate)"
-          @click="handleStartEditDueDate"
-          title="点击修改到期时间"
+        <div v-if="!isEditingDueDate && task.dueDate"
+          class="task-due-date"
+          :class="dueDateStatusClass"
+          @click="!task.completed && handleStartEditDueDate"
+          :style="{ cursor: task.completed ? 'default' : 'pointer' }"
+          :title="task.completed ? '' : '点击修改到期时间'"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -147,7 +149,7 @@
             <line x1="8" y1="2" x2="8" y2="6"></line>
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
-          {{ formatDueDate(task.dueDate) }}
+          {{ dueDateDisplayText }}
         </div>
         
         <!-- 编辑到期时间 -->
@@ -177,9 +179,9 @@
           </button>
         </div>
         
-        <!-- 如果没有到期时间，显示添加按钮 -->
-        <div v-if="!task.dueDate && !isEditingDueDate" 
-          class="task-add-due-date" 
+        <!-- 如果没有到期时间，显示添加按钮（已完成任务不显示） -->
+        <div v-if="!task.dueDate && !isEditingDueDate && !task.completed"
+          class="task-add-due-date"
           @click="handleStartEditDueDate"
           title="设置到期时间"
         >
@@ -293,11 +295,12 @@
               <span class="task-assignee-label">负责人</span>
               <span class="task-assignee-name">{{ assigneeLabel }}</span>
             </div>
-            <div v-if="!isEditingDueDate && task.dueDate" 
-              class="task-due-date" 
-              :class="getDueDateStatus(task.dueDate)"
-              @click="handleStartEditDueDate"
-              title="点击修改到期时间"
+            <div v-if="!isEditingDueDate && task.dueDate"
+              class="task-due-date"
+              :class="dueDateStatusClass"
+              @click="!task.completed && handleStartEditDueDate"
+              :style="{ cursor: task.completed ? 'default' : 'pointer' }"
+              :title="task.completed ? '' : '点击修改到期时间'"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -305,7 +308,7 @@
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              {{ formatDueDate(task.dueDate) }}
+              {{ dueDateDisplayText }}
             </div>
             <div v-if="isEditingDueDate" class="task-due-date-edit">
               <input 
@@ -332,8 +335,8 @@
                 </svg>
               </button>
             </div>
-            <div v-if="!task.dueDate && !isEditingDueDate" 
-              class="task-add-due-date" 
+            <div v-if="!task.dueDate && !isEditingDueDate && !task.completed"
+              class="task-add-due-date"
               @click="handleStartEditDueDate"
               title="设置到期时间"
             >
@@ -686,7 +689,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useAppStore } from '../stores/app'
 import { useTodoStore } from '../stores/todo'
 import { useOrgStore } from '../stores/org'
@@ -711,6 +714,10 @@ const electronAPI = window.electronAPI
 const imageCache = ref({})
 const progressImageCache = ref({})
 const subtaskImageCache = ref({})
+const taskItemRef = ref(null)
+const hasLoadedTaskImages = ref(false)
+const hasLoadedDetailImages = ref(false)
+let taskImageObserver = null
 
 // 编辑状态
 const isEditing = ref(false)
@@ -788,6 +795,54 @@ const assigneeLabel = computed(() => {
   if (!assigneeId) return '未分配'
   const matched = (orgStore.members || []).find(member => String(member.id) === String(assigneeId))
   return matched ? matched.name : String(assigneeId)
+})
+
+// 计算到期日期显示文本
+const dueDateDisplayText = computed(() => {
+  if (!props.task.dueDate) return ''
+
+  // 如果任务已完成
+  if (props.task.completed && props.task.completedAt) {
+    const dueDate = new Date(props.task.dueDate)
+    const completedDate = new Date(props.task.completedAt)
+    dueDate.setHours(0, 0, 0, 0)
+    completedDate.setHours(0, 0, 0, 0)
+
+    if (completedDate <= dueDate) {
+      return '提前完成'
+    } else {
+      return '逾期完成'
+    }
+  }
+
+  // 未完成任务显示正常日期
+  return formatDueDate(props.task.dueDate)
+})
+
+// 计算到期日期样式类
+const dueDateStatusClass = computed(() => {
+  if (!props.task.dueDate) return ''
+
+  // 如果任务已完成
+  if (props.task.completed) {
+    if (!props.task.completedAt) return ''
+
+    const dueDate = new Date(props.task.dueDate)
+    const completedDate = new Date(props.task.completedAt)
+    dueDate.setHours(0, 0, 0, 0)
+    completedDate.setHours(0, 0, 0, 0)
+
+    // 提前完成显示绿色
+    if (completedDate <= dueDate) {
+      return 'completed-early'
+    } else {
+      // 逾期完成显示橙色
+      return 'completed-late'
+    }
+  }
+
+  // 未完成任务使用原来的逻辑
+  return getDueDateStatus(props.task.dueDate)
 })
 
 const completedSubtaskCount = computed(() => {
@@ -928,17 +983,20 @@ async function loadSubtaskImage(fileName) {
   }
 }
 
-// 加载所有图片
-onMounted(async () => {
-  window.addEventListener('click', handleOutsideClick)
-  // 加载任务图片
+async function loadTaskImages() {
+  if (hasLoadedTaskImages.value) return
+  hasLoadedTaskImages.value = true
   if (props.task.images && props.task.images.length > 0) {
     await Promise.all(
       props.task.images.map(image => loadImage(image))
     )
   }
-  
-  // 加载进度图片
+}
+
+async function loadDetailImages() {
+  if (hasLoadedDetailImages.value) return
+  hasLoadedDetailImages.value = true
+
   if (props.task.progress && props.task.progress.length > 0) {
     const allProgressImages = props.task.progress.flatMap(p => p.images || [])
     if (allProgressImages.length > 0) {
@@ -947,8 +1005,7 @@ onMounted(async () => {
       )
     }
   }
-  
-  // 加载子任务图片
+
   if (props.task.subtasks && props.task.subtasks.length > 0) {
     const allSubtaskImages = props.task.subtasks.flatMap(st => st.images || [])
     if (allSubtaskImages.length > 0) {
@@ -957,10 +1014,43 @@ onMounted(async () => {
       )
     }
   }
+}
+
+// 懒加载图片：任务进入视口后加载任务图片，展开详情时再加载详情图片
+onMounted(() => {
+  window.addEventListener('click', handleOutsideClick)
+  if (typeof IntersectionObserver === 'undefined') {
+    loadTaskImages()
+    return
+  }
+
+  taskImageObserver = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      loadTaskImages()
+      taskImageObserver.disconnect()
+      taskImageObserver = null
+    }
+  }, { rootMargin: '120px' })
+
+  if (taskItemRef.value) {
+    taskImageObserver.observe(taskItemRef.value)
+  } else {
+    loadTaskImages()
+  }
+})
+
+watch(showDetails, async (value) => {
+  if (!value) return
+  await loadTaskImages()
+  await loadDetailImages()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', handleOutsideClick)
+  if (taskImageObserver) {
+    taskImageObserver.disconnect()
+    taskImageObserver = null
+  }
 })
 
 // 任务操作
@@ -1583,6 +1673,3 @@ async function handleRemoveDueDate() {
   appStore.toast('到期时间已移除')
 }
 </script>
-
-
-

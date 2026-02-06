@@ -24,6 +24,25 @@
         justify-content: space-between;
         gap: 12px;
       }
+      .nav {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .nav a {
+        text-decoration: none;
+        font-size: 12px;
+        color: #6b7280;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid transparent;
+      }
+      .nav a.active {
+        color: #1f2937;
+        background: #f3f4f6;
+        border-color: #e5e7eb;
+        font-weight: 600;
+      }
       header .title {
         font-size: 18px;
         font-weight: 700;
@@ -39,6 +58,11 @@
         padding: 6px 12px;
         font-size: 12px;
         cursor: pointer;
+      }
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
       }
       .container {
         max-width: 680px;
@@ -110,13 +134,20 @@
         <div class="title">创建组织</div>
         <div class="user" id="admin-user"></div>
       </div>
-      <button id="logout-btn" type="button">退出登录</button>
+      <div class="header-right">
+        <nav class="nav">
+          <a class="active" href="/admin/orgs">组织管理</a>
+          <a href="/admin/projects">组织项目</a>
+          <a href="/admin/members">组织成员</a>
+        </nav>
+        <button id="logout-btn" type="button">退出登录</button>
+      </div>
     </header>
 
     <div class="container">
       <div class="card">
         <div class="title">组织账号配置</div>
-        <div class="subtitle">创建后组织账号/密码用于成员加入</div>
+        <div class="subtitle">创建后组织账号用于成员加入</div>
         <form id="org-form">
           <div class="field">
             <label for="name">组织名称</label>
@@ -125,10 +156,6 @@
           <div class="field">
             <label for="account">组织账号</label>
             <input id="account" name="account" type="text" required />
-          </div>
-          <div class="field">
-            <label for="password">组织密码</label>
-            <input id="password" name="password" type="password" required />
           </div>
           <button class="btn" type="submit">创建组织</button>
           <div class="message" id="message"></div>
@@ -165,11 +192,10 @@
         event.preventDefault();
         setMessage('');
 
-        const payload = {
-          name: form.name.value.trim(),
-          account: form.account.value.trim(),
-          password: form.password.value
-        };
+          const payload = {
+            name: form.name.value.trim(),
+            account: form.account.value.trim()
+          };
 
         try {
           const response = await fetch('/api/admin/orgs', {

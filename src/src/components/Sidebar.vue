@@ -1,5 +1,38 @@
 <template>
   <aside class="sidebar">
+    <!-- 视角切换 -->
+    <div class="view-toggle-section">
+      <div class="view-toggle">
+        <span class="view-toggle-label">视角</span>
+        <button
+          class="view-toggle-btn"
+          :class="{ active: dataMode === 'local' }"
+          @click="setViewMode('local')"
+        >
+          本地
+        </button>
+        <button
+          class="view-toggle-btn"
+          :class="{ active: dataMode === 'server' }"
+          @click="setViewMode('server')"
+        >
+          服务端
+        </button>
+      </div>
+      <button
+        v-if="isServerMode && !hasSession"
+        class="view-toggle-join"
+        @click="openJoinOrgModal"
+      >
+        加入组织
+      </button>
+      <div v-if="isServerMode && hasSession" class="view-toggle-session">
+        <span class="view-toggle-org">{{ orgAccount || orgId }}</span>
+        <span class="view-toggle-member">{{ memberName }}（{{ memberRoleLabel }}）</span>
+        <button class="view-toggle-manage" @click="openAccountModal">账号管理</button>
+      </div>
+    </div>
+
     <div class="progress-card">
       <div class="progress-header">
         <span>整体进度</span>
@@ -342,6 +375,120 @@
       </div>
     </div>
 
+    <!-- 加入组织弹窗 -->
+    <div v-if="showJoinOrgModal" class="join-org-modal" @click.self="closeJoinOrgModal">
+      <div class="join-org-dialog">
+        <div class="join-org-header">
+          <div class="join-org-title">加入组织</div>
+          <button class="join-org-close" @click="closeJoinOrgModal" title="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="join-org-body">
+          <label class="join-org-label">服务端地址</label>
+          <input v-model="joinBaseUrl" type="text" class="join-org-input" placeholder="http://localhost:8081" />
+
+          <label class="join-org-label">组织账号</label>
+          <input v-model="joinAccount" type="text" class="join-org-input" placeholder="请输入组织账号" />
+
+          <label class="join-org-label">成员账号</label>
+          <input v-model="joinMemberId" type="text" class="join-org-input" placeholder="由管理员提供" />
+
+          <label class="join-org-label">成员密码</label>
+          <input v-model="joinPassword" type="password" class="join-org-input" placeholder="请输入成员密码" />
+
+          <div class="join-org-hint">成员账号与密码由管理员后台创建与配置</div>
+        </div>
+        <div class="join-org-actions">
+          <button class="join-org-cancel" @click="closeJoinOrgModal">取消</button>
+          <button class="join-org-confirm" :disabled="isJoining" @click="handleJoinOrg">
+            {{ isJoining ? '加入中...' : '加入组织' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 账号管理弹窗 -->
+    <div v-if="showAccountModal" class="account-modal" @click.self="closeAccountModal">
+      <div class="account-dialog">
+        <div class="account-header">
+          <div class="account-title">账号管理</div>
+          <button class="account-close" @click="closeAccountModal" title="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="account-body">
+          <div class="account-row">
+            <span class="account-label">服务端地址</span>
+            <span class="account-value">{{ serverBaseUrl || '-' }}</span>
+          </div>
+          <div class="account-row">
+            <span class="account-label">组织账号</span>
+            <span class="account-value">{{ orgAccount || '-' }}</span>
+          </div>
+          <div class="account-row">
+            <span class="account-label">组织 ID</span>
+            <span class="account-value">{{ orgId || '-' }}</span>
+          </div>
+          <div class="account-row">
+            <span class="account-label">成员账号</span>
+            <span class="account-value">{{ memberId || '-' }}</span>
+          </div>
+          <div class="account-row">
+            <span class="account-label">成员姓名</span>
+            <span class="account-value">{{ memberName || '-' }}</span>
+          </div>
+          <div class="account-row">
+            <span class="account-label">成员角色</span>
+            <span class="account-value">{{ memberRoleLabel }}</span>
+          </div>
+        </div>
+        <div class="account-actions">
+          <button class="account-cancel" @click="closeAccountModal">关闭</button>
+          <button class="account-secondary" @click="openPasswordModal">修改密码</button>
+          <button class="account-logout" :disabled="isLoggingOut" @click="handleLogout">
+            {{ isLoggingOut ? '退出中...' : '退出账号' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showPasswordModal" class="account-modal" @click.self="closePasswordModal">
+      <div class="account-dialog">
+        <div class="account-header">
+          <div class="account-title">修改成员密码</div>
+          <button class="account-close" @click="closePasswordModal" title="关闭">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="account-body">
+          <label class="account-label">原密码</label>
+          <input v-model="oldPassword" type="password" class="account-input" placeholder="输入原密码" />
+
+          <label class="account-label">新密码</label>
+          <input v-model="newPassword" type="password" class="account-input" placeholder="输入新密码" />
+
+          <label class="account-label">确认新密码</label>
+          <input v-model="confirmPassword" type="password" class="account-input" placeholder="再次输入新密码" />
+        </div>
+        <div class="account-actions">
+          <button class="account-cancel" @click="closePasswordModal">取消</button>
+          <button class="account-secondary" :disabled="isUpdatingPassword" @click="handleUpdatePassword">
+            {{ isUpdatingPassword ? '保存中...' : '确认修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
   </aside>
 </template>
 
@@ -351,13 +498,16 @@ import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { useProjectStore } from '../stores/project'
 import { useTodoStore } from '../stores/todo'
+import { useOrgStore } from '../stores/org'
 
 const appStore = useAppStore()
 const projectStore = useProjectStore()
 const todoStore = useTodoStore()
+const orgStore = useOrgStore()
 
 const { projects, projectGroups, currentProjectId, hasProjects } = storeToRefs(projectStore)
 const { todos } = storeToRefs(todoStore)
+const { dataMode, isServerMode, isAdmin, hasSession, members, serverBaseUrl, orgAccount, memberName, memberRole, orgId, memberId } = storeToRefs(orgStore)
 
 const progressTasks = computed(() => todos.value)
 
@@ -558,6 +708,126 @@ async function handleImportProject() {
     await projectStore.importProject()
   } catch (error) {
     console.error('导入项目失败:', error)
+  }
+}
+
+// 视角切换相关
+const memberRoleLabel = computed(() => {
+  if (memberRole.value === 'ADMIN') return '管理员'
+  if (memberRole.value === 'USER') return '成员'
+  return '未知'
+})
+
+function setViewMode(mode) {
+  orgStore.setMode(mode)
+}
+
+const showJoinOrgModal = ref(false)
+const showAccountModal = ref(false)
+const showPasswordModal = ref(false)
+const joinBaseUrl = ref(serverBaseUrl.value)
+const joinAccount = ref('')
+const joinMemberId = ref('')
+const joinPassword = ref('')
+const isJoining = ref(false)
+const isLoggingOut = ref(false)
+const isUpdatingPassword = ref(false)
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+
+function openJoinOrgModal() {
+  joinBaseUrl.value = serverBaseUrl.value
+  joinAccount.value = orgAccount.value || ''
+  joinMemberId.value = memberId.value ? String(memberId.value) : ''
+  joinPassword.value = ''
+  showJoinOrgModal.value = true
+}
+
+function closeJoinOrgModal() {
+  showJoinOrgModal.value = false
+}
+
+function openAccountModal() {
+  showAccountModal.value = true
+}
+
+function closeAccountModal() {
+  showAccountModal.value = false
+}
+
+function openPasswordModal() {
+  oldPassword.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
+  showPasswordModal.value = true
+}
+
+function closePasswordModal() {
+  showPasswordModal.value = false
+}
+
+async function handleLogout() {
+  const confirmed = await appStore.confirm('确定要退出当前账号吗？')
+  if (!confirmed) return
+  isLoggingOut.value = true
+  try {
+    orgStore.clearSession()
+    await projectStore.loadProjects()
+    await todoStore.loadTodos()
+    showAccountModal.value = false
+    appStore.toast('已退出账号')
+  } finally {
+    isLoggingOut.value = false
+  }
+}
+
+async function handleUpdatePassword() {
+  if (!oldPassword.value.trim() || !newPassword.value.trim() || !confirmPassword.value.trim()) {
+    appStore.toast('请完整填写密码信息')
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    appStore.toast('两次输入的新密码不一致')
+    return
+  }
+  isUpdatingPassword.value = true
+  try {
+    await orgStore.changePassword({
+      oldPassword: oldPassword.value.trim(),
+      newPassword: newPassword.value.trim()
+    })
+    appStore.toast('密码已更新')
+    showPasswordModal.value = false
+  } catch (error) {
+    appStore.toast(error.message || '修改密码失败')
+  } finally {
+    isUpdatingPassword.value = false
+  }
+}
+
+async function handleJoinOrg() {
+  if (!joinAccount.value.trim() || !joinPassword.value.trim() || !joinMemberId.value.trim()) {
+    appStore.toast('请完整填写组织账号、成员账号和成员密码')
+    return
+  }
+  isJoining.value = true
+  try {
+    await orgStore.joinOrg({
+      baseUrl: joinBaseUrl.value.trim(),
+      account: joinAccount.value.trim(),
+      memberId: joinMemberId.value.trim(),
+      password: joinPassword.value.trim()
+    })
+    await orgStore.loadMembers()
+    await projectStore.loadProjects()
+    await todoStore.loadTodos()
+    showJoinOrgModal.value = false
+    appStore.toast('加入组织成功')
+  } catch (error) {
+    appStore.toast(error.message || '加入组织失败')
+  } finally {
+    isJoining.value = false
   }
 }
 </script>

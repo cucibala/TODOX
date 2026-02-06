@@ -64,7 +64,7 @@ public class TaskService {
         ensureAdmin(creator);
 
         OrgMember assignee = null;
-        if (request.getAssigneeId() != null) {
+        if (request.getAssigneeId() != null && !request.getAssigneeId().isEmpty()) {
             assignee = requireMember(organization.getId(), request.getAssigneeId());
         }
 
@@ -119,8 +119,12 @@ public class TaskService {
         }
 
         if (request.getAssigneeId() != null) {
-            OrgMember assignee = requireMember(task.getOrganization().getId(), request.getAssigneeId());
-            task.setAssignee(assignee);
+            if (request.getAssigneeId().isEmpty()) {
+                task.setAssignee(null);
+            } else {
+                OrgMember assignee = requireMember(task.getOrganization().getId(), request.getAssigneeId());
+                task.setAssignee(assignee);
+            }
         }
         if (request.getProjectId() != null) {
             task.setProjectId(request.getProjectId());
@@ -163,7 +167,7 @@ public class TaskService {
     }
 
     @Transactional
-    public void deleteTask(String taskId, Long updaterId) {
+    public void deleteTask(String taskId, String updaterId) {
         Task task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("任务不存在"));
 
@@ -186,7 +190,7 @@ public class TaskService {
     }
 
     @Transactional(readOnly = true)
-    public List<TaskResponse> listTasks(Long orgId, Long requesterId, Long assigneeId) {
+    public List<TaskResponse> listTasks(Long orgId, String requesterId, String assigneeId) {
         requireMember(orgId, requesterId);
         List<Task> tasks = assigneeId == null
             ? taskRepository.findByOrganizationId(orgId)
@@ -198,7 +202,7 @@ public class TaskService {
     }
 
     @Transactional
-    public SubtaskResponse addSubtask(String taskId, SubtaskCreateRequest request, Long updaterId) {
+    public SubtaskResponse addSubtask(String taskId, SubtaskCreateRequest request, String updaterId) {
         Task task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("任务不存在"));
         OrgMember updater = requireMember(task.getOrganization().getId(), updaterId);
@@ -247,7 +251,7 @@ public class TaskService {
     }
 
     @Transactional
-    public void deleteSubtask(String subtaskId, Long updaterId) {
+    public void deleteSubtask(String subtaskId, String updaterId) {
         Subtask subtask = subtaskRepository.findById(subtaskId)
             .orElseThrow(() -> new IllegalArgumentException("子任务不存在"));
         Task task = subtask.getTask();
@@ -324,7 +328,7 @@ public class TaskService {
     }
 
     @Transactional
-    public void deleteProgress(String progressId, Long updaterId) {
+    public void deleteProgress(String progressId, String updaterId) {
         ProgressRecord record = progressRecordRepository.findById(progressId)
             .orElseThrow(() -> new IllegalArgumentException("进度记录不存在"));
         Task task = record.getTask();
@@ -420,7 +424,7 @@ public class TaskService {
         return response;
     }
 
-    private OrgMember requireMember(Long orgId, Long memberId) {
+    private OrgMember requireMember(Long orgId, String memberId) {
         return orgMemberRepository.findByIdAndOrganizationId(memberId, orgId)
             .orElseThrow(() -> new IllegalArgumentException("成员不存在"));
     }

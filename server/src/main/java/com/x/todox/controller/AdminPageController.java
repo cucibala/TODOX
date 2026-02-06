@@ -15,4 +15,14 @@ public class AdminPageController {
     public String orgPage() {
         return "forward:/admin/orgs.html";
     }
+
+    @GetMapping("/admin/projects")
+    public String projectPage() {
+        return "forward:/admin/projects.html";
+    }
+
+    @GetMapping("/admin/members")
+    public String memberPage() {
+        return "forward:/admin/members.html";
+    }
 }
