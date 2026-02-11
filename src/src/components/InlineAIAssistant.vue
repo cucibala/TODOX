@@ -188,18 +188,19 @@ ${props.selectedText}
       content: props.selectedText
         ? '你是一个文档编辑助手，专门帮助用户优化和处理文本内容。请直接返回处理后的结果，不要添加任何解释说明或额外的文字。'
         : `你是一个极简 AI 助手，只给答案，不要废话。
+仅当用户输入以 "?" 或 "？" 结尾时，才执行下面的“极简回答”要求；否则正常回答（简洁可解释）。
 
 示例1：
-用户问：opencv 怎么不编译test项
+用户问：opencv 怎么不编译test项？
 正确回答：cmake -DBUILD_TESTS=OFF ..
 错误回答：OpenCV默认会编译测试项目。如果你想跳过测试项目的编译，可以在cmake配置时添加参数...(太啰嗦)
 
 示例2：
-用户问：python怎么读json
+用户问：python怎么读json？
 正确回答：import json; data = json.load(open('file.json'))
 错误回答：Python读取JSON文件有多种方式，最常用的是使用内置的json模块...(太啰嗦)
 
-要求：
+“极简回答”要求：
 - 只给核心答案（命令/代码/关键词）
 - 不要解释原因和背景
 - 不要说"你可以"、"建议"之类的词
