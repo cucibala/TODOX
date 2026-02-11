@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const TodoXDatabase = require('./database');
+const isDev = process.argv.includes('--dev');
 
 // 单实例锁定 - 只允许运行一个应用实例
 const gotTheLock = app.requestSingleInstanceLock();
@@ -437,10 +438,9 @@ function createQuickWindow() {
     resizable: true
   });
 
-  const isDev = process.argv.includes('--dev');
   if (isDev) {
     quickWindow.loadURL('http://localhost:5173/?quick=1');
-    // quickWindow.webContents.openDevTools();
+    quickWindow.webContents.openDevTools();
   } else {
     const vueDistPath = path.join(__dirname, 'dist-vue', 'index.html');
     quickWindow.loadFile(vueDistPath, { query: { quick: '1' } });
@@ -498,7 +498,7 @@ function showQuickWindow() {
   const windowInstance = createQuickWindow();
   quickInputHasMessages = false;
   quickWindowManualSize = false;
-  windowInstance.setResizable(false);
+  windowInstance.setResizable(isDev);
   const openAndFocus = () => {
     const targetBounds = lastQuickWindowBounds || getQuickWindowBounds();
     setQuickWindowBounds(targetBounds);
@@ -702,7 +702,6 @@ function createWindow() {
 
   // 开发模式：加载 Vite 开发服务器
   // 生产模式：加载 Vue 构建的文件
-  const isDev = process.argv.includes('--dev');
   if (isDev) {
     mainWindow.webContents.openDevTools();
   }
@@ -947,7 +946,7 @@ ipcMain.on('quick-input-sent', () => {
 ipcMain.on('quick-input-has-messages', (event, hasMessages) => {
   quickInputHasMessages = Boolean(hasMessages);
   if (quickWindow && !quickWindow.isDestroyed()) {
-    quickWindow.setResizable(quickInputHasMessages);
+    quickWindow.setResizable(isDev || quickInputHasMessages);
   }
 });
 

@@ -4,7 +4,7 @@
     :class="{
       'quick-input-mode': isQuickInputMode,
       'quick-glow-active': isQuickInputMode && appStore.showChatStatusIndicator,
-      'is-locked': showLockScreen && !isQuickInputMode
+      'is-locked': shouldShowLockScreen
     }"
   >
     <!-- 自定义标题栏 -->
@@ -48,7 +48,7 @@
 
     <!-- 锁定界面 -->
     <Transition name="lock-reveal">
-      <LockScreen v-if="showLockScreen && !isQuickInputMode" :initial-lock="isInitialLock" />
+      <LockScreen v-if="shouldShowLockScreen" :initial-lock="isInitialLock" />
     </Transition>
 
     <!-- 子任务弹窗 -->
@@ -84,7 +84,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import TitleBar from './components/TitleBar.vue'
 import Sidebar from './components/Sidebar.vue'
@@ -120,6 +120,7 @@ const orgStore = useOrgStore()
 
 const { showLockScreen, currentPage, isAppReady, isQuickInputMode } = storeToRefs(appStore)
 const isInitialLock = ref(false)
+const shouldShowLockScreen = computed(() => showLockScreen.value && !isQuickInputMode.value && currentPage.value !== 'tools')
 
 watch(showLockScreen, (visible) => {
   if (!visible) {

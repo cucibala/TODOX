@@ -252,6 +252,75 @@
               </div>
             </div>
           </div>
+
+          <div v-else-if="activeTab.type === 'text-to-qrcode'">
+            <div class="tool-card-header">
+              <div class="tool-card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="14" width="3" height="3" rx="0.5"></rect>
+                  <rect x="19" y="19" width="2" height="2" rx="0.5"></rect>
+                </svg>
+                <div>
+                  <h3>{{ activeTab.title }}</h3>
+                  <span>输入文字或链接生成二维码（需联网）</span>
+                </div>
+              </div>
+              <span class="tool-tag">文本</span>
+            </div>
+            <div class="tool-card-body">
+              <div class="tool-input">
+                <label>内容</label>
+                <textarea
+                  v-model="activeTab.state.textInput"
+                  rows="5"
+                  placeholder="输入文字、链接或任意内容"
+                ></textarea>
+                <div class="tool-form-row">
+                  <span class="tool-inline-label">尺寸</span>
+                  <input
+                    type="number"
+                    v-model.number="activeTab.state.size"
+                    min="128"
+                    max="1024"
+                    step="8"
+                  />
+                  <span class="tool-inline-hint">px（128-1024）</span>
+                </div>
+                <div class="tool-actions">
+                  <button class="tool-btn primary" @click="handleGenerateQr(activeTab)">生成二维码</button>
+                  <button class="tool-btn" :disabled="!activeTab.state.textInput" @click="handleClearTextToQr(activeTab)">清空</button>
+                </div>
+              </div>
+
+              <div v-if="activeTab.state.qrDataUrl" class="tool-preview">
+                <img :src="activeTab.state.qrDataUrl" alt="二维码预览" @error="handleQrPreviewError(activeTab)" />
+              </div>
+              <div v-else class="tool-preview tool-preview-empty">
+                暂无二维码
+              </div>
+
+              <div class="tool-actions">
+                <button
+                  class="tool-btn"
+                  :disabled="!activeTab.state.qrDataUrl"
+                  @click="handleCopy(activeTab.state.qrDataUrl, '已复制二维码链接')"
+                >
+                  复制链接
+                </button>
+                <button
+                  class="tool-btn"
+                  :disabled="!activeTab.state.qrDataUrl"
+                  @click="handleDownloadQr(activeTab)"
+                >
+                  下载二维码
+                </button>
+              </div>
+              <div v-if="activeTab.state.qrError" class="tool-error">{{ activeTab.state.qrError }}</div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
@@ -293,6 +362,19 @@ const tools = [
     icon: `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 12h4l3 8 4-16 3 8h4"></path>
+      </svg>
+    `
+  },
+  {
+    id: 'text-to-qrcode',
+    name: '文字转二维码',
+    icon: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="14" width="3" height="3" rx="0.5"></rect>
+        <rect x="19" y="19" width="2" height="2" rx="0.5"></rect>
       </svg>
     `
   }
@@ -349,6 +431,7 @@ function createTab(tool) {
 function createToolState(type) {
   if (type === 'image-to-base64') return createImageToBase64State()
   if (type === 'base64-to-image') return createBase64ToImageState()
+  if (type === 'text-to-qrcode') return createTextToQrState()
   return createHttpImageReceiverState()
 }
 
@@ -386,6 +469,15 @@ function createHttpImageReceiverState() {
     Object.assign(state, latestHttpImagePayload)
   }
   return state
+}
+
+function createTextToQrState() {
+  return {
+    textInput: '',
+    qrDataUrl: '',
+    qrError: '',
+    size: 240
+  }
 }
 
 function setImageInputRef(tabId, element) {
@@ -499,6 +591,31 @@ function handleBase64PreviewError(tab) {
   appStore.toast('图片预览失败', 'warning')
 }
 
+function handleGenerateQr(tab) {
+  const text = (tab.state.textInput || '').trim()
+  if (!text) {
+    tab.state.qrError = '请输入要生成的内容'
+    appStore.toast('请输入要生成的内容', 'warning')
+    return
+  }
+  const size = clampNumber(parseInt(tab.state.size, 10) || 240, 128, 1024)
+  tab.state.size = size
+  tab.state.qrDataUrl = buildQrImageUrl(text, size)
+  tab.state.qrError = ''
+}
+
+function handleClearTextToQr(tab) {
+  tab.state.textInput = ''
+  tab.state.qrDataUrl = ''
+  tab.state.qrError = ''
+}
+
+function handleQrPreviewError(tab) {
+  tab.state.qrError = '二维码预览失败'
+  appStore.toast('二维码预览失败', 'warning')
+  tab.state.qrDataUrl = ''
+}
+
 async function handleStartHttpServer(tab) {
   if (!electronAPI?.startToolboxHttp) {
     appStore.toast('当前环境不支持启动服务', 'warning')
@@ -563,6 +680,17 @@ function handleDownloadImage(tab) {
   link.click()
 }
 
+function handleDownloadQr(tab) {
+  if (!tab.state.qrDataUrl) {
+    appStore.toast('没有可下载的二维码', 'warning')
+    return
+  }
+  const link = document.createElement('a')
+  link.href = tab.state.qrDataUrl
+  link.download = `qrcode-${Date.now()}.png`
+  link.click()
+}
+
 function normalizeBase64(value) {
   if (!value) return ''
   return value.trim().replace(/\s+/g, '')
@@ -606,6 +734,16 @@ function formatFileSize(size) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function clampNumber(value, min, max) {
+  if (Number.isNaN(value)) return min
+  return Math.min(Math.max(value, min), max)
+}
+
+function buildQrImageUrl(text, size) {
+  const encoded = encodeURIComponent(text)
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}`
 }
 
 function buildHttpExample(host, port) {
@@ -1036,6 +1174,35 @@ onMounted(() => {
   color: var(--text-primary);
   margin-bottom: 6px;
   display: block;
+}
+
+.tool-form-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 10px;
+}
+
+.tool-form-row input {
+  width: 96px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.tool-inline-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tool-inline-hint {
+  color: var(--text-secondary);
 }
 
 .tool-output textarea,

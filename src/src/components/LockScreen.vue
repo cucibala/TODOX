@@ -29,6 +29,13 @@
         >
           设置/修改密码
         </button>
+        <button
+          type="button"
+          class="lock-link"
+          @click="openToolbox"
+        >
+          进入工具箱
+        </button>
       </div>
     </div>
   </div>
@@ -67,6 +74,10 @@ async function handleUnlock() {
   } else {
     password.value = ''
   }
+}
+
+function openToolbox() {
+  appStore.currentPage = 'tools'
 }
 </script>
 
