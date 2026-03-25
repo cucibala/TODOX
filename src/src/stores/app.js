@@ -9,11 +9,6 @@ export const useAppStore = defineStore('app', () => {
   const isAppReady = ref(false) // 应用是否初始化完成
   const isQuickInputMode = ref(new URLSearchParams(window.location.search).get('quick') === '1')
 
-  // 自动锁定
-  const AUTO_LOCK_TIMEOUT = 15 * 60 * 1000 // 15分钟（毫秒）
-  let autoLockTimer = null
-  let lastActivityTime = Date.now()
-
   // Toast
   const toastMessage = ref('')
   const toastType = ref('info') // 'info' | 'success' | 'warning' | 'error'
@@ -84,6 +79,18 @@ export const useAppStore = defineStore('app', () => {
     // 监听置顶状态变化
     electronAPI.onAlwaysOnTopChanged((onTop) => {
       isAlwaysOnTop.value = onTop
+    })
+
+    // 监听系统锁屏，仅在系统锁屏时自动锁定
+    electronAPI.onSystemScreenLocked?.(async () => {
+      if (showLockScreen.value || isQuickInputMode.value) {
+        return
+      }
+
+      const result = await electronAPI.hasPassword()
+      if (result.hasPassword) {
+        showLockScreen.value = true
+      }
     })
 
     // 监听快捷输入模式变化
@@ -191,51 +198,10 @@ export const useAppStore = defineStore('app', () => {
     if (result.success) {
       showLockScreen.value = false
       toast('解锁成功')
-      // 解锁后重启自动锁定计时器
-      resetActivityTimer()
       return { success: true }
     } else {
       return { success: false, error: '密码错误，请重试' }
     }
-  }
-
-  // 自动锁定计时器管理
-  function startAutoLockTimer() {
-    // 只有在设置了密码的情况下才启用自动锁定
-    electronAPI.hasPassword().then(result => {
-      if (result.hasPassword && !isQuickInputMode.value) {
-        resetActivityTimer()
-      }
-    })
-  }
-
-  function stopAutoLockTimer() {
-    if (autoLockTimer) {
-      clearTimeout(autoLockTimer)
-      autoLockTimer = null
-    }
-  }
-
-  function resetActivityTimer() {
-    lastActivityTime = Date.now()
-
-    // 清除现有计时器
-    if (autoLockTimer) {
-      clearTimeout(autoLockTimer)
-    }
-
-    // 设置新的计时器
-    autoLockTimer = setTimeout(() => {
-      // 检查是否已经锁定
-      if (!showLockScreen.value && !isQuickInputMode.value) {
-        electronAPI.hasPassword().then(result => {
-          if (result.hasPassword) {
-            showLockScreen.value = true
-            toast('应用已自动锁定')
-          }
-        })
-      }
-    }, AUTO_LOCK_TIMEOUT)
   }
 
   return {
@@ -287,9 +253,6 @@ export const useAppStore = defineStore('app', () => {
     toggleAlwaysOnTop,
     setQuickInputMode,
     lockApp,
-    unlockApp,
-    startAutoLockTimer,
-    stopAutoLockTimer,
-    resetActivityTimer
+    unlockApp
   }
 })

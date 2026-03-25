@@ -135,6 +135,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // 监听模式变化
   onAlwaysOnTopChanged: (callback) => ipcRenderer.on('always-on-top-changed', (event, isOnTop) => callback(isOnTop)),
+  onSystemScreenLocked: (callback) => ipcRenderer.on('system-screen-locked', () => callback()),
   onQuickInputModeChanged: (callback) => ipcRenderer.on('quick-input-mode-changed', (event, isQuick) => callback(isQuick)),
   onQuickInputOpened: (callback) => ipcRenderer.on('quick-input-opened', () => callback()),
   onQuickInputFocus: (callback) => ipcRenderer.on('quick-input-focus', () => callback()),

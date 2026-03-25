@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell, globalShortcut, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell, globalShortcut, screen, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -245,6 +245,12 @@ function broadcastTodosChanged() {
 function broadcastToolboxHttpStatus() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('toolbox-http-status', { ...toolboxHttpStatus });
+  }
+}
+
+function broadcastSystemScreenLocked() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('system-screen-locked');
   }
 }
 
@@ -849,6 +855,11 @@ app.whenReady().then(() => {
   
   createWindow();
   createTray();
+
+  powerMonitor.on('lock-screen', () => {
+    hideQuickWindow();
+    broadcastSystemScreenLocked();
+  });
 
   const quickShortcutRegistered = globalShortcut.register('Alt+Space', () => {
     if (quickWindow && !quickWindow.isDestroyed() && quickWindow.isVisible()) {
