@@ -56,6 +56,19 @@
         </button>
         <button
           class="titlebar-nav-btn"
+          :class="{ active: currentPage === 'password-vault' }"
+          @click="goToPasswordVault"
+          title="密码本"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-7"></path>
+            <path d="M7 12V8a5 5 0 0 1 10 0v4"></path>
+            <circle cx="12" cy="16" r="1"></circle>
+            <path d="M12 17v2"></path>
+          </svg>
+        </button>
+        <button
+          class="titlebar-nav-btn"
           :class="{ active: currentPage === 'tools' }"
           @click="goToTools"
           title="工具箱"
@@ -129,6 +142,11 @@ function goToDocument() {
 // 导航到聊天
 function goToChat() {
   appStore.currentPage = 'chat'
+}
+
+// 导航到密码本
+function goToPasswordVault() {
+  appStore.currentPage = 'password-vault'
 }
 
 // 导航到工具箱

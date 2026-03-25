@@ -33,6 +33,7 @@ This repository contains **TodoX**, a desktop task manager built with **Electron
 - Stores are simple `.js` modules under `src/src/stores/`; keep naming consistent with nearby files.
 - IPC rule: only pass plain serializable data over IPC (no Vue `ref/reactive` proxies, functions, or cyclic objects).
 - UI rule: do not use native `confirm`; use the project’s custom confirm dialog/component.
+- UI rule: do not use blur/glassmorphism effects such as `backdrop-filter`, frosted glass panels, or large translucent blurred surfaces; prefer solid backgrounds, borders, shadows, and contrast for hierarchy.
 
 ## Testing Guidelines
 

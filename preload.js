@@ -13,6 +13,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setCurrentProject: (projectId) => ipcRenderer.invoke('set-current-project', projectId),
   exportProject: (fileName, encryptedData) => ipcRenderer.invoke('export-project', fileName, encryptedData),
   importProject: () => ipcRenderer.invoke('import-project'),
+
+  // 密码本
+  loadPasswordVault: () => ipcRenderer.invoke('load-password-vault'),
+  addPasswordVaultGroup: (group) => ipcRenderer.invoke('add-password-vault-group', group),
+  updatePasswordVaultGroup: (groupId, updates) => ipcRenderer.invoke('update-password-vault-group', groupId, updates),
+  deletePasswordVaultGroup: (groupId) => ipcRenderer.invoke('delete-password-vault-group', groupId),
+  addPasswordVaultEntry: (entry) => ipcRenderer.invoke('add-password-vault-entry', entry),
+  updatePasswordVaultEntry: (entryId, updates) => ipcRenderer.invoke('update-password-vault-entry', entryId, updates),
+  deletePasswordVaultEntry: (entryId) => ipcRenderer.invoke('delete-password-vault-entry', entryId),
   
   // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),

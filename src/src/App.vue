@@ -39,6 +39,11 @@
       <!-- 聊天页面 -->
       <ChatPage v-else-if="currentPage === 'chat'" />
 
+      <!-- 密码本页面 -->
+      <KeepAlive>
+        <PasswordVaultPage v-if="currentPage === 'password-vault'" />
+      </KeepAlive>
+
       <!-- 工具箱页面 -->
       <KeepAlive>
         <ToolboxPage v-if="currentPage === 'tools'" />
@@ -104,12 +109,14 @@ import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
 import DocumentPage from './pages/DocumentPage.vue'
 import ToolboxPage from './pages/ToolboxPage.vue'
+import PasswordVaultPage from './pages/PasswordVaultPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'
 import { useProjectStore } from './stores/project'
 import { useChatStore } from './stores/chat'
 import { useDocumentStore } from './stores/document'
 import { useOrgStore } from './stores/org'
+import { usePasswordVaultStore } from './stores/passwordVault'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
@@ -117,6 +124,7 @@ const projectStore = useProjectStore()
 const chatStore = useChatStore()
 const documentStore = useDocumentStore()
 const orgStore = useOrgStore()
+const passwordVaultStore = usePasswordVaultStore()
 
 const { showLockScreen, currentPage, isAppReady, isQuickInputMode } = storeToRefs(appStore)
 const isInitialLock = ref(false)
@@ -152,7 +160,8 @@ onMounted(async () => {
       todoStore.loadTodos(),
       chatStore.loadConversations(),
       chatStore.initAIClients(),
-      documentStore.loadDocuments()
+      documentStore.loadDocuments(),
+      passwordVaultStore.loadPasswordVault()
     ])
     
     // 智能选择默认 AI 模型（优先豆包）

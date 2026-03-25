@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 10;
+const DATABASE_VERSION = 11;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -53,6 +53,33 @@ class TodoXDatabase {
         "order" INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      )
+    `);
+
+    // 密码本分组表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS password_groups (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        "order" INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    // 密码本条目表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS password_entries (
+        id TEXT PRIMARY KEY,
+        group_id TEXT NOT NULL,
+        account TEXT NOT NULL,
+        password TEXT NOT NULL,
+        website TEXT,
+        note TEXT,
+        "order" INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (group_id) REFERENCES password_groups(id) ON DELETE CASCADE
       )
     `);
 
@@ -230,6 +257,7 @@ class TodoXDatabase {
 
     // 创建索引
     this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_password_entries_group ON password_entries(group_id);
       CREATE INDEX IF NOT EXISTS idx_projects_group ON projects(group_id);
       CREATE INDEX IF NOT EXISTS idx_todos_project ON todos(project_id);
       CREATE INDEX IF NOT EXISTS idx_subtasks_todo ON subtasks(todo_id);
@@ -239,6 +267,62 @@ class TodoXDatabase {
       CREATE INDEX IF NOT EXISTS idx_chat_records_person ON chat_records(person_id);
       CREATE INDEX IF NOT EXISTS idx_diaries_person ON diaries(person_id);
     `);
+
+    // 修复旧库中密码本表结构不完整的问题
+    this.ensurePasswordVaultSchema();
+  }
+
+  /**
+   * 验证并修复密码本表结构
+   */
+  ensurePasswordVaultSchema() {
+    const groupTableInfo = this.db.prepare('PRAGMA table_info(password_groups)').all();
+    const groupColumns = groupTableInfo.map(col => col.name);
+
+    if (groupColumns.length > 0) {
+      if (!groupColumns.includes('order')) {
+        this.db.exec('ALTER TABLE password_groups ADD COLUMN "order" INTEGER DEFAULT 0;');
+        console.log('✓ 已为 password_groups 表添加 order 字段');
+      }
+      if (!groupColumns.includes('created_at')) {
+        this.db.exec('ALTER TABLE password_groups ADD COLUMN created_at TEXT;');
+        this.db.exec("UPDATE password_groups SET created_at = datetime('now') WHERE created_at IS NULL OR created_at = '';");
+        console.log('✓ 已为 password_groups 表添加 created_at 字段');
+      }
+      if (!groupColumns.includes('updated_at')) {
+        this.db.exec('ALTER TABLE password_groups ADD COLUMN updated_at TEXT;');
+        this.db.exec("UPDATE password_groups SET updated_at = datetime('now') WHERE updated_at IS NULL OR updated_at = '';");
+        console.log('✓ 已为 password_groups 表添加 updated_at 字段');
+      }
+    }
+
+    const entryTableInfo = this.db.prepare('PRAGMA table_info(password_entries)').all();
+    const entryColumns = entryTableInfo.map(col => col.name);
+
+    if (entryColumns.length > 0) {
+      if (!entryColumns.includes('order')) {
+        this.db.exec('ALTER TABLE password_entries ADD COLUMN "order" INTEGER DEFAULT 0;');
+        console.log('✓ 已为 password_entries 表添加 order 字段');
+      }
+      if (!entryColumns.includes('website')) {
+        this.db.exec('ALTER TABLE password_entries ADD COLUMN website TEXT;');
+        console.log('✓ 已为 password_entries 表添加 website 字段');
+      }
+      if (!entryColumns.includes('note')) {
+        this.db.exec('ALTER TABLE password_entries ADD COLUMN note TEXT;');
+        console.log('✓ 已为 password_entries 表添加 note 字段');
+      }
+      if (!entryColumns.includes('created_at')) {
+        this.db.exec('ALTER TABLE password_entries ADD COLUMN created_at TEXT;');
+        this.db.exec("UPDATE password_entries SET created_at = datetime('now') WHERE created_at IS NULL OR created_at = '';");
+        console.log('✓ 已为 password_entries 表添加 created_at 字段');
+      }
+      if (!entryColumns.includes('updated_at')) {
+        this.db.exec('ALTER TABLE password_entries ADD COLUMN updated_at TEXT;');
+        this.db.exec("UPDATE password_entries SET updated_at = datetime('now') WHERE updated_at IS NULL OR updated_at = '';");
+        console.log('✓ 已为 password_entries 表添加 updated_at 字段');
+      }
+    }
   }
 
   /**
@@ -268,6 +352,148 @@ class TodoXDatabase {
   getProjectGroups() {
     const stmt = this.db.prepare('SELECT * FROM project_groups ORDER BY "order" ASC');
     return stmt.all();
+  }
+
+  /**
+   * 获取所有密码本分组
+   */
+  getPasswordGroups() {
+    const stmt = this.db.prepare('SELECT * FROM password_groups ORDER BY "order" ASC, updated_at DESC');
+    return stmt.all();
+  }
+
+  /**
+   * 添加密码本分组
+   */
+  addPasswordGroup(group) {
+    const stmt = this.db.prepare(`
+      INSERT INTO password_groups (id, name, "order", created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      String(group.id),
+      group.name,
+      group.order || 0,
+      group.createdAt || group.created_at || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新密码本分组
+   */
+  updatePasswordGroup(groupId, updates) {
+    const fields = [];
+    const values = [];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.order !== undefined) {
+      fields.push('"order" = ?');
+      values.push(updates.order);
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(String(groupId));
+
+    const stmt = this.db.prepare(`
+      UPDATE password_groups SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除密码本分组
+   */
+  deletePasswordGroup(groupId) {
+    const transaction = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM password_entries WHERE group_id = ?').run(String(groupId));
+      this.db.prepare('DELETE FROM password_groups WHERE id = ?').run(String(groupId));
+    });
+
+    transaction();
+  }
+
+  /**
+   * 获取所有密码本条目
+   */
+  getPasswordEntries() {
+    const stmt = this.db.prepare('SELECT * FROM password_entries ORDER BY "order" ASC, updated_at DESC');
+    return stmt.all();
+  }
+
+  /**
+   * 添加密码本条目
+   */
+  addPasswordEntry(entry) {
+    const stmt = this.db.prepare(`
+      INSERT INTO password_entries (id, group_id, account, password, website, note, "order", created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      String(entry.id),
+      String(entry.groupId ?? entry.group_id),
+      entry.account,
+      entry.password,
+      entry.website || '',
+      entry.note || '',
+      entry.order || 0,
+      entry.createdAt || entry.created_at || new Date().toISOString(),
+      new Date().toISOString()
+    );
+  }
+
+  /**
+   * 更新密码本条目
+   */
+  updatePasswordEntry(entryId, updates) {
+    const fields = [];
+    const values = [];
+
+    if (updates.groupId !== undefined || updates.group_id !== undefined) {
+      const groupId = updates.groupId ?? updates.group_id;
+      fields.push('group_id = ?');
+      values.push(String(groupId));
+    }
+    if (updates.account !== undefined) {
+      fields.push('account = ?');
+      values.push(updates.account);
+    }
+    if (updates.password !== undefined) {
+      fields.push('password = ?');
+      values.push(updates.password);
+    }
+    if (updates.website !== undefined) {
+      fields.push('website = ?');
+      values.push(updates.website || '');
+    }
+    if (updates.note !== undefined) {
+      fields.push('note = ?');
+      values.push(updates.note || '');
+    }
+    if (updates.order !== undefined) {
+      fields.push('"order" = ?');
+      values.push(updates.order);
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(String(entryId));
+
+    const stmt = this.db.prepare(`
+      UPDATE password_entries SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除密码本条目
+   */
+  deletePasswordEntry(entryId) {
+    this.db.prepare('DELETE FROM password_entries WHERE id = ?').run(String(entryId));
   }
 
   /**
@@ -1737,6 +1963,36 @@ class TodoXDatabase {
           this.db.exec('ALTER TABLE todos ADD COLUMN pinned INTEGER DEFAULT 0;');
           console.log('? 已为 todos 表添加 pinned 字段');
         }
+      },
+
+      // 版本 11 - 密码本支持
+      11: function() {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS password_groups (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            "order" INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        `);
+
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS password_entries (
+            id TEXT PRIMARY KEY,
+            group_id TEXT NOT NULL,
+            account TEXT NOT NULL,
+            password TEXT NOT NULL,
+            website TEXT,
+            note TEXT,
+            "order" INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (group_id) REFERENCES password_groups(id) ON DELETE CASCADE
+          )
+        `);
+
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_password_entries_group ON password_entries(group_id);');
       },
 
       // 未来的迁移函数在这里添加...

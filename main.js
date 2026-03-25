@@ -554,6 +554,13 @@ function decryptPassword(encrypted) {
   }
 }
 
+function normalizePasswordEntryForRenderer(entry) {
+  return {
+    ...entry,
+    password: decryptPassword(entry.password) || ''
+  };
+}
+
 // 加载设置（settings.json 用于路径配置，数据库用于敏感配置）
 function loadSettings() {
   try {
@@ -1090,6 +1097,113 @@ ipcMain.handle('delete-project-group', async (event, groupId) => {
     return { success: true };
   } catch (error) {
     console.error('删除项目分组失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 读取密码本数据
+ipcMain.handle('load-password-vault', async () => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    return {
+      groups: db.getPasswordGroups(),
+      entries: db.getPasswordEntries().map(normalizePasswordEntryForRenderer)
+    };
+  } catch (error) {
+    console.error('读取密码本数据失败:', error);
+    return { groups: [], entries: [] };
+  }
+});
+
+// IPC 通信处理 - 添加密码本分组
+ipcMain.handle('add-password-vault-group', async (event, group) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addPasswordGroup(group);
+    return { success: true };
+  } catch (error) {
+    console.error('添加密码本分组失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新密码本分组
+ipcMain.handle('update-password-vault-group', async (event, groupId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.updatePasswordGroup(groupId, updates);
+    return { success: true };
+  } catch (error) {
+    console.error('更新密码本分组失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除密码本分组
+ipcMain.handle('delete-password-vault-group', async (event, groupId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deletePasswordGroup(groupId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除密码本分组失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 添加密码本条目
+ipcMain.handle('add-password-vault-entry', async (event, entry) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.addPasswordEntry({
+      ...entry,
+      password: encryptPassword(entry.password || '')
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('添加密码本条目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 更新密码本条目
+ipcMain.handle('update-password-vault-entry', async (event, entryId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    const payload = { ...updates };
+    if (payload.password !== undefined) {
+      payload.password = encryptPassword(payload.password || '');
+    }
+    db.updatePasswordEntry(entryId, payload);
+    return { success: true };
+  } catch (error) {
+    console.error('更新密码本条目失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC 通信处理 - 删除密码本条目
+ipcMain.handle('delete-password-vault-entry', async (event, entryId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+    db.deletePasswordEntry(entryId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除密码本条目失败:', error);
     return { success: false, error: error.message };
   }
 });

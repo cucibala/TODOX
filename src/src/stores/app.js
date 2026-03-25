@@ -5,7 +5,7 @@ export const useAppStore = defineStore('app', () => {
   // 状态
   const isAlwaysOnTop = ref(true)
   const showLockScreen = ref(false)
-  const currentPage = ref('home') // 'home' | 'settings' | 'chat' | 'document' | 'tools'
+  const currentPage = ref('home') // 'home' | 'settings' | 'chat' | 'document' | 'password-vault' | 'tools'
   const isAppReady = ref(false) // 应用是否初始化完成
   const isQuickInputMode = ref(new URLSearchParams(window.location.search).get('quick') === '1')
 
