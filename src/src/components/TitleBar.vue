@@ -69,6 +69,19 @@
         </button>
         <button
           class="titlebar-nav-btn"
+          :class="{ active: currentPage === 'ssh' }"
+          @click="goToSsh"
+          title="SSH"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+            <path d="M7 8l3 3-3 3"></path>
+            <line x1="12" y1="14" x2="17" y2="14"></line>
+            <path d="M8 20h8"></path>
+          </svg>
+        </button>
+        <button
+          class="titlebar-nav-btn"
           :class="{ active: currentPage === 'tools' }"
           @click="goToTools"
           title="工具箱"
@@ -147,6 +160,11 @@ function goToChat() {
 // 导航到密码本
 function goToPasswordVault() {
   appStore.currentPage = 'password-vault'
+}
+
+// 导航到 SSH 连接器
+function goToSsh() {
+  appStore.currentPage = 'ssh'
 }
 
 // 导航到工具箱

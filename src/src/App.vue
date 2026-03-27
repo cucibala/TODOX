@@ -44,6 +44,11 @@
         <PasswordVaultPage v-if="currentPage === 'password-vault'" />
       </KeepAlive>
 
+      <!-- SSH 连接器页面 -->
+      <KeepAlive>
+        <SshConnectorPage v-if="currentPage === 'ssh'" />
+      </KeepAlive>
+
       <!-- 工具箱页面 -->
       <KeepAlive>
         <ToolboxPage v-if="currentPage === 'tools'" />
@@ -109,6 +114,7 @@ import SettingsPage from './pages/SettingsPage.vue'
 import ChatPage from './pages/ChatPage.vue'
 import DocumentPage from './pages/DocumentPage.vue'
 import ToolboxPage from './pages/ToolboxPage.vue'
+import SshConnectorPage from './pages/SshConnectorPage.vue'
 import PasswordVaultPage from './pages/PasswordVaultPage.vue'
 import { useAppStore } from './stores/app'
 import { useTodoStore } from './stores/todo'

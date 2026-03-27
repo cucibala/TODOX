@@ -1,10 +1,10 @@
 <template>
   <div class="toolbox-page">
     <div class="toolbox-body">
-      <aside class="toolbox-sidebar">
+      <aside v-if="!props.hideSidebar" class="toolbox-sidebar">
         <div class="toolbox-sidebar-title">工具列表</div>
         <button
-          v-for="tool in tools"
+          v-for="tool in availableTools"
           :key="tool.id"
           class="toolbox-tool"
           @click="openTool(tool)"
@@ -14,8 +14,8 @@
         </button>
       </aside>
 
-      <main class="toolbox-content">
-        <div class="toolbox-tabs">
+      <main class="toolbox-content" :class="{ 'toolbox-content-standalone': props.hideSidebar }">
+        <div v-if="!props.hideTabs" class="toolbox-tabs">
           <div class="toolbox-tabs-inner">
             <button
               v-for="tab in tabs"
@@ -44,8 +44,8 @@
               <path d="M8.5 13.5l2 2"></path>
             </svg>
           </div>
-          <h3>还没有打开工具</h3>
-          <p>点击左侧工具，创建新的工具页面</p>
+          <h3>{{ props.standaloneToolId ? '正在打开工具' : '还没有打开工具' }}</h3>
+          <p>{{ props.standaloneToolId ? '请稍候，正在初始化页面内容' : '点击左侧工具，创建新的工具页面' }}</p>
         </div>
 
         <section v-else class="tool-card">
@@ -321,6 +321,191 @@
               <div v-if="activeTab.state.qrError" class="tool-error">{{ activeTab.state.qrError }}</div>
             </div>
           </div>
+
+          <div v-else-if="activeTab.type === 'ssh-connector'">
+            <div class="tool-card-header">
+              <div class="tool-card-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+                  <path d="M7 8l3 3-3 3"></path>
+                  <line x1="12" y1="14" x2="17" y2="14"></line>
+                  <path d="M8 20h8"></path>
+                </svg>
+                <div>
+                  <h3>{{ activeTab.title }}</h3>
+                  <span>保存 SSH 连接信息，通过系统终端快速发起连接</span>
+                </div>
+              </div>
+              <span class="tool-tag">SSH</span>
+            </div>
+            <div class="tool-card-body ssh-tool-body">
+              <div class="ssh-security-note">
+                为了安全，连接器只保存主机、端口、用户名、私钥路径和登录后命令，不保存 SSH 密码。
+              </div>
+
+              <div class="ssh-tool-layout">
+                <section class="ssh-saved-list">
+                  <div class="ssh-panel-header">
+                    <div>
+                      <div class="ssh-panel-title">已保存连接</div>
+                      <div class="ssh-panel-subtitle">
+                        {{ getFilteredSshConnections(activeTab).length }} 个结果
+                      </div>
+                    </div>
+                    <button class="tool-btn" @click="handleCreateSshConnection(activeTab)">新建</button>
+                  </div>
+
+                  <div class="ssh-search-box">
+                    <input
+                      v-model="activeTab.state.searchQuery"
+                      type="text"
+                      placeholder="搜索名称、主机、用户名"
+                    />
+                  </div>
+
+                  <div v-if="activeTab.state.loading" class="ssh-empty-state">
+                    正在加载连接信息...
+                  </div>
+                  <div v-else-if="getFilteredSshConnections(activeTab).length === 0" class="ssh-empty-state">
+                    还没有保存 SSH 连接
+                  </div>
+
+                  <div v-else class="ssh-connection-list">
+                    <div
+                      v-for="connection in getFilteredSshConnections(activeTab)"
+                      :key="connection.id"
+                      class="ssh-connection-card"
+                      :class="{ active: activeTab.state.selectedConnectionId === connection.id }"
+                      tabindex="0"
+                      @click="selectSshConnection(activeTab, connection.id)"
+                      @keydown.enter.prevent="selectSshConnection(activeTab, connection.id)"
+                      @keydown.space.prevent="selectSshConnection(activeTab, connection.id)"
+                    >
+                      <div class="ssh-connection-card-head">
+                        <div class="ssh-connection-name">{{ connection.name }}</div>
+                        <div class="ssh-connection-target">{{ formatSshTarget(connection) }}</div>
+                      </div>
+
+                      <div class="ssh-connection-badges">
+                        <span v-if="connection.privateKeyPath" class="ssh-badge">私钥</span>
+                        <span v-if="connection.remoteCommand" class="ssh-badge">命令</span>
+                        <span v-if="connection.lastConnectedAt" class="ssh-badge subtle">最近使用</span>
+                      </div>
+
+                      <div class="ssh-connection-meta">
+                        <span v-if="connection.lastConnectedAt">上次连接：{{ formatSshTime(connection.lastConnectedAt) }}</span>
+                        <span v-else>尚未连接</span>
+                      </div>
+
+                      <div class="ssh-card-actions">
+                        <button class="ssh-mini-btn primary" @click.stop="handleConnectSsh(activeTab, connection)">
+                          连接
+                        </button>
+                        <button class="ssh-mini-btn" @click.stop="handleCopySshCommand(connection)">
+                          复制命令
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="ssh-editor-panel">
+                  <div class="ssh-panel-header">
+                    <div>
+                      <div class="ssh-panel-title">
+                        {{ activeTab.state.selectedConnectionId ? '编辑连接' : '新建连接' }}
+                      </div>
+                      <div class="ssh-panel-subtitle">
+                        连接会在系统终端中打开，适合密码登录或 SSH Key 登录
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="ssh-form-grid">
+                    <label class="ssh-field">
+                      <span>连接名称</span>
+                      <input v-model="activeTab.state.draft.name" type="text" placeholder="例如：生产服务器" />
+                    </label>
+
+                    <label class="ssh-field">
+                      <span>主机地址</span>
+                      <input v-model="activeTab.state.draft.host" type="text" placeholder="例如：192.168.1.88 或 example.com" />
+                    </label>
+
+                    <label class="ssh-field">
+                      <span>用户名</span>
+                      <input v-model="activeTab.state.draft.username" type="text" placeholder="留空则使用系统默认用户" />
+                    </label>
+
+                    <label class="ssh-field">
+                      <span>端口</span>
+                      <input v-model.number="activeTab.state.draft.port" type="number" min="1" max="65535" placeholder="22" />
+                    </label>
+                  </div>
+
+                  <label class="ssh-field">
+                    <span>私钥路径</span>
+                    <div class="ssh-inline-field">
+                      <input
+                        v-model="activeTab.state.draft.privateKeyPath"
+                        type="text"
+                        placeholder="例如：C:\\Users\\me\\.ssh\\id_ed25519"
+                      />
+                      <button class="tool-btn" @click="handlePickSshPrivateKey(activeTab)">选择文件</button>
+                      <button
+                        class="tool-btn"
+                        :disabled="!activeTab.state.draft.privateKeyPath"
+                        @click="activeTab.state.draft.privateKeyPath = ''"
+                      >
+                        清空
+                      </button>
+                    </div>
+                  </label>
+
+                  <label class="ssh-field">
+                    <span>登录后命令</span>
+                    <textarea
+                      v-model="activeTab.state.draft.remoteCommand"
+                      rows="3"
+                      placeholder="例如：tmux attach || tmux"
+                    ></textarea>
+                  </label>
+
+                  <label class="ssh-field">
+                    <span>备注</span>
+                    <textarea
+                      v-model="activeTab.state.draft.note"
+                      rows="3"
+                      placeholder="补充说明、环境用途、跳板机信息等"
+                    ></textarea>
+                  </label>
+
+                  <div class="ssh-command-preview">
+                    <label>命令预览</label>
+                    <textarea
+                      :value="buildSshCommandPreview(activeTab.state.draft)"
+                      rows="3"
+                      readonly
+                    ></textarea>
+                  </div>
+
+                  <div class="tool-actions ssh-form-actions">
+                    <button class="tool-btn primary" @click="handleSaveSshConnection(activeTab)">保存连接</button>
+                    <button class="tool-btn" @click="handleSaveAndConnectSsh(activeTab)">保存并连接</button>
+                    <button class="tool-btn" @click="handleConnectSsh(activeTab, activeTab.state.draft)">直接连接</button>
+                    <button class="tool-btn" @click="handleCopySshCommand(activeTab.state.draft)">复制命令</button>
+                    <button
+                      class="tool-btn"
+                      :disabled="!activeTab.state.selectedConnectionId"
+                      @click="handleDeleteSshConnection(activeTab)"
+                    >
+                      删除连接
+                    </button>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
     </div>
@@ -330,6 +515,22 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAppStore } from '../stores/app'
+import { generateId } from '../utils/tools'
+
+const props = defineProps({
+  standaloneToolId: {
+    type: String,
+    default: ''
+  },
+  hideSidebar: {
+    type: Boolean,
+    default: false
+  },
+  hideTabs: {
+    type: Boolean,
+    default: false
+  }
+})
 
 const appStore = useAppStore()
 const electronAPI = window.electronAPI
@@ -377,8 +578,27 @@ const tools = [
         <rect x="19" y="19" width="2" height="2" rx="0.5"></rect>
       </svg>
     `
+  },
+  {
+    id: 'ssh-connector',
+    name: 'SSH 连接器',
+    icon: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="14" rx="2"></rect>
+        <path d="M7 8l3 3-3 3"></path>
+        <line x1="12" y1="14" x2="17" y2="14"></line>
+        <path d="M8 20h8"></path>
+      </svg>
+    `
   }
 ]
+
+const availableTools = computed(() => {
+  if (props.standaloneToolId) {
+    return tools.filter(tool => tool.id === props.standaloneToolId)
+  }
+  return tools.filter(tool => tool.id !== 'ssh-connector')
+})
 
 const tabs = ref([])
 const activeTabId = ref(null)
@@ -391,12 +611,25 @@ const activeTab = computed(() => tabs.value.find(tab => tab.id === activeTabId.v
 function openTool(tool) {
   const existing = tabs.value.find(tab => tab.type === tool.id)
   if (existing) {
+    if (tool.id === 'ssh-connector') {
+      loadSshConnections(existing)
+    }
     activeTabId.value = existing.id
     return
   }
   const tab = createTab(tool)
   tabs.value.push(tab)
   activeTabId.value = tab.id
+  if (tool.id === 'ssh-connector') {
+    loadSshConnections(tab)
+  }
+}
+
+if (props.standaloneToolId) {
+  const standaloneTool = tools.find(tool => tool.id === props.standaloneToolId)
+  if (standaloneTool) {
+    openTool(standaloneTool)
+  }
 }
 
 function setActiveTab(tabId) {
@@ -432,6 +665,7 @@ function createToolState(type) {
   if (type === 'image-to-base64') return createImageToBase64State()
   if (type === 'base64-to-image') return createBase64ToImageState()
   if (type === 'text-to-qrcode') return createTextToQrState()
+  if (type === 'ssh-connector') return createSshConnectorState()
   return createHttpImageReceiverState()
 }
 
@@ -477,6 +711,32 @@ function createTextToQrState() {
     qrDataUrl: '',
     qrError: '',
     size: 240
+  }
+}
+
+function createSshDraft(connection = null) {
+  return {
+    id: connection?.id || '',
+    name: connection?.name || '',
+    host: connection?.host || '',
+    port: connection?.port ?? 22,
+    username: connection?.username || '',
+    privateKeyPath: connection?.privateKeyPath || '',
+    remoteCommand: connection?.remoteCommand || '',
+    note: connection?.note || '',
+    createdAt: connection?.createdAt || '',
+    updatedAt: connection?.updatedAt || '',
+    lastConnectedAt: connection?.lastConnectedAt || ''
+  }
+}
+
+function createSshConnectorState() {
+  return {
+    connections: [],
+    loading: false,
+    searchQuery: '',
+    selectedConnectionId: '',
+    draft: createSshDraft()
   }
 }
 
@@ -614,6 +874,330 @@ function handleQrPreviewError(tab) {
   tab.state.qrError = '二维码预览失败'
   appStore.toast('二维码预览失败', 'warning')
   tab.state.qrDataUrl = ''
+}
+
+function normalizeSshConnection(connection) {
+  if (!connection) return null
+  return {
+    id: String(connection.id || ''),
+    name: String(connection.name || '').trim(),
+    host: String(connection.host || '').trim(),
+    port: clampNumber(parseInt(connection.port, 10) || 22, 1, 65535),
+    username: String(connection.username || '').trim(),
+    privateKeyPath: String(connection.privateKeyPath || connection.private_key_path || '').trim(),
+    remoteCommand: String(connection.remoteCommand || connection.remote_command || '').trim(),
+    note: String(connection.note || '').trim(),
+    createdAt: connection.createdAt || connection.created_at || '',
+    updatedAt: connection.updatedAt || connection.updated_at || '',
+    lastConnectedAt: connection.lastConnectedAt || connection.last_connected_at || ''
+  }
+}
+
+function sortSshConnections(connections) {
+  return [...connections].sort((a, b) => {
+    const aLast = a.lastConnectedAt ? new Date(a.lastConnectedAt).getTime() : 0
+    const bLast = b.lastConnectedAt ? new Date(b.lastConnectedAt).getTime() : 0
+    if (aLast !== bLast) return bLast - aLast
+
+    const aUpdated = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+    const bUpdated = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+    if (aUpdated !== bUpdated) return bUpdated - aUpdated
+
+    return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN')
+  })
+}
+
+function getFilteredSshConnections(tab) {
+  const query = String(tab?.state?.searchQuery || '').trim().toLowerCase()
+  const connections = tab?.state?.connections || []
+  if (!query) return connections
+
+  return connections.filter((connection) => {
+    return [
+      connection.name,
+      connection.host,
+      connection.username,
+      connection.note
+    ]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(query))
+  })
+}
+
+function buildSshTarget(connection, withPlaceholder = false) {
+  const host = String(connection?.host || '').trim()
+  const username = String(connection?.username || '').trim()
+  if (!host) {
+    if (!withPlaceholder) return ''
+    return username ? `${username}@example.com` : 'example.com'
+  }
+  return username ? `${username}@${host}` : host
+}
+
+function formatSshTarget(connection) {
+  const target = buildSshTarget(connection)
+  const port = clampNumber(parseInt(connection?.port, 10) || 22, 1, 65535)
+  return port === 22 ? target : `${target}:${port}`
+}
+
+function quoteSshPreviewArg(arg) {
+  const text = String(arg ?? '')
+  if (!text) return '""'
+  if (/[\s"'`$\\]/.test(text)) {
+    return `"${text.replace(/(["\\$`])/g, '\\$1')}"`
+  }
+  return text
+}
+
+function buildSshCommandPreview(connection) {
+  const normalized = normalizeSshConnection(connection || {})
+  const args = ['ssh']
+
+  if (normalized.port !== 22) {
+    args.push('-p', String(normalized.port))
+  }
+  if (normalized.privateKeyPath) {
+    args.push('-i', normalized.privateKeyPath)
+  }
+  if (normalized.remoteCommand) {
+    args.push('-t')
+  }
+
+  args.push(buildSshTarget(normalized, true))
+
+  if (normalized.remoteCommand) {
+    args.push(normalized.remoteCommand)
+  }
+
+  return args.map(quoteSshPreviewArg).join(' ')
+}
+
+function selectSshConnection(tab, connectionId) {
+  const connection = tab.state.connections.find(item => item.id === String(connectionId))
+  if (!connection) return
+
+  tab.state.selectedConnectionId = connection.id
+  tab.state.draft = createSshDraft(connection)
+}
+
+function handleCreateSshConnection(tab) {
+  tab.state.selectedConnectionId = ''
+  tab.state.draft = createSshDraft()
+}
+
+function upsertSshConnection(tab, connection) {
+  const normalized = normalizeSshConnection(connection)
+  const index = tab.state.connections.findIndex(item => item.id === normalized.id)
+  if (index === -1) {
+    tab.state.connections.push(normalized)
+  } else {
+    tab.state.connections.splice(index, 1, normalized)
+  }
+  tab.state.connections = sortSshConnections(tab.state.connections)
+  return normalized
+}
+
+function buildSshPayload(source, options = {}) {
+  const normalized = normalizeSshConnection(source)
+  if (options.requireName !== false && !normalized.name) {
+    appStore.toast('请填写连接名称', 'warning')
+    return null
+  }
+  if (!normalized.host) {
+    appStore.toast('请填写主机地址', 'warning')
+    return null
+  }
+  if (!normalized.port || normalized.port < 1 || normalized.port > 65535) {
+    appStore.toast('端口必须在 1-65535 之间', 'warning')
+    return null
+  }
+  return normalized
+}
+
+async function loadSshConnections(tab) {
+  if (!electronAPI?.loadSshConnections) {
+    appStore.toast('当前环境不支持 SSH 连接器', 'warning')
+    return
+  }
+
+  tab.state.loading = true
+  try {
+    const result = await electronAPI.loadSshConnections()
+    if (!result?.success) {
+      throw new Error(result?.error || '加载 SSH 连接失败')
+    }
+
+    tab.state.connections = sortSshConnections((result.connections || []).map(normalizeSshConnection).filter(Boolean))
+    if (tab.state.selectedConnectionId) {
+      const selected = tab.state.connections.find(item => item.id === tab.state.selectedConnectionId)
+      if (selected) {
+        tab.state.draft = createSshDraft(selected)
+      } else {
+        handleCreateSshConnection(tab)
+      }
+    } else if (!tab.state.draft.name && !tab.state.draft.host && tab.state.connections[0]) {
+      selectSshConnection(tab, tab.state.connections[0].id)
+    }
+  } catch (error) {
+    console.error('加载 SSH 连接失败:', error)
+    appStore.toast(error.message || '加载 SSH 连接失败', 'error')
+  } finally {
+    tab.state.loading = false
+  }
+}
+
+async function handleSaveSshConnection(tab) {
+  if (!electronAPI?.addSshConnection || !electronAPI?.updateSshConnection) {
+    appStore.toast('当前环境不支持保存 SSH 连接', 'warning')
+    return null
+  }
+
+  const payload = buildSshPayload(tab.state.draft)
+  if (!payload) return null
+
+  const now = new Date().toISOString()
+  if (tab.state.selectedConnectionId) {
+    const existing = tab.state.connections.find(item => item.id === tab.state.selectedConnectionId)
+    const savedConnection = {
+      ...(existing || {}),
+      ...payload,
+      id: tab.state.selectedConnectionId,
+      createdAt: existing?.createdAt || payload.createdAt || now,
+      updatedAt: now,
+      lastConnectedAt: existing?.lastConnectedAt || payload.lastConnectedAt || ''
+    }
+
+    const result = await electronAPI.updateSshConnection(savedConnection.id, savedConnection)
+    if (!result?.success) {
+      appStore.toast(result?.error || '保存失败', 'error')
+      return null
+    }
+
+    const normalized = upsertSshConnection(tab, savedConnection)
+    tab.state.selectedConnectionId = normalized.id
+    tab.state.draft = createSshDraft(normalized)
+    appStore.toast('SSH 连接已更新', 'success')
+    return normalized
+  }
+
+  const newConnection = {
+    ...payload,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+    lastConnectedAt: ''
+  }
+
+  const result = await electronAPI.addSshConnection(newConnection)
+  if (!result?.success) {
+    appStore.toast(result?.error || '保存失败', 'error')
+    return null
+  }
+
+  const normalized = upsertSshConnection(tab, newConnection)
+  tab.state.selectedConnectionId = normalized.id
+  tab.state.draft = createSshDraft(normalized)
+  appStore.toast('SSH 连接已保存', 'success')
+  return normalized
+}
+
+async function handleSaveAndConnectSsh(tab) {
+  const savedConnection = await handleSaveSshConnection(tab)
+  if (!savedConnection) return
+  await handleConnectSsh(tab, savedConnection)
+}
+
+async function handleDeleteSshConnection(tab) {
+  if (!electronAPI?.deleteSshConnection) {
+    appStore.toast('当前环境不支持删除 SSH 连接', 'warning')
+    return
+  }
+
+  const connectionId = tab.state.selectedConnectionId
+  if (!connectionId) {
+    appStore.toast('请先选择要删除的连接', 'warning')
+    return
+  }
+
+  const connection = tab.state.connections.find(item => item.id === connectionId)
+  if (!connection) return
+
+  const confirmed = await appStore.confirm(`确定删除 SSH 连接“${connection.name}”吗？`)
+  if (!confirmed) return
+
+  const result = await electronAPI.deleteSshConnection(connectionId)
+  if (!result?.success) {
+    appStore.toast(result?.error || '删除失败', 'error')
+    return
+  }
+
+  tab.state.connections = tab.state.connections.filter(item => item.id !== connectionId)
+  const nextConnection = tab.state.connections[0] || null
+  if (nextConnection) {
+    selectSshConnection(tab, nextConnection.id)
+  } else {
+    handleCreateSshConnection(tab)
+  }
+  appStore.toast('SSH 连接已删除', 'success')
+}
+
+async function handlePickSshPrivateKey(tab) {
+  if (!electronAPI?.selectSshPrivateKey) {
+    appStore.toast('当前环境不支持选择私钥文件', 'warning')
+    return
+  }
+
+  const result = await electronAPI.selectSshPrivateKey()
+  if (result?.success && result.path) {
+    tab.state.draft.privateKeyPath = result.path
+  }
+}
+
+async function handleConnectSsh(tab, connection) {
+  if (!electronAPI?.connectSsh) {
+    appStore.toast('当前环境不支持 SSH 连接', 'warning')
+    return
+  }
+
+  const payload = buildSshPayload(connection, { requireName: false })
+  if (!payload) return
+
+  const result = await electronAPI.connectSsh(payload)
+  if (!result?.success) {
+    appStore.toast(result?.error || 'SSH 启动失败', 'error')
+    return
+  }
+
+  if (payload.id && result.lastConnectedAt) {
+    const existing = tab.state.connections.find(item => item.id === payload.id)
+    if (existing) {
+      const updated = upsertSshConnection(tab, {
+        ...existing,
+        lastConnectedAt: result.lastConnectedAt,
+        updatedAt: result.lastConnectedAt
+      })
+      if (tab.state.selectedConnectionId === updated.id) {
+        tab.state.draft = createSshDraft(updated)
+      }
+    }
+  }
+
+  appStore.toast('SSH 会话已在系统终端中打开', 'success')
+}
+
+async function handleCopySshCommand(connection) {
+  if (!String(connection?.host || '').trim()) {
+    appStore.toast('请先填写主机地址', 'warning')
+    return
+  }
+  await handleCopy(buildSshCommandPreview(connection), '已复制 SSH 命令')
+}
+
+function formatSshTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString()
 }
 
 async function handleStartHttpServer(tab) {
@@ -960,6 +1544,10 @@ onMounted(() => {
   flex: 1;
   padding: 18px 22px 24px;
   overflow-y: auto;
+}
+
+.toolbox-content-standalone {
+  padding: 22px 24px 26px;
 }
 
 .toolbox-empty-state {
@@ -1324,6 +1912,258 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
+.ssh-tool-body {
+  gap: 18px;
+}
+
+.ssh-security-note {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f5f9ff;
+  border: 1px solid #d7e5ff;
+  color: #4a5f86;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ssh-tool-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.ssh-saved-list,
+.ssh-editor-panel {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.ssh-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(180deg, #fbfdff 0%, #f4f8ff 100%);
+}
+
+.ssh-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ssh-panel-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ssh-search-box {
+  padding: 14px 16px 0;
+}
+
+.ssh-search-box input,
+.ssh-field input,
+.ssh-field textarea,
+.ssh-command-preview textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.6;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.ssh-search-box input,
+.ssh-field input {
+  font-family: inherit;
+  resize: none;
+}
+
+.ssh-field textarea,
+.ssh-command-preview textarea {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+.ssh-search-box input:focus,
+.ssh-field input:focus,
+.ssh-field textarea:focus,
+.ssh-command-preview textarea:focus {
+  outline: none;
+  border-color: #8aa8ff;
+  box-shadow: 0 0 0 3px rgba(112, 144, 255, 0.12);
+}
+
+.ssh-empty-state {
+  padding: 28px 16px 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.ssh-connection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.ssh-connection-card {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #dce6f4;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ssh-connection-card:hover {
+  border-color: #94b4ff;
+  box-shadow: 0 10px 20px rgba(41, 84, 153, 0.08);
+}
+
+.ssh-connection-card:focus-visible {
+  outline: none;
+  border-color: #5f84ff;
+  box-shadow: 0 0 0 3px rgba(95, 132, 255, 0.18);
+}
+
+.ssh-connection-card.active {
+  border-color: #5f84ff;
+  background: linear-gradient(180deg, #eef4ff 0%, #f7fbff 100%);
+  box-shadow: 0 10px 24px rgba(95, 132, 255, 0.14);
+}
+
+.ssh-connection-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ssh-connection-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ssh-connection-target {
+  font-size: 12px;
+  color: #436088;
+  word-break: break-all;
+}
+
+.ssh-connection-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ssh-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #396090;
+  background: #eaf2ff;
+}
+
+.ssh-badge.subtle {
+  color: #5d6e85;
+  background: #eef2f7;
+}
+
+.ssh-connection-meta {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ssh-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ssh-mini-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ssh-mini-btn:hover {
+  border-color: #7c9bff;
+  color: var(--text-primary);
+}
+
+.ssh-mini-btn.primary {
+  background: #5f84ff;
+  border-color: #5f84ff;
+  color: #ffffff;
+}
+
+.ssh-editor-panel {
+  padding-bottom: 16px;
+}
+
+.ssh-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px 16px 0;
+}
+
+.ssh-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px;
+  margin-top: 14px;
+}
+
+.ssh-field span,
+.ssh-command-preview label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ssh-inline-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.ssh-command-preview {
+  padding: 16px 16px 0;
+}
+
+.ssh-form-actions {
+  padding: 16px 16px 0;
+  margin-top: 0;
+}
+
 @media (max-width: 900px) {
   .toolbox-body {
     flex-direction: column;
@@ -1336,6 +2176,18 @@ onMounted(() => {
   }
 
   .tool-upload {
+    grid-template-columns: 1fr;
+  }
+
+  .ssh-tool-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .ssh-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ssh-inline-field {
     grid-template-columns: 1fr;
   }
 }

@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 11;
+const DATABASE_VERSION = 13;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -192,6 +192,27 @@ class TodoXDatabase {
       )
     `);
 
+    // SSH 连接器表
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS ssh_connections (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER DEFAULT 22,
+        username TEXT,
+        proxy_type TEXT DEFAULT 'none',
+        proxy_host TEXT,
+        proxy_port INTEGER,
+        proxy_username TEXT,
+        private_key_path TEXT,
+        remote_command TEXT,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_connected_at TEXT
+      )
+    `);
+
     // 文档表
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS documents (
@@ -266,6 +287,7 @@ class TodoXDatabase {
       CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
       CREATE INDEX IF NOT EXISTS idx_chat_records_person ON chat_records(person_id);
       CREATE INDEX IF NOT EXISTS idx_diaries_person ON diaries(person_id);
+      CREATE INDEX IF NOT EXISTS idx_ssh_connections_last_connected ON ssh_connections(last_connected_at DESC);
     `);
 
     // 修复旧库中密码本表结构不完整的问题
@@ -1352,6 +1374,189 @@ class TodoXDatabase {
     this.db.prepare('DELETE FROM settings WHERE key = ?').run(key);
   }
 
+  // ==================== SSH 连接器相关操作 ====================
+
+  /**
+   * 获取所有 SSH 连接
+   */
+  getSshConnections() {
+    const stmt = this.db.prepare(`
+      SELECT * FROM ssh_connections
+      ORDER BY
+        CASE WHEN last_connected_at IS NULL OR last_connected_at = '' THEN 1 ELSE 0 END ASC,
+        last_connected_at DESC,
+        updated_at DESC,
+        name COLLATE NOCASE ASC
+    `);
+
+    return stmt.all().map(connection => ({
+      id: connection.id,
+      name: connection.name,
+      host: connection.host,
+      port: connection.port || 22,
+      username: connection.username || '',
+      proxyType: connection.proxy_type || 'none',
+      proxyHost: connection.proxy_host || '',
+      proxyPort: connection.proxy_port || 1080,
+      proxyUsername: connection.proxy_username || '',
+      privateKeyPath: connection.private_key_path || '',
+      remoteCommand: connection.remote_command || '',
+      note: connection.note || '',
+      createdAt: connection.created_at,
+      updatedAt: connection.updated_at,
+      lastConnectedAt: connection.last_connected_at || ''
+    }));
+  }
+
+  /**
+   * 获取单个 SSH 连接
+   */
+  getSshConnection(connectionId) {
+    const stmt = this.db.prepare('SELECT * FROM ssh_connections WHERE id = ?');
+    const connection = stmt.get(String(connectionId));
+    if (!connection) return null;
+
+    return {
+      id: connection.id,
+      name: connection.name,
+      host: connection.host,
+      port: connection.port || 22,
+      username: connection.username || '',
+      proxyType: connection.proxy_type || 'none',
+      proxyHost: connection.proxy_host || '',
+      proxyPort: connection.proxy_port || 1080,
+      proxyUsername: connection.proxy_username || '',
+      privateKeyPath: connection.private_key_path || '',
+      remoteCommand: connection.remote_command || '',
+      note: connection.note || '',
+      createdAt: connection.created_at,
+      updatedAt: connection.updated_at,
+      lastConnectedAt: connection.last_connected_at || ''
+    };
+  }
+
+  /**
+   * 添加 SSH 连接
+   */
+  addSshConnection(connection) {
+    const createdAt = connection.createdAt || connection.created_at || new Date().toISOString();
+    const stmt = this.db.prepare(`
+      INSERT INTO ssh_connections (
+        id, name, host, port, username, proxy_type, proxy_host, proxy_port, proxy_username, private_key_path, remote_command,
+        note, created_at, updated_at, last_connected_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      String(connection.id),
+      connection.name,
+      connection.host,
+      Number(connection.port) || 22,
+      connection.username || null,
+      connection.proxyType || connection.proxy_type || 'none',
+      connection.proxyHost || connection.proxy_host || null,
+      connection.proxyPort ? Number(connection.proxyPort) : (connection.proxy_port ? Number(connection.proxy_port) : null),
+      connection.proxyUsername || connection.proxy_username || null,
+      connection.privateKeyPath || connection.private_key_path || null,
+      connection.remoteCommand || connection.remote_command || null,
+      connection.note || null,
+      createdAt,
+      new Date().toISOString(),
+      connection.lastConnectedAt || connection.last_connected_at || null
+    );
+  }
+
+  /**
+   * 更新 SSH 连接
+   */
+  updateSshConnection(connectionId, updates) {
+    const fields = [];
+    const values = [];
+
+    if (updates.name !== undefined) {
+      fields.push('name = ?');
+      values.push(updates.name);
+    }
+    if (updates.host !== undefined) {
+      fields.push('host = ?');
+      values.push(updates.host);
+    }
+    if (updates.port !== undefined) {
+      fields.push('port = ?');
+      values.push(Number(updates.port) || 22);
+    }
+    if (updates.username !== undefined) {
+      fields.push('username = ?');
+      values.push(updates.username || null);
+    }
+    if (updates.proxyType !== undefined || updates.proxy_type !== undefined) {
+      fields.push('proxy_type = ?');
+      values.push(updates.proxyType || updates.proxy_type || 'none');
+    }
+    if (updates.proxyHost !== undefined || updates.proxy_host !== undefined) {
+      fields.push('proxy_host = ?');
+      values.push(updates.proxyHost || updates.proxy_host || null);
+    }
+    if (updates.proxyPort !== undefined || updates.proxy_port !== undefined) {
+      fields.push('proxy_port = ?');
+      values.push(
+        updates.proxyPort !== undefined
+          ? (updates.proxyPort ? Number(updates.proxyPort) : null)
+          : (updates.proxy_port ? Number(updates.proxy_port) : null)
+      );
+    }
+    if (updates.proxyUsername !== undefined || updates.proxy_username !== undefined) {
+      fields.push('proxy_username = ?');
+      values.push(updates.proxyUsername || updates.proxy_username || null);
+    }
+    if (updates.privateKeyPath !== undefined || updates.private_key_path !== undefined) {
+      fields.push('private_key_path = ?');
+      values.push(updates.privateKeyPath || updates.private_key_path || null);
+    }
+    if (updates.remoteCommand !== undefined || updates.remote_command !== undefined) {
+      fields.push('remote_command = ?');
+      values.push(updates.remoteCommand || updates.remote_command || null);
+    }
+    if (updates.note !== undefined) {
+      fields.push('note = ?');
+      values.push(updates.note || null);
+    }
+    if (updates.lastConnectedAt !== undefined || updates.last_connected_at !== undefined) {
+      fields.push('last_connected_at = ?');
+      values.push(updates.lastConnectedAt || updates.last_connected_at || null);
+    }
+
+    fields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(String(connectionId));
+
+    const stmt = this.db.prepare(`
+      UPDATE ssh_connections SET ${fields.join(', ')} WHERE id = ?
+    `);
+    stmt.run(...values);
+  }
+
+  /**
+   * 删除 SSH 连接
+   */
+  deleteSshConnection(connectionId) {
+    this.db.prepare('DELETE FROM ssh_connections WHERE id = ?').run(String(connectionId));
+  }
+
+  /**
+   * 更新最近连接时间
+   */
+  touchSshConnection(connectionId, connectedAt = new Date().toISOString()) {
+    this.db.prepare(`
+      UPDATE ssh_connections
+      SET last_connected_at = ?, updated_at = ?
+      WHERE id = ?
+    `).run(connectedAt, connectedAt, String(connectionId));
+
+    return this.getSshConnection(connectionId);
+  }
+
   /**
    * 获取当前项目 ID
    */
@@ -1993,6 +2198,50 @@ class TodoXDatabase {
         `);
 
         this.db.exec('CREATE INDEX IF NOT EXISTS idx_password_entries_group ON password_entries(group_id);');
+      },
+
+      // 版本 12 - SSH 连接器支持
+      12: function() {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS ssh_connections (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            host TEXT NOT NULL,
+            port INTEGER DEFAULT 22,
+            username TEXT,
+            proxy_type TEXT DEFAULT 'none',
+            proxy_host TEXT,
+            proxy_port INTEGER,
+            proxy_username TEXT,
+            private_key_path TEXT,
+            remote_command TEXT,
+            note TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            last_connected_at TEXT
+          )
+        `);
+
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_ssh_connections_last_connected ON ssh_connections(last_connected_at DESC);');
+      },
+
+      // 版本 13 - SSH 代理支持（SOCKS5）
+      13: function() {
+        const tableInfo = this.db.prepare('PRAGMA table_info(ssh_connections)').all();
+        const columnNames = tableInfo.map(col => col.name);
+
+        if (!columnNames.includes('proxy_type')) {
+          this.db.exec("ALTER TABLE ssh_connections ADD COLUMN proxy_type TEXT DEFAULT 'none';");
+        }
+        if (!columnNames.includes('proxy_host')) {
+          this.db.exec('ALTER TABLE ssh_connections ADD COLUMN proxy_host TEXT;');
+        }
+        if (!columnNames.includes('proxy_port')) {
+          this.db.exec('ALTER TABLE ssh_connections ADD COLUMN proxy_port INTEGER;');
+        }
+        if (!columnNames.includes('proxy_username')) {
+          this.db.exec('ALTER TABLE ssh_connections ADD COLUMN proxy_username TEXT;');
+        }
       },
 
       // 未来的迁移函数在这里添加...

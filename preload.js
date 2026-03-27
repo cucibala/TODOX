@@ -50,6 +50,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getToolboxHttpStatus: () => ipcRenderer.invoke('toolbox-http-status'),
   onToolboxHttpStatus: (callback) => ipcRenderer.on('toolbox-http-status', (event, status) => callback(status)),
   onToolboxImageReceived: (callback) => ipcRenderer.on('toolbox-image-received', (event, payload) => callback(payload)),
+
+  // 工具箱 - SSH 连接器
+  loadSshConnections: () => ipcRenderer.invoke('load-ssh-connections'),
+  addSshConnection: (connection) => ipcRenderer.invoke('add-ssh-connection', connection),
+  updateSshConnection: (connectionId, updates) => ipcRenderer.invoke('update-ssh-connection', connectionId, updates),
+  deleteSshConnection: (connectionId) => ipcRenderer.invoke('delete-ssh-connection', connectionId),
+  connectSsh: (connection) => ipcRenderer.invoke('connect-ssh', connection),
+  connectSshSession: (connection) => ipcRenderer.invoke('connect-ssh-session', connection),
+  loadCmdPaths: () => ipcRenderer.invoke('load-cmd-paths'),
+  saveCmdPaths: (paths) => ipcRenderer.invoke('save-cmd-paths', paths),
+  loadSshGroupSettings: () => ipcRenderer.invoke('load-ssh-group-settings'),
+  saveSshGroupSettings: (groups, connectionGroupMap, connectionOrderMap, cmdBookmarks) => ipcRenderer.invoke('save-ssh-group-settings', groups, connectionGroupMap, connectionOrderMap, cmdBookmarks),
+  createCmdSession: (options) => ipcRenderer.invoke('create-cmd-session', options),
+  resolveCmdSessionPath: (sessionId) => ipcRenderer.invoke('resolve-cmd-session-path', sessionId),
+  writeSshSession: (sessionId, data) => ipcRenderer.invoke('write-ssh-session', sessionId, data),
+  resizeSshSession: (sessionId, cols, rows) => ipcRenderer.invoke('resize-ssh-session', sessionId, cols, rows),
+  disconnectSshSession: (sessionId) => ipcRenderer.invoke('disconnect-ssh-session', sessionId),
+  selectSshPrivateKey: () => ipcRenderer.invoke('select-ssh-private-key'),
+  onSshSessionEvent: (callback) => ipcRenderer.on('ssh-session-event', (event, payload) => callback(payload)),
   
   // 密码管理
   setPassword: (password) => ipcRenderer.invoke('set-password', password),

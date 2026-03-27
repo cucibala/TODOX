@@ -2,6 +2,11 @@ const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, 
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
+const os = require('os');
+const { spawn } = require('child_process');
+const { Client: SshClient } = require('ssh2');
+const { SocksClient } = require('socks');
+const pty = require('node-pty');
 const TodoXDatabase = require('./database');
 const isDev = process.argv.includes('--dev');
 
@@ -232,6 +237,8 @@ let toolboxHttpStatus = {
   port: TOOLBOX_HTTP_PORT,
   lastError: ''
 };
+const sshSessions = new Map();
+const cmdSessions = new Map();
 
 function broadcastTodosChanged() {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -252,6 +259,16 @@ function broadcastSystemScreenLocked() {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('system-screen-locked');
   }
+}
+
+function broadcastSshSessionEvent(payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('ssh-session-event', payload);
+  }
+}
+
+function generateSshSessionId() {
+  return `ssh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function parseMimeFromDataUrl(dataUrl) {
@@ -289,6 +306,711 @@ function extractDataUrlFromBody(body, contentType) {
     return trimmed;
   }
   return buildDataUrl(trimmed, 'image/png');
+}
+
+function normalizeSshConnectionPayload(connection = {}, options = {}) {
+  const normalized = {
+    id: connection.id ? String(connection.id).trim() : '',
+    name: String(connection.name || '').trim(),
+    host: String(connection.host || '').trim(),
+    port: Number.parseInt(connection.port, 10) || 22,
+    username: String(connection.username || '').trim(),
+    proxyType: String(connection.proxyType || connection.proxy_type || 'none').trim() || 'none',
+    proxyHost: String(connection.proxyHost || connection.proxy_host || '').trim(),
+    proxyPort: Number.parseInt(connection.proxyPort ?? connection.proxy_port, 10) || 1080,
+    proxyUsername: String(connection.proxyUsername || connection.proxy_username || '').trim(),
+    privateKeyPath: String(connection.privateKeyPath || connection.private_key_path || '').trim(),
+    remoteCommand: String(connection.remoteCommand || connection.remote_command || '').trim(),
+    note: String(connection.note || '').trim()
+  };
+
+  if (options.requireName !== false && !normalized.name) {
+    throw new Error('连接名称不能为空');
+  }
+  if (!normalized.host) {
+    throw new Error('主机地址不能为空');
+  }
+  if (!Number.isInteger(normalized.port) || normalized.port < 1 || normalized.port > 65535) {
+    throw new Error('端口必须在 1-65535 之间');
+  }
+  if (normalized.proxyType !== 'none' && normalized.proxyType !== 'socks5') {
+    throw new Error('当前仅支持 SOCKS5 代理');
+  }
+  if (normalized.proxyType === 'socks5') {
+    if (!normalized.proxyHost) {
+      throw new Error('代理主机不能为空');
+    }
+    if (!Number.isInteger(normalized.proxyPort) || normalized.proxyPort < 1 || normalized.proxyPort > 65535) {
+      throw new Error('代理端口必须在 1-65535 之间');
+    }
+  }
+  if (options.validateKeyPath && normalized.privateKeyPath && !fs.existsSync(normalized.privateKeyPath)) {
+    throw new Error('私钥文件不存在');
+  }
+
+  return normalized;
+}
+
+function buildSshArgs(connection) {
+  const args = [];
+
+  if (connection.port && Number(connection.port) !== 22) {
+    args.push('-p', String(connection.port));
+  }
+  if (connection.privateKeyPath) {
+    args.push('-i', connection.privateKeyPath);
+  }
+  if (connection.remoteCommand) {
+    args.push('-t');
+  }
+
+  args.push(connection.username ? `${connection.username}@${connection.host}` : connection.host);
+
+  if (connection.remoteCommand) {
+    args.push(connection.remoteCommand);
+  }
+
+  return args;
+}
+
+function buildSshExternalUrl(connection) {
+  const safeHost = connection.host.includes(':') && !connection.host.startsWith('[')
+    ? `[${connection.host}]`
+    : connection.host;
+  const auth = connection.username ? `${encodeURIComponent(connection.username)}@` : '';
+  const port = connection.port ? `:${connection.port}` : '';
+  return `ssh://${auth}${safeHost}${port}`;
+}
+
+function quotePosixShellArg(value) {
+  const stringValue = String(value ?? '');
+  if (!stringValue) return "''";
+  return "'" + stringValue.replace(/'/g, "'\"'\"'") + "'";
+}
+
+function buildSshShellCommand(connection) {
+  return ['ssh', ...buildSshArgs(connection)].map(quotePosixShellArg).join(' ');
+}
+
+function escapePowerShellSingleQuotedString(value) {
+  return String(value ?? '').replace(/'/g, "''");
+}
+
+function encodePowerShellCommand(script) {
+  return Buffer.from(script, 'utf16le').toString('base64');
+}
+
+function spawnDetachedProcess(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+      ...options
+    });
+
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+async function launchWindowsSshTerminal(connection) {
+  const sshArgs = buildSshArgs(connection);
+  const title = connection.name || (connection.username ? `${connection.username}@${connection.host}` : connection.host);
+  const psArgsLiteral = sshArgs.map(arg => `'${escapePowerShellSingleQuotedString(arg)}'`).join(', ');
+  const script = [
+    `$Host.UI.RawUI.WindowTitle = '${escapePowerShellSingleQuotedString(`TodoX SSH - ${title}`)}'`,
+    `$sshArgs = @(${psArgsLiteral})`,
+    '& ssh.exe @sshArgs'
+  ].join('\n');
+
+  await spawnDetachedProcess('powershell.exe', [
+    '-NoLogo',
+    '-NoProfile',
+    '-NoExit',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-EncodedCommand',
+    encodePowerShellCommand(script)
+  ]);
+}
+
+async function launchMacSshTerminal(connection) {
+  const shellCommand = buildSshShellCommand(connection);
+  const escapedShellCommand = shellCommand
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"');
+
+  await spawnDetachedProcess('osascript', [
+    '-e',
+    'tell application "Terminal" to activate',
+    '-e',
+    `tell application "Terminal" to do script "${escapedShellCommand}"`
+  ]);
+}
+
+async function launchSshSession(connection) {
+  if (process.platform === 'win32') {
+    await launchWindowsSshTerminal(connection);
+    return { method: 'powershell' };
+  }
+
+  if (process.platform === 'darwin') {
+    await launchMacSshTerminal(connection);
+    return { method: 'terminal' };
+  }
+
+  const url = buildSshExternalUrl(connection);
+  await shell.openExternal(url);
+  return { method: 'external-url', url };
+}
+
+function finalizeSshSession(sessionId, payload = {}) {
+  const session = sshSessions.get(sessionId);
+  if (!session || session.closed) return;
+
+  session.closed = true;
+  sshSessions.delete(sessionId);
+
+  try {
+    session.stream?.removeAllListeners();
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    session.client?.removeAllListeners();
+  } catch (error) {
+    // ignore
+  }
+
+  broadcastSshSessionEvent({
+    type: 'closed',
+    sessionId,
+    connectionId: session.connectionId || '',
+    ...payload
+  });
+}
+
+function finalizeCmdSession(sessionId, payload = {}) {
+  const session = cmdSessions.get(sessionId);
+  if (!session || session.closed) return;
+
+  session.closed = true;
+  cmdSessions.delete(sessionId);
+
+  try {
+    session.dataDisposable?.dispose?.();
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    session.exitDisposable?.dispose?.();
+  } catch (error) {
+    // ignore
+  }
+
+  try {
+    (session.pathRequests || []).forEach((request) => {
+      clearTimeout(request.timer);
+      request.reject?.(new Error('CMD 会话已关闭'));
+    });
+  } catch (error) {
+    // ignore
+  }
+
+  broadcastSshSessionEvent({
+    type: 'closed',
+    sessionId,
+    connectionId: '',
+    ...payload
+  });
+}
+
+function normalizeCmdPath(inputPath) {
+  const fallbackPath = os.homedir();
+  const trimmed = String(inputPath || '').trim();
+  if (!trimmed) return fallbackPath;
+
+  try {
+    if (fs.existsSync(trimmed)) {
+      return trimmed;
+    }
+  } catch (error) {
+    // ignore
+  }
+
+  return fallbackPath;
+}
+
+function getSavedCmdPaths() {
+  try {
+    if (!db) return [normalizeCmdPath('')];
+    const raw = db.getSetting('ssh_cmd_paths');
+    const parsed = raw ? JSON.parse(raw) : [];
+    const normalized = Array.isArray(parsed)
+      ? parsed.map(item => normalizeCmdPath(item)).filter(Boolean)
+      : [];
+    return Array.from(new Set([normalizeCmdPath(''), ...normalized]));
+  } catch (error) {
+    return [normalizeCmdPath('')];
+  }
+}
+
+function saveCmdPaths(paths) {
+  if (!db) return;
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(paths) ? paths : [])
+        .map(item => normalizeCmdPath(item))
+        .filter(Boolean)
+    )
+  ).slice(0, 20);
+
+  db.setSetting('ssh_cmd_paths', JSON.stringify(normalized));
+}
+
+function getSshGroups() {
+  try {
+    if (!db) return [];
+    const raw = db.getSetting('ssh_groups');
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((group, index) => ({
+        id: String(group.id || ''),
+        name: String(group.name || '').trim(),
+        order: Number.isFinite(Number(group.order)) ? Number(group.order) : index
+      }))
+      .filter(group => group.id && group.name)
+      .sort((a, b) => a.order - b.order);
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveSshGroups(groups) {
+  if (!db) return;
+  const normalized = (Array.isArray(groups) ? groups : [])
+    .map((group, index) => ({
+      id: String(group.id || ''),
+      name: String(group.name || '').trim(),
+      order: Number.isFinite(Number(group.order)) ? Number(group.order) : index
+    }))
+    .filter(group => group.id && group.name)
+    .slice(0, 100);
+
+  db.setSetting('ssh_groups', JSON.stringify(normalized));
+}
+
+function getSshConnectionGroupMap() {
+  try {
+    if (!db) return {};
+    const raw = db.getSetting('ssh_connection_groups');
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const normalized = {};
+    Object.keys(parsed).forEach((key) => {
+      const value = String(parsed[key] || '').trim();
+      if (value) {
+        normalized[String(key)] = value;
+      }
+    });
+    return normalized;
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveSshConnectionGroupMap(groupMap) {
+  if (!db) return;
+  const normalized = {};
+  if (groupMap && typeof groupMap === 'object') {
+    Object.keys(groupMap).forEach((key) => {
+      const value = String(groupMap[key] || '').trim();
+      if (value) {
+        normalized[String(key)] = value;
+      }
+    });
+  }
+
+  db.setSetting('ssh_connection_groups', JSON.stringify(normalized));
+}
+
+function getSshConnectionOrderMap() {
+  try {
+    if (!db) return {};
+    const raw = db.getSetting('ssh_connection_orders');
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const normalized = {};
+    Object.keys(parsed).forEach((key) => {
+      const order = Number(parsed[key]);
+      if (Number.isFinite(order)) {
+        normalized[String(key)] = order;
+      }
+    });
+    return normalized;
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveSshConnectionOrderMap(orderMap) {
+  if (!db) return;
+  const normalized = {};
+  if (orderMap && typeof orderMap === 'object') {
+    Object.keys(orderMap).forEach((key) => {
+      const order = Number(orderMap[key]);
+      if (Number.isFinite(order)) {
+        normalized[String(key)] = order;
+      }
+    });
+  }
+
+  db.setSetting('ssh_connection_orders', JSON.stringify(normalized));
+}
+
+function getCmdBookmarks() {
+  try {
+    if (!db) return [];
+    const raw = db.getSetting('ssh_cmd_bookmarks');
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((item, index) => ({
+        id: String(item.id || ''),
+        name: String(item.name || '').trim(),
+        path: normalizeCmdPath(item.path),
+        order: Number.isFinite(Number(item.order)) ? Number(item.order) : index
+      }))
+      .filter(item => item.id && item.name && item.path)
+      .sort((a, b) => a.order - b.order);
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveCmdBookmarks(bookmarks) {
+  if (!db) return;
+  const normalized = (Array.isArray(bookmarks) ? bookmarks : [])
+    .map((item, index) => ({
+      id: String(item.id || ''),
+      name: String(item.name || '').trim(),
+      path: normalizeCmdPath(item.path),
+      order: Number.isFinite(Number(item.order)) ? Number(item.order) : index
+    }))
+    .filter(item => item.id && item.name && item.path)
+    .slice(0, 200);
+
+  db.setSetting('ssh_cmd_bookmarks', JSON.stringify(normalized));
+}
+
+function createCmdSession(options = {}) {
+  const sessionId = generateSshSessionId();
+  const cwd = normalizeCmdPath(options.cwd);
+  const command = process.platform === 'win32' ? 'cmd.exe' : (process.env.SHELL || '/bin/bash');
+  const args = process.platform === 'win32' ? [] : [];
+
+  const terminalProcess = pty.spawn(command, args, {
+    name: 'xterm-256color',
+    cols: 120,
+    rows: 32,
+    cwd,
+    env: {
+      ...process.env,
+      TERM: 'xterm-256color'
+    }
+  });
+
+  const dataDisposable = terminalProcess.onData((data) => {
+    const session = cmdSessions.get(sessionId);
+    if (session?.pathRequests?.length) {
+      session.pathRequests = session.pathRequests.filter((request) => {
+        request.buffer += String(data);
+        const marker = `${request.markerPrefix}(.*?)__END__`;
+        const match = new RegExp(marker, 's').exec(request.buffer);
+        if (match) {
+          clearTimeout(request.timer);
+          request.resolve(String(match[1] || '').trim());
+          return false;
+        }
+        return true;
+      });
+    }
+
+    broadcastSshSessionEvent({
+      type: 'data',
+      sessionId,
+      connectionId: '',
+      data: String(data)
+    });
+  });
+
+  const exitDisposable = terminalProcess.onExit(({ exitCode }) => {
+    finalizeCmdSession(sessionId, { reason: 'process-close', code: exitCode });
+  });
+
+  cmdSessions.set(sessionId, {
+    id: sessionId,
+    pty: terminalProcess,
+    cwd,
+    dataDisposable,
+    exitDisposable,
+    pathRequests: [],
+    closed: false
+  });
+
+  broadcastSshSessionEvent({
+    type: 'status',
+    status: 'connected',
+    sessionId,
+    connectionId: '',
+    message: process.platform === 'win32' ? `本地 CMD 已启动：${cwd}` : `本地 Shell 已启动：${cwd}`
+  });
+
+  return {
+    sessionId,
+    title: process.platform === 'win32' ? 'CMD' : 'Shell',
+    cwd
+  };
+}
+
+function requestCmdSessionPath(sessionId) {
+  const session = cmdSessions.get(String(sessionId));
+  if (!session || session.closed || !session.pty) {
+    throw new Error('CMD 会话不可用');
+  }
+
+  return new Promise((resolve, reject) => {
+    const markerPrefix = `__CODEX_CWD__${Date.now()}__`;
+    const timer = setTimeout(() => {
+      session.pathRequests = (session.pathRequests || []).filter(item => item.markerPrefix !== markerPrefix);
+      reject(new Error('读取当前路径超时'));
+    }, 3000);
+
+    session.pathRequests = session.pathRequests || [];
+    session.pathRequests.push({
+      markerPrefix,
+      buffer: '',
+      timer,
+      resolve,
+      reject
+    });
+
+    if (process.platform === 'win32') {
+      session.pty.write(`for %I in (.) do @echo ${markerPrefix}%~fI__END__\r`);
+    } else {
+      session.pty.write(`printf "${markerPrefix}%s__END__\\n" "$PWD"\r`);
+    }
+  });
+}
+
+function buildEmbeddedSshOptions(connection) {
+  const normalized = normalizeSshConnectionPayload(connection, {
+    validateKeyPath: true,
+    requireName: false
+  });
+
+  const username = normalized.username || os.userInfo().username;
+  const password = String(connection.password || '').trim();
+  const passphrase = String(connection.passphrase || '').trim();
+  const proxyPassword = String(connection.proxyPassword || connection.proxy_password || '').trim();
+
+  const connectOptions = {
+    host: normalized.host,
+    port: normalized.port,
+    username,
+    readyTimeout: 20000,
+    keepaliveInterval: 10000,
+    keepaliveCountMax: 3
+  };
+
+  if (normalized.privateKeyPath) {
+    connectOptions.privateKey = fs.readFileSync(normalized.privateKeyPath);
+    if (passphrase) {
+      connectOptions.passphrase = passphrase;
+    }
+  } else if (password) {
+    connectOptions.password = password;
+  } else {
+    throw new Error('应用内 SSH 连接需要密码或私钥');
+  }
+
+  return {
+    normalized: {
+      ...normalized,
+      username
+    },
+    connectOptions,
+    proxyPassword
+  };
+}
+
+async function createSocksProxySocket(connection, proxyPassword) {
+  const result = await SocksClient.createConnection({
+    proxy: {
+      host: connection.proxyHost,
+      port: connection.proxyPort,
+      type: 5,
+      userId: connection.proxyUsername || undefined,
+      password: proxyPassword || undefined
+    },
+    command: 'connect',
+    destination: {
+      host: connection.host,
+      port: connection.port
+    },
+    timeout: 20000
+  });
+
+  return result.socket;
+}
+
+async function createEmbeddedSshSession(connection) {
+  const { normalized, connectOptions, proxyPassword } = buildEmbeddedSshOptions(connection);
+  const sessionId = generateSshSessionId();
+  const client = new SshClient();
+
+  sshSessions.set(sessionId, {
+    id: sessionId,
+    client,
+    stream: null,
+    closed: false,
+    connectionId: normalized.id || '',
+    profile: normalized
+  });
+
+  client.on('ready', () => {
+    broadcastSshSessionEvent({
+      type: 'status',
+      status: 'connected',
+      sessionId,
+      connectionId: normalized.id || '',
+      message: `已连接到 ${normalized.username}@${normalized.host}`
+    });
+
+    client.shell(
+      {
+        term: 'xterm-256color',
+        cols: 120,
+        rows: 32
+      },
+      (error, stream) => {
+        if (error) {
+          broadcastSshSessionEvent({
+            type: 'status',
+            status: 'error',
+            sessionId,
+            connectionId: normalized.id || '',
+            message: error.message
+          });
+          try {
+            client.end();
+          } catch (closeError) {
+            // ignore
+          }
+          finalizeSshSession(sessionId, { reason: 'shell-error', error: error.message });
+          return;
+        }
+
+        const session = sshSessions.get(sessionId);
+        if (!session || session.closed) {
+          try {
+            stream.end();
+          } catch (closeError) {
+            // ignore
+          }
+          try {
+            client.end();
+          } catch (closeError) {
+            // ignore
+          }
+          return;
+        }
+
+        session.stream = stream;
+
+        stream.on('data', (chunk) => {
+          broadcastSshSessionEvent({
+            type: 'data',
+            sessionId,
+            connectionId: normalized.id || '',
+            data: Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+          });
+        });
+
+        stream.stderr?.on('data', (chunk) => {
+          broadcastSshSessionEvent({
+            type: 'data',
+            sessionId,
+            connectionId: normalized.id || '',
+            data: Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+          });
+        });
+
+        stream.on('close', () => {
+          try {
+            client.end();
+          } catch (closeError) {
+            // ignore
+          }
+        });
+
+        if (normalized.remoteCommand) {
+          stream.write(`${normalized.remoteCommand}\n`);
+        }
+
+        if (db && normalized.id) {
+          db.touchSshConnection(normalized.id, new Date().toISOString());
+        }
+      }
+    );
+  });
+
+  client.on('error', (error) => {
+    broadcastSshSessionEvent({
+      type: 'status',
+      status: 'error',
+      sessionId,
+      connectionId: normalized.id || '',
+      message: error.message
+    });
+  });
+
+  client.on('close', (hadError) => {
+    finalizeSshSession(sessionId, { reason: hadError ? 'error' : 'remote-close' });
+  });
+
+  broadcastSshSessionEvent({
+    type: 'status',
+    status: 'connecting',
+    sessionId,
+    connectionId: normalized.id || '',
+    message: `正在连接 ${normalized.username}@${normalized.host}...`
+  });
+
+  if (normalized.proxyType === 'socks5') {
+    connectOptions.sock = await createSocksProxySocket(normalized, proxyPassword);
+  }
+
+  client.connect(connectOptions);
+
+  return {
+    sessionId,
+    username: normalized.username,
+    host: normalized.host,
+    port: normalized.port,
+    connectionId: normalized.id || ''
+  };
 }
 
 function startToolboxHttpServer() {
@@ -894,6 +1616,27 @@ app.on('before-quit', () => {
     toolboxHttpServer.close();
     toolboxHttpServer = null;
   }
+  for (const [sessionId, session] of sshSessions.entries()) {
+    try {
+      session.stream?.end();
+    } catch (error) {
+      // ignore
+    }
+    try {
+      session.client?.end();
+    } catch (error) {
+      // ignore
+    }
+    finalizeSshSession(sessionId, { reason: 'app-quit' });
+  }
+  for (const [sessionId, session] of cmdSessions.entries()) {
+    try {
+      session.pty?.kill();
+    } catch (error) {
+      // ignore
+    }
+    finalizeCmdSession(sessionId, { reason: 'app-quit' });
+  }
   if (db) {
     db.close();
     console.log('数据库已关闭');
@@ -940,6 +1683,328 @@ ipcMain.handle('toolbox-http-stop', async () => {
 
 ipcMain.handle('toolbox-http-status', async () => {
   return { success: true, ...toolboxHttpStatus };
+});
+
+// IPC 通信处理 - SSH 连接器
+ipcMain.handle('load-ssh-connections', async () => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
+    const connections = db.getSshConnections();
+    return { success: true, connections };
+  } catch (error) {
+    console.error('读取 SSH 连接失败:', error);
+    return { success: false, error: error.message, connections: [] };
+  }
+});
+
+ipcMain.handle('add-ssh-connection', async (event, connection) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
+    const normalized = normalizeSshConnectionPayload(connection);
+    db.addSshConnection({
+      ...normalized,
+      id: normalized.id || String(Date.now())
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('新增 SSH 连接失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('update-ssh-connection', async (event, connectionId, updates) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
+    const existingConnection = db.getSshConnection(connectionId);
+    if (!existingConnection) {
+      throw new Error('SSH 连接不存在');
+    }
+
+    const normalized = normalizeSshConnectionPayload({
+      ...existingConnection,
+      ...updates,
+      id: connectionId
+    });
+
+    db.updateSshConnection(connectionId, normalized);
+    return { success: true };
+  } catch (error) {
+    console.error('更新 SSH 连接失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-ssh-connection', async (event, connectionId) => {
+  try {
+    if (!db) {
+      throw new Error('数据库未初始化');
+    }
+
+    db.deleteSshConnection(connectionId);
+    return { success: true };
+  } catch (error) {
+    console.error('删除 SSH 连接失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('connect-ssh', async (event, connection) => {
+  try {
+    const normalized = normalizeSshConnectionPayload(connection, {
+      validateKeyPath: true,
+      requireName: false
+    });
+    const launched = await launchSshSession(normalized);
+    const lastConnectedAt = new Date().toISOString();
+
+    if (db && normalized.id) {
+      db.touchSshConnection(normalized.id, lastConnectedAt);
+    }
+
+    return {
+      success: true,
+      lastConnectedAt,
+      launched
+    };
+  } catch (error) {
+    console.error('启动 SSH 连接失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('connect-ssh-session', async (event, connection) => {
+  try {
+    const session = await createEmbeddedSshSession(connection);
+    return {
+      success: true,
+      ...session
+    };
+  } catch (error) {
+    console.error('创建应用内 SSH 会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('load-cmd-paths', async () => {
+  try {
+    return {
+      success: true,
+      defaultPath: normalizeCmdPath(''),
+      paths: getSavedCmdPaths()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      defaultPath: normalizeCmdPath(''),
+      paths: [normalizeCmdPath('')]
+    };
+  }
+});
+
+ipcMain.handle('save-cmd-paths', async (event, paths) => {
+  try {
+    saveCmdPaths(paths);
+    return {
+      success: true,
+      paths: getSavedCmdPaths()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+ipcMain.handle('load-ssh-group-settings', async () => {
+  try {
+    return {
+      success: true,
+      groups: getSshGroups(),
+      connectionGroupMap: getSshConnectionGroupMap(),
+      connectionOrderMap: getSshConnectionOrderMap(),
+      cmdBookmarks: getCmdBookmarks()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+      groups: [],
+      connectionGroupMap: {},
+      connectionOrderMap: {},
+      cmdBookmarks: []
+    };
+  }
+});
+
+ ipcMain.handle('save-ssh-group-settings', async (event, groups, connectionGroupMap, connectionOrderMap, cmdBookmarks) => {
+  try {
+    saveSshGroups(groups);
+    saveSshConnectionGroupMap(connectionGroupMap);
+    saveSshConnectionOrderMap(connectionOrderMap);
+    saveCmdBookmarks(cmdBookmarks);
+    return {
+      success: true,
+      groups: getSshGroups(),
+      connectionGroupMap: getSshConnectionGroupMap(),
+      connectionOrderMap: getSshConnectionOrderMap(),
+      cmdBookmarks: getCmdBookmarks()
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+ipcMain.handle('create-cmd-session', async (event, options) => {
+  try {
+    const session = createCmdSession(options || {});
+    return {
+      success: true,
+      ...session
+    };
+  } catch (error) {
+    console.error('创建本地 CMD 会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('resolve-cmd-session-path', async (event, sessionId) => {
+  try {
+    const path = await requestCmdSessionPath(sessionId);
+    return {
+      success: true,
+      path
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+ipcMain.handle('write-ssh-session', async (event, sessionId, data) => {
+  try {
+    const sshSession = sshSessions.get(String(sessionId));
+    if (sshSession && !sshSession.closed && sshSession.stream) {
+      sshSession.stream.write(String(data || ''));
+      return { success: true };
+    }
+
+    const cmdSession = cmdSessions.get(String(sessionId));
+    if (cmdSession && !cmdSession.closed && cmdSession.pty) {
+      cmdSession.pty.write(String(data || ''));
+      return { success: true };
+    }
+
+    throw new Error('会话不可用');
+  } catch (error) {
+    console.error('写入 SSH 会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('resize-ssh-session', async (event, sessionId, cols, rows) => {
+  try {
+    const session = sshSessions.get(String(sessionId));
+    const normalizedCols = Math.max(20, Number.parseInt(cols, 10) || 120);
+    const normalizedRows = Math.max(8, Number.parseInt(rows, 10) || 32);
+
+    const cmdSession = cmdSessions.get(String(sessionId));
+    if (cmdSession && !cmdSession.closed && cmdSession.pty) {
+      cmdSession.pty.resize(normalizedCols, normalizedRows);
+      return { success: true };
+    }
+
+    if (!session || session.closed || !session.stream) {
+      return { success: true };
+    }
+
+    if (typeof session.stream.setWindow === 'function') {
+      session.stream.setWindow(normalizedRows, normalizedCols, 0, 0);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('调整 SSH 会话尺寸失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('disconnect-ssh-session', async (event, sessionId) => {
+  try {
+    const sshSession = sshSessions.get(String(sessionId));
+    if (sshSession && !sshSession.closed) {
+      try {
+        sshSession.stream?.end('exit\n');
+      } catch (error) {
+        // ignore
+      }
+      try {
+        sshSession.client?.end();
+      } catch (error) {
+        // ignore
+      }
+
+      finalizeSshSession(String(sessionId), { reason: 'manual-disconnect' });
+      return { success: true };
+    }
+
+    const cmdSession = cmdSessions.get(String(sessionId));
+    if (cmdSession && !cmdSession.closed) {
+      try {
+        cmdSession.pty?.kill();
+      } catch (error) {
+        // ignore
+      }
+      finalizeCmdSession(String(sessionId), { reason: 'manual-disconnect' });
+      return { success: true };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('断开 SSH 会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('select-ssh-private-key', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '选择 SSH 私钥',
+      properties: ['openFile'],
+      filters: [
+        { name: '密钥文件', extensions: ['pem', 'key', 'ppk', 'pub'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, canceled: true };
+    }
+
+    return {
+      success: true,
+      path: result.filePaths[0]
+    };
+  } catch (error) {
+    console.error('选择 SSH 私钥失败:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 ipcMain.on('quick-input-exit', () => {
