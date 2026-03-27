@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell, globalShortcut, screen, powerMonitor } = require('electron');
+const { app, BrowserWindow, clipboard, ipcMain, dialog, Tray, Menu, nativeImage, protocol, shell, globalShortcut, screen, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -1894,6 +1894,25 @@ ipcMain.handle('resolve-cmd-session-path', async (event, sessionId) => {
       success: false,
       error: error.message
     };
+  }
+});
+
+ipcMain.handle('read-clipboard-text', async () => {
+  try {
+    return String(clipboard.readText() || '');
+  } catch (error) {
+    console.error('读取剪贴板文本失败:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('write-clipboard-text', async (event, text) => {
+  try {
+    clipboard.writeText(String(text || ''));
+    return { success: true };
+  } catch (error) {
+    console.error('写入剪贴板文本失败:', error);
+    return { success: false, error: error.message };
   }
 });
 

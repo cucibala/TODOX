@@ -99,11 +99,39 @@ export const useAppStore = defineStore('app', () => {
     })
   }
 
+  function normalizeToastMessage(message) {
+    if (message instanceof Error) {
+      return message.stack || message.message || '未知错误'
+    }
+
+    if (typeof message === 'string') {
+      return message
+    }
+
+    if (message == null) {
+      return ''
+    }
+
+    try {
+      return JSON.stringify(message)
+    } catch (error) {
+      return String(message)
+    }
+  }
+
+  function logToastToConsole(message, type) {
+    const normalizedMessage = normalizeToastMessage(message)
+    if (!normalizedMessage) return ''
+    console.error(`[toast:${type || 'info'}] ${normalizedMessage}`)
+    return normalizedMessage
+  }
+
   // Toast 提示
   function toast(message, type = 'info', duration = 3200) {
-    if (!message) return
+    const normalizedMessage = logToastToConsole(message, type)
+    if (!normalizedMessage) return
     toastQueue.value.push({
-      message,
+      message: normalizedMessage,
       type,
       duration: Math.max(1200, duration || 0)
     })

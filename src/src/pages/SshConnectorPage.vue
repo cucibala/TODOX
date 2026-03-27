@@ -44,7 +44,13 @@
               class="ssh-group-section"
             >
               <template v-if="editingGroupId !== null && editingGroupId === String(group.id)">
-                <div class="ssh-group-header editing">
+                <div
+                  class="ssh-group-header editing"
+                  :class="{
+                    'ungrouped-group': group.key === '__ungrouped__',
+                    'cmd-group': group.itemType === 'cmd'
+                  }"
+                >
                   <span class="ssh-group-arrow">✎</span>
                   <input
                     v-model="editingGroupName"
@@ -61,6 +67,10 @@
               <template v-else>
                 <div
                   class="ssh-group-header"
+                  :class="{
+                    'ungrouped-group': group.key === '__ungrouped__',
+                    'cmd-group': group.itemType === 'cmd'
+                  }"
                   :draggable="!group.locked"
                   @click="toggleGroup(group.key)"
                   @dragstart="!group.locked && handleGroupDragStart(group.id)"
@@ -101,7 +111,7 @@
                   :draggable="true"
                   tabindex="0"
                   @click="group.itemType === 'ssh' ? selectConnection(connection.id) : null"
-                  @dblclick="group.itemType === 'ssh' ? connectEmbeddedSession(connection) : openCmdBookmark(connection)"
+                  @dblclick="group.itemType === 'ssh' ? openConnectionEditor(connection) : openCmdBookmark(connection)"
                   @keydown.enter.prevent="group.itemType === 'ssh' ? selectConnection(connection.id) : null"
                   @keydown.space.prevent="group.itemType === 'ssh' ? selectConnection(connection.id) : null"
                   @dragstart="handleItemDragStart(group.itemType, connection.id, group.key)"
@@ -125,39 +135,7 @@
         </div>
 
         <section class="ssh-sidebar-panel">
-          <div class="sidebar-panel-title">本次连接认证</div>
-
-          <div class="ssh-form-grid auth-grid compact">
-            <label class="ssh-field">
-              <span>密码</span>
-              <input
-                v-model="runtimePassword"
-                type="password"
-                autocomplete="new-password"
-                placeholder="仅用于本次连接"
-              />
-            </label>
-
-            <label v-if="selectedConnection?.proxyType === 'socks5'" class="ssh-field">
-              <span>代理密码</span>
-              <input
-                v-model="runtimeProxyPassword"
-                type="password"
-                autocomplete="new-password"
-                placeholder="SOCKS5 代理密码，仅用于本次连接"
-              />
-            </label>
-
-            <label class="ssh-field">
-              <span>私钥口令</span>
-              <input
-                v-model="runtimePassphrase"
-                type="password"
-                autocomplete="new-password"
-                placeholder="仅用于本次连接"
-              />
-            </label>
-          </div>
+          <div class="sidebar-panel-title">连接操作</div>
 
           <div class="ssh-editor-actions">
             <button class="ssh-btn" :disabled="!selectedConnection" @click="openConnectionEditor(selectedConnection)">编辑连接</button>
@@ -198,6 +176,8 @@
               保存 CMD
             </button>
             <button class="ssh-btn mini" :disabled="!activeSessionId" @click="focusActiveTerminal">聚焦</button>
+            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="copyActiveTerminal">复制</button>
+            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="pasteActiveTerminal">粘贴</button>
             <button class="ssh-btn mini" :disabled="!activeSessionId" @click="sendControlC">Ctrl+C</button>
             <button class="ssh-btn mini" :disabled="!activeSessionId" @click="clearActiveTerminal">清空</button>
             <button class="ssh-btn mini danger" :disabled="!activeSessionId" @click="disconnectActiveSession">断开</button>
@@ -384,10 +364,6 @@ const cmdBookmarkDraft = ref({
   name: '',
   path: ''
 })
-
-const runtimePassword = ref('')
-const runtimePassphrase = ref('')
-const runtimeProxyPassword = ref('')
 
 const sessionTabs = ref([])
 const activeSessionId = ref('')
@@ -634,16 +610,149 @@ function buildSavePayload(source, options = {}) {
 function buildSessionPayload(source) {
   const payload = buildSavePayload(source, { requireName: false })
   if (!payload) return null
-  return {
-    ...payload,
-    password: runtimePassword.value,
-    passphrase: runtimePassphrase.value,
-    proxyPassword: runtimeProxyPassword.value
-  }
+  return payload
 }
 
 function toPlainData(value) {
   return JSON.parse(JSON.stringify(value))
+}
+
+function isPasteShortcut(event) {
+  const key = String(event?.key || '').toLowerCase()
+  return (
+    (((event?.ctrlKey || event?.metaKey) && !event?.altKey && key === 'v')) ||
+    (!event?.ctrlKey && !event?.metaKey && !event?.altKey && event?.shiftKey && key === 'insert')
+  )
+}
+
+function isCopyShortcut(event) {
+  const key = String(event?.key || '').toLowerCase()
+  const isMac = /mac|iphone|ipad|ipod/i.test(String(navigator?.platform || '').toLowerCase())
+  if (isMac) {
+    return (
+      (event?.metaKey && !event?.ctrlKey && !event?.altKey && !event?.shiftKey && key === 'c') ||
+      (event?.metaKey && !event?.ctrlKey && !event?.altKey && event?.shiftKey && key === 'c')
+    )
+  }
+
+  return (
+    (event?.ctrlKey && !event?.metaKey && !event?.altKey && !event?.shiftKey && key === 'c') ||
+    (event?.ctrlKey && !event?.metaKey && !event?.altKey && event?.shiftKey && key === 'c') ||
+    (event?.ctrlKey && !event?.metaKey && !event?.altKey && !event?.shiftKey && key === 'insert')
+  )
+}
+
+async function readClipboardText() {
+  if (typeof electronAPI?.readClipboardText === 'function') {
+    try {
+      return String(await electronAPI.readClipboardText() || '')
+    } catch (error) {}
+  }
+
+  if (navigator?.clipboard?.readText) {
+    return String(await navigator.clipboard.readText())
+  }
+
+  throw new Error('当前环境不支持读取剪贴板')
+}
+
+async function writeClipboardText(text = '') {
+  const normalizedText = String(text || '')
+  if (!normalizedText) return false
+
+  if (typeof electronAPI?.writeClipboardText === 'function') {
+    try {
+      const result = await electronAPI.writeClipboardText(normalizedText)
+      if (result?.success) {
+        return true
+      }
+    } catch (error) {}
+  }
+
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(normalizedText)
+    return true
+  }
+
+  throw new Error('当前环境不支持写入剪贴板')
+}
+
+async function writeSessionInput(sessionId, data, options = {}) {
+  const normalizedSessionId = String(sessionId || '').trim()
+  const normalizedData = String(data || '')
+  if (!normalizedSessionId || !normalizedData) {
+    return false
+  }
+
+  if (!electronAPI?.writeSshSession) {
+    if (options.showError !== false) {
+      appStore.toast('当前环境不支持终端输入', 'warning')
+    }
+    return false
+  }
+
+  const result = await electronAPI.writeSshSession(normalizedSessionId, normalizedData)
+  if (!result?.success) {
+    if (options.showError !== false) {
+      appStore.toast(result?.error || '写入终端失败', 'error')
+    }
+    return false
+  }
+
+  return true
+}
+
+async function pasteTextToSession(sessionId, text = '') {
+  let content = String(text || '')
+
+  if (!content) {
+    try {
+      content = await readClipboardText()
+    } catch (error) {
+      appStore.toast(error?.message || '读取剪贴板失败', 'error')
+      return false
+    }
+  }
+
+  if (!content) return false
+
+  const success = await writeSessionInput(sessionId, content)
+  if (success && activeSessionId.value === sessionId) {
+    focusActiveTerminal()
+  }
+  return success
+}
+
+async function pasteActiveTerminal() {
+  if (!activeSessionId.value) return
+  await pasteTextToSession(activeSessionId.value)
+}
+
+async function copyTerminalSelection(sessionId, options = {}) {
+  const controller = terminalControllers.get(String(sessionId || ''))
+  const text = String(controller?.terminal?.getSelection?.() || '')
+  if (!text) {
+    if (options.showWarning !== false) {
+      appStore.toast('请先在终端中选中文本', 'warning')
+    }
+    return false
+  }
+
+  try {
+    await writeClipboardText(text)
+    if (options.showToast !== false) {
+      appStore.toast('终端内容已复制', 'success')
+    }
+    return true
+  } catch (error) {
+    appStore.toast(error?.message || '复制失败', 'error')
+    return false
+  }
+}
+
+async function copyActiveTerminal() {
+  if (!activeSessionId.value) return
+  await copyTerminalSelection(activeSessionId.value)
 }
 
 function getStatusLabel(status) {
@@ -1077,7 +1186,6 @@ function handleCreateConnection() {
   editingConnectionId.value = ''
   editorDraft.value = createDraft()
   showEditorDialog.value = true
-  runtimeProxyPassword.value = ''
 }
 
 function openConnectionEditor(connection) {
@@ -1146,9 +1254,60 @@ function createTerminalController(sessionId, hostElement) {
   terminal.open(hostElement)
   fitAddon.fit()
 
+  const copyListener = (event) => {
+    const selectedText = String(terminal.getSelection?.() || '')
+    if (!selectedText) return
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (event.clipboardData?.setData) {
+      event.clipboardData.setData('text/plain', selectedText)
+    }
+    void copyTerminalSelection(sessionId, { showToast: false, showWarning: false })
+  }
+
+  const pasteListener = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    void pasteTextToSession(sessionId, event.clipboardData?.getData('text/plain') || '')
+  }
+
+  const contextMenuListener = (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    void pasteTextToSession(sessionId)
+  }
+
+  const clipboardTargets = [hostElement, hostElement.querySelector('.xterm-helper-textarea')].filter(Boolean)
+  clipboardTargets.forEach((target) => {
+    target.addEventListener('copy', copyListener, true)
+    target.addEventListener('paste', pasteListener, true)
+    target.addEventListener('contextmenu', contextMenuListener, true)
+  })
+
+  terminal.attachCustomKeyEventHandler((event) => {
+    if (event.type !== 'keydown') return true
+
+    if (isCopyShortcut(event) && terminal.hasSelection?.()) {
+      event.preventDefault()
+      event.stopPropagation()
+      void copyTerminalSelection(sessionId, { showToast: false, showWarning: false })
+      return false
+    }
+
+    if (isPasteShortcut(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      void pasteTextToSession(sessionId)
+      return false
+    }
+
+    return true
+  })
+
   const dataDisposable = terminal.onData(async (data) => {
-    if (!electronAPI?.writeSshSession) return
-    await electronAPI.writeSshSession(sessionId, data)
+    await writeSessionInput(sessionId, data, { showError: false })
   })
 
   const resizeDisposable = terminal.onResize(async ({ cols, rows }) => {
@@ -1159,7 +1318,14 @@ function createTerminalController(sessionId, hostElement) {
     terminal,
     fitAddon,
     dataDisposable,
-    resizeDisposable
+    resizeDisposable,
+    detachClipboardListeners: () => {
+      clipboardTargets.forEach((target) => {
+        target.removeEventListener('copy', copyListener, true)
+        target.removeEventListener('paste', pasteListener, true)
+        target.removeEventListener('contextmenu', contextMenuListener, true)
+      })
+    }
   })
 
   flushPendingSessionEvents(sessionId)
@@ -1178,6 +1344,7 @@ function disposeTerminalController(sessionId) {
 
   try { controller.dataDisposable?.dispose() } catch (error) {}
   try { controller.resizeDisposable?.dispose() } catch (error) {}
+  try { controller.detachClipboardListeners?.() } catch (error) {}
   try { controller.terminal?.dispose() } catch (error) {}
 
   terminalControllers.delete(sessionId)
@@ -1482,8 +1649,8 @@ async function connectEmbeddedSession(connection) {
   const payload = buildSessionPayload(connection)
   if (!payload) return
 
-  if (!payload.privateKeyPath && !String(payload.password || '').trim()) {
-    appStore.toast('应用内 SSH 需要密码或私钥', 'warning')
+  if (!payload.privateKeyPath) {
+    appStore.toast('应用内 SSH 需要先配置私钥路径', 'warning')
     return
   }
 
@@ -1571,8 +1738,8 @@ async function disconnectActiveSession() {
 }
 
 async function sendControlC() {
-  if (!activeSessionId.value || !electronAPI?.writeSshSession) return
-  await electronAPI.writeSshSession(activeSessionId.value, '\u0003')
+  if (!activeSessionId.value) return
+  await writeSessionInput(activeSessionId.value, '\u0003', { showError: false })
 }
 
 async function handleCopyCommand(connection) {
@@ -1657,6 +1824,14 @@ onBeforeUnmount(async () => {
   --ssh-item-bg: #0a1120;
   --ssh-terminal-bg: #05080f;
   --ssh-shadow: 0 0 16px rgba(98, 178, 255, 0.08);
+  --ssh-group-header-bg: linear-gradient(90deg, rgba(17, 39, 68, 0.96) 0%, rgba(9, 21, 38, 0.98) 100%);
+  --ssh-group-header-border: rgba(92, 136, 196, 0.38);
+  --ssh-group-header-accent: #7edcff;
+  --ssh-group-header-edit-bg: linear-gradient(90deg, rgba(24, 54, 91, 0.98) 0%, rgba(11, 26, 46, 1) 100%);
+  --ssh-group-header-ungrouped-bg: linear-gradient(90deg, rgba(48, 60, 82, 0.96) 0%, rgba(20, 28, 42, 0.98) 100%);
+  --ssh-group-header-ungrouped-accent: #9fb5d1;
+  --ssh-group-header-cmd-bg: linear-gradient(90deg, rgba(70, 42, 18, 0.96) 0%, rgba(35, 21, 9, 0.98) 100%);
+  --ssh-group-header-cmd-accent: #ffbf69;
 }
 
 .ssh-page[data-theme='light'] {
@@ -1678,6 +1853,14 @@ onBeforeUnmount(async () => {
   --ssh-item-bg: #ffffff;
   --ssh-terminal-bg: #ffffff;
   --ssh-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  --ssh-group-header-bg: linear-gradient(90deg, rgba(225, 238, 255, 0.98) 0%, rgba(243, 248, 255, 1) 100%);
+  --ssh-group-header-border: rgba(170, 192, 224, 0.75);
+  --ssh-group-header-accent: #4d7dce;
+  --ssh-group-header-edit-bg: linear-gradient(90deg, rgba(214, 231, 255, 1) 0%, rgba(238, 246, 255, 1) 100%);
+  --ssh-group-header-ungrouped-bg: linear-gradient(90deg, rgba(234, 239, 247, 1) 0%, rgba(246, 248, 252, 1) 100%);
+  --ssh-group-header-ungrouped-accent: #7f93ad;
+  --ssh-group-header-cmd-bg: linear-gradient(90deg, rgba(255, 239, 214, 1) 0%, rgba(255, 247, 233, 1) 100%);
+  --ssh-group-header-cmd-accent: #d18b2d;
 }
 
 .ssh-header,
@@ -1792,16 +1975,19 @@ onBeforeUnmount(async () => {
   border: 1px solid var(--ssh-border-soft);
   border-radius: 10px;
   background: var(--ssh-item-bg);
+  overflow: hidden;
 }
 
 .ssh-group-header {
   width: 100%;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 9px 10px 9px 14px;
   border: none;
-  background: transparent;
+  background: var(--ssh-group-header-bg);
+  box-shadow: inset 0 -1px 0 var(--ssh-group-header-border);
   color: var(--ssh-text-strong);
   font-size: 12px;
   font-weight: 700;
@@ -1809,12 +1995,39 @@ onBeforeUnmount(async () => {
   text-align: left;
 }
 
+.ssh-group-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--ssh-group-header-accent);
+}
+
 .ssh-group-header[draggable='true'] {
   cursor: grab;
 }
 
 .ssh-group-header.editing {
+  background: var(--ssh-group-header-edit-bg);
   cursor: default;
+}
+
+.ssh-group-header.ungrouped-group {
+  background: var(--ssh-group-header-ungrouped-bg);
+}
+
+.ssh-group-header.ungrouped-group::before {
+  background: var(--ssh-group-header-ungrouped-accent);
+}
+
+.ssh-group-header.cmd-group {
+  background: var(--ssh-group-header-cmd-bg);
+}
+
+.ssh-group-header.cmd-group::before {
+  background: var(--ssh-group-header-cmd-accent);
 }
 
 .ssh-group-arrow {
@@ -1826,6 +2039,10 @@ onBeforeUnmount(async () => {
 }
 
 .ssh-group-count {
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--ssh-group-header-border) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ssh-item-bg) 36%, transparent);
   color: var(--ssh-text-muted);
   font-size: 11px;
 }

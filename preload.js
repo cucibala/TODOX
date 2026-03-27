@@ -68,6 +68,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resizeSshSession: (sessionId, cols, rows) => ipcRenderer.invoke('resize-ssh-session', sessionId, cols, rows),
   disconnectSshSession: (sessionId) => ipcRenderer.invoke('disconnect-ssh-session', sessionId),
   selectSshPrivateKey: () => ipcRenderer.invoke('select-ssh-private-key'),
+  readClipboardText: () => ipcRenderer.invoke('read-clipboard-text'),
+  writeClipboardText: (text) => ipcRenderer.invoke('write-clipboard-text', text),
   onSshSessionEvent: (callback) => ipcRenderer.on('ssh-session-event', (event, payload) => callback(payload)),
   
   // 密码管理
