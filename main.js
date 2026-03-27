@@ -271,6 +271,14 @@ function generateSshSessionId() {
   return `ssh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function generateSshUploadId() {
+  return `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function generateSshDownloadId() {
+  return `download_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function parseMimeFromDataUrl(dataUrl) {
   const match = /^data:([^;]+);base64,/.exec(dataUrl);
   return match ? match[1] : 'image/png';
@@ -529,6 +537,620 @@ function finalizeCmdSession(sessionId, payload = {}) {
     connectionId: '',
     ...payload
   });
+}
+
+function openSftpChannel(client) {
+  return new Promise((resolve, reject) => {
+    client.sftp((error, sftp) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(sftp);
+    });
+  });
+}
+
+function sftpRealPath(sftp, inputPath = '.') {
+  return new Promise((resolve, reject) => {
+    if (!sftp || typeof sftp.realpath !== 'function') {
+      resolve(inputPath);
+      return;
+    }
+
+    sftp.realpath(inputPath, (error, resolvedPath) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(String(resolvedPath || inputPath || '.'));
+    });
+  });
+}
+
+function sftpStat(sftp, remotePath) {
+  return new Promise((resolve, reject) => {
+    sftp.stat(remotePath, (error, stats) => {
+      if (error) {
+        const message = String(error.message || '');
+        if (error.code === 2 || /no such file/i.test(message)) {
+          resolve(null);
+          return;
+        }
+        reject(error);
+        return;
+      }
+      resolve(stats || null);
+    });
+  });
+}
+
+function closeSftpChannel(sftp) {
+  try {
+    sftp?.end?.();
+  } catch (error) {
+    // ignore
+  }
+}
+
+async function resolveSshUploadDirectory(session, sftp) {
+  if (session.remoteUploadDir) {
+    return session.remoteUploadDir;
+  }
+
+  try {
+    session.remoteUploadDir = await sftpRealPath(sftp, '.');
+  } catch (error) {
+    session.remoteUploadDir = '.';
+  }
+
+  return session.remoteUploadDir || '.';
+}
+
+async function normalizeRemoteSftpPath(session, sftp, inputPath) {
+  const normalizedInput = String(inputPath || '').trim();
+  if (!normalizedInput) {
+    throw new Error('远程文件路径不能为空');
+  }
+
+  const homeDirectory = await resolveSshUploadDirectory(session, sftp);
+  if (normalizedInput === '~') {
+    return homeDirectory;
+  }
+  if (normalizedInput.startsWith('~/')) {
+    return path.posix.join(homeDirectory, normalizedInput.slice(2));
+  }
+  if (!normalizedInput.startsWith('/')) {
+    return path.posix.join(homeDirectory, normalizedInput);
+  }
+  return normalizedInput;
+}
+
+async function resolveRemoteDirectoryPath(session, sftp, inputPath = '') {
+  const normalizedInput = String(inputPath || '').trim();
+  if (!normalizedInput) {
+    return resolveSshUploadDirectory(session, sftp);
+  }
+
+  const normalizedPath = await normalizeRemoteSftpPath(session, sftp, normalizedInput);
+  try {
+    return await sftpRealPath(sftp, normalizedPath);
+  } catch (error) {
+    return normalizedPath;
+  }
+}
+
+function sftpReadDir(sftp, remotePath) {
+  return new Promise((resolve, reject) => {
+    sftp.readdir(remotePath, (error, entries) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(Array.isArray(entries) ? entries : []);
+    });
+  });
+}
+
+function isSftpDirectory(attrs) {
+  if (!attrs) return false;
+  if (typeof attrs.isDirectory === 'function') {
+    return attrs.isDirectory();
+  }
+  const mode = Number(attrs.mode || 0);
+  return (mode & 0o170000) === 0o040000;
+}
+
+async function resolveAvailableRemotePath(sftp, remoteDirectory, fileName) {
+  const parsed = path.posix.parse(String(fileName || 'file'));
+  const safeBaseName = parsed.name || 'file';
+  const extension = parsed.ext || '';
+  let attempt = 0;
+
+  while (attempt < 1000) {
+    const candidateName = attempt === 0
+      ? `${safeBaseName}${extension}`
+      : `${safeBaseName}-${attempt}${extension}`;
+    const candidatePath = path.posix.join(remoteDirectory || '.', candidateName);
+    const existing = await sftpStat(sftp, candidatePath);
+    if (!existing) {
+      return candidatePath;
+    }
+    attempt += 1;
+  }
+
+  throw new Error(`无法为文件 ${fileName} 分配远程路径`);
+}
+
+function broadcastSshUploadEvent(sessionId, payload) {
+  broadcastSshSessionEvent({
+    type: 'upload',
+    sessionId,
+    ...payload
+  });
+}
+
+function broadcastSshDownloadEvent(sessionId, payload) {
+  broadcastSshSessionEvent({
+    type: 'download',
+    sessionId,
+    ...payload
+  });
+}
+
+async function uploadLocalFileToSshSession(sessionId, uploadItem) {
+  const session = sshSessions.get(String(sessionId));
+  const uploadId = uploadItem.uploadId;
+  const localPath = String(uploadItem.localPath || '');
+  const fileName = String(uploadItem.fileName || path.basename(localPath) || 'file');
+
+  if (!session || session.closed || !session.client) {
+    broadcastSshUploadEvent(sessionId, {
+      uploadId,
+      fileName,
+      status: 'error',
+      progress: 0,
+      message: 'SSH 会话不可用，无法上传文件'
+    });
+    return;
+  }
+
+  let localStat = null;
+  try {
+    localStat = await fs.promises.stat(localPath);
+  } catch (error) {
+    broadcastSshUploadEvent(sessionId, {
+      uploadId,
+      fileName,
+      status: 'error',
+      progress: 0,
+      message: `读取本地文件失败: ${error.message}`
+    });
+    return;
+  }
+
+  if (!localStat.isFile()) {
+    broadcastSshUploadEvent(sessionId, {
+      uploadId,
+      fileName,
+      status: 'error',
+      progress: 0,
+      message: `仅支持上传文件: ${fileName}`
+    });
+    return;
+  }
+
+  let sftp = null;
+  let remotePath = '';
+  try {
+    sftp = await openSftpChannel(session.client);
+    const remoteDirectory = await resolveSshUploadDirectory(session, sftp);
+    remotePath = await resolveAvailableRemotePath(sftp, remoteDirectory, fileName);
+
+    broadcastSshUploadEvent(sessionId, {
+      uploadId,
+      fileName,
+      remotePath,
+      totalBytes: localStat.size,
+      transferredBytes: 0,
+      progress: 0,
+      status: 'uploading',
+      message: `开始上传 ${fileName}`
+    });
+
+    await new Promise((resolve, reject) => {
+      let transferredBytes = 0;
+      let completed = false;
+      let lastReportedAt = 0;
+      let lastReportedBytes = 0;
+
+      const readStream = fs.createReadStream(localPath);
+      const writeStream = sftp.createWriteStream(remotePath, {
+        flags: 'w'
+      });
+
+      const finish = () => {
+        if (completed) return;
+        completed = true;
+        transferredBytes = localStat.size;
+        broadcastSshUploadEvent(sessionId, {
+          uploadId,
+          fileName,
+          remotePath,
+          totalBytes: localStat.size,
+          transferredBytes,
+          progress: 100,
+          status: 'completed',
+          message: `已上传 ${fileName} 到 ${remotePath}`
+        });
+        resolve();
+      };
+
+      const fail = (error) => {
+        if (completed) return;
+        completed = true;
+        reject(error);
+      };
+
+      const reportProgress = (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastReportedAt < 80 && transferredBytes - lastReportedBytes < 256 * 1024) {
+          return;
+        }
+        lastReportedAt = now;
+        lastReportedBytes = transferredBytes;
+        const progress = localStat.size > 0
+          ? Math.min(100, Number(((transferredBytes / localStat.size) * 100).toFixed(1)))
+          : 100;
+        broadcastSshUploadEvent(sessionId, {
+          uploadId,
+          fileName,
+          remotePath,
+          totalBytes: localStat.size,
+          transferredBytes,
+          progress,
+          status: 'uploading'
+        });
+      };
+
+      readStream.on('data', (chunk) => {
+        transferredBytes += chunk.length;
+        reportProgress();
+      });
+      readStream.on('error', fail);
+      writeStream.on('error', fail);
+      writeStream.on('close', finish);
+      writeStream.on('finish', finish);
+
+      readStream.pipe(writeStream);
+    });
+  } catch (error) {
+    broadcastSshUploadEvent(sessionId, {
+      uploadId,
+      fileName,
+      remotePath,
+      totalBytes: localStat?.size || 0,
+      progress: 0,
+      status: 'error',
+      message: `上传 ${fileName} 失败: ${error.message}`
+    });
+  } finally {
+    closeSftpChannel(sftp);
+  }
+}
+
+function queueSshSessionUploads(sessionId, localPaths) {
+  const session = sshSessions.get(String(sessionId));
+  if (!session || session.closed || !session.client) {
+    throw new Error('SSH 会话不可用');
+  }
+
+  const uploadItems = localPaths.map((localPath) => ({
+    uploadId: generateSshUploadId(),
+    localPath,
+    fileName: path.basename(localPath)
+  }));
+
+  uploadItems.forEach((item) => {
+    broadcastSshUploadEvent(sessionId, {
+      uploadId: item.uploadId,
+      fileName: item.fileName,
+      progress: 0,
+      status: 'queued',
+      message: `等待上传 ${item.fileName}`
+    });
+  });
+
+  const runUploads = async () => {
+    for (const item of uploadItems) {
+      await uploadLocalFileToSshSession(sessionId, item);
+    }
+  };
+
+  const previousQueue = session.uploadQueue || Promise.resolve();
+  session.uploadQueue = previousQueue
+    .catch(() => {})
+    .then(runUploads);
+
+  return uploadItems.length;
+}
+
+async function listSshSessionFiles(sessionId, remoteDirectoryInput = '') {
+  const session = sshSessions.get(String(sessionId));
+  if (!session || session.closed || !session.client) {
+    throw new Error('SSH 会话不可用');
+  }
+
+  let sftp = null;
+  try {
+    sftp = await openSftpChannel(session.client);
+    const currentPath = await resolveRemoteDirectoryPath(session, sftp, remoteDirectoryInput);
+    const currentStat = await sftpStat(sftp, currentPath);
+    if (!currentStat) {
+      throw new Error('远程目录不存在');
+    }
+    if (!isSftpDirectory(currentStat)) {
+      throw new Error('目标路径不是目录');
+    }
+
+    const entries = await sftpReadDir(sftp, currentPath);
+    const normalizedEntries = entries
+      .filter((entry) => entry && entry.filename && entry.filename !== '.' && entry.filename !== '..')
+      .map((entry) => {
+        const attrs = entry.attrs || {};
+        const isDirectory = isSftpDirectory(attrs);
+        return {
+          name: String(entry.filename || ''),
+          path: path.posix.join(currentPath, String(entry.filename || '')),
+          isDirectory,
+          size: Number(attrs.size || 0),
+          mtime: attrs.mtime ? new Date(Number(attrs.mtime) * 1000).toISOString() : ''
+        };
+      })
+      .sort((a, b) => {
+        if (a.isDirectory !== b.isDirectory) {
+          return a.isDirectory ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name, 'zh-CN');
+      });
+
+    const parentPath = currentPath === '/' ? '' : path.posix.dirname(currentPath);
+    return {
+      currentPath,
+      parentPath: parentPath && parentPath !== currentPath ? parentPath : '',
+      entries: normalizedEntries
+    };
+  } finally {
+    closeSftpChannel(sftp);
+  }
+}
+
+async function resolveSshDownloadRequest(sessionId, remotePathInput) {
+  const session = sshSessions.get(String(sessionId));
+  if (!session || session.closed || !session.client) {
+    throw new Error('SSH 会话不可用');
+  }
+
+  let sftp = null;
+  try {
+    sftp = await openSftpChannel(session.client);
+    const remotePath = await normalizeRemoteSftpPath(session, sftp, remotePathInput);
+    const remoteStat = await sftpStat(sftp, remotePath);
+    if (!remoteStat) {
+      throw new Error('远程文件不存在');
+    }
+    if (typeof remoteStat.isDirectory === 'function' && remoteStat.isDirectory()) {
+      throw new Error('暂不支持下载目录，请填写文件路径');
+    }
+
+    return {
+      remotePath,
+      fileName: path.posix.basename(remotePath) || 'download',
+      totalBytes: Number(remoteStat.size || 0)
+    };
+  } finally {
+    closeSftpChannel(sftp);
+  }
+}
+
+async function downloadRemoteFileFromSshSession(sessionId, downloadItem) {
+  const session = sshSessions.get(String(sessionId));
+  const downloadId = downloadItem.downloadId;
+  const remotePath = String(downloadItem.remotePath || '').trim();
+  const localPath = String(downloadItem.localPath || '').trim();
+  const fileName = String(downloadItem.fileName || path.posix.basename(remotePath) || path.basename(localPath) || 'download');
+  const tempLocalPath = localPath ? `${localPath}.todox-${downloadId}.part` : '';
+
+  if (!session || session.closed || !session.client) {
+    broadcastSshDownloadEvent(sessionId, {
+      downloadId,
+      fileName,
+      remotePath,
+      localPath,
+      progress: 0,
+      status: 'error',
+      message: 'SSH 会话不可用，无法下载文件'
+    });
+    return;
+  }
+
+  if (!remotePath || !localPath) {
+    broadcastSshDownloadEvent(sessionId, {
+      downloadId,
+      fileName,
+      remotePath,
+      localPath,
+      progress: 0,
+      status: 'error',
+      message: '下载参数不完整'
+    });
+    return;
+  }
+
+  let sftp = null;
+  let remoteStat = null;
+  try {
+    await fs.promises.mkdir(path.dirname(localPath), { recursive: true });
+    try {
+      if (tempLocalPath && fs.existsSync(tempLocalPath)) {
+        fs.unlinkSync(tempLocalPath);
+      }
+    } catch (cleanupError) {
+      // ignore
+    }
+
+    sftp = await openSftpChannel(session.client);
+    remoteStat = await sftpStat(sftp, remotePath);
+    if (!remoteStat) {
+      throw new Error('远程文件不存在');
+    }
+    if (typeof remoteStat.isDirectory === 'function' && remoteStat.isDirectory()) {
+      throw new Error('暂不支持下载目录，请填写文件路径');
+    }
+
+    broadcastSshDownloadEvent(sessionId, {
+      downloadId,
+      fileName,
+      remotePath,
+      localPath,
+      totalBytes: Number(remoteStat.size || 0),
+      transferredBytes: 0,
+      progress: 0,
+      status: 'downloading',
+      message: `开始下载 ${fileName}`
+    });
+
+    await new Promise((resolve, reject) => {
+      let transferredBytes = 0;
+      let completed = false;
+      let lastReportedAt = 0;
+      let lastReportedBytes = 0;
+      const totalBytes = Number(remoteStat.size || 0);
+
+      const readStream = sftp.createReadStream(remotePath);
+      const writeStream = fs.createWriteStream(tempLocalPath);
+
+      const finish = () => {
+        if (completed) return;
+        completed = true;
+        transferredBytes = totalBytes;
+        (async () => {
+          try {
+            await fs.promises.rm(localPath, { force: true });
+          } catch (removeError) {
+            // ignore
+          }
+          await fs.promises.rename(tempLocalPath, localPath);
+          broadcastSshDownloadEvent(sessionId, {
+            downloadId,
+            fileName,
+            remotePath,
+            localPath,
+            totalBytes,
+            transferredBytes,
+            progress: 100,
+            status: 'completed',
+            message: `已下载 ${fileName} 到 ${localPath}`
+          });
+          resolve();
+        })().catch(reject);
+      };
+
+      const fail = (error) => {
+        if (completed) return;
+        completed = true;
+        try {
+          readStream.destroy();
+        } catch (streamError) {
+          // ignore
+        }
+        try {
+          writeStream.destroy();
+        } catch (streamError) {
+          // ignore
+        }
+        reject(error);
+      };
+
+      const reportProgress = (force = false) => {
+        const now = Date.now();
+        if (!force && now - lastReportedAt < 80 && transferredBytes - lastReportedBytes < 256 * 1024) {
+          return;
+        }
+        lastReportedAt = now;
+        lastReportedBytes = transferredBytes;
+        const progress = totalBytes > 0
+          ? Math.min(100, Number(((transferredBytes / totalBytes) * 100).toFixed(1)))
+          : 100;
+        broadcastSshDownloadEvent(sessionId, {
+          downloadId,
+          fileName,
+          remotePath,
+          localPath,
+          totalBytes,
+          transferredBytes,
+          progress,
+          status: 'downloading'
+        });
+      };
+
+      readStream.on('data', (chunk) => {
+        transferredBytes += chunk.length;
+        reportProgress();
+      });
+      readStream.on('error', fail);
+      writeStream.on('error', fail);
+      writeStream.on('close', finish);
+      writeStream.on('finish', finish);
+
+      readStream.pipe(writeStream);
+    });
+  } catch (error) {
+    try {
+      if (tempLocalPath && fs.existsSync(tempLocalPath)) {
+        fs.unlinkSync(tempLocalPath);
+      }
+    } catch (cleanupError) {
+      // ignore
+    }
+
+    broadcastSshDownloadEvent(sessionId, {
+      downloadId,
+      fileName,
+      remotePath,
+      localPath,
+      totalBytes: Number(remoteStat?.size || 0),
+      progress: 0,
+      status: 'error',
+      message: `下载 ${fileName} 失败: ${error.message}`
+    });
+  } finally {
+    closeSftpChannel(sftp);
+  }
+}
+
+function queueSshSessionDownload(sessionId, downloadItem) {
+  const session = sshSessions.get(String(sessionId));
+  if (!session || session.closed || !session.client) {
+    throw new Error('SSH 会话不可用');
+  }
+
+  broadcastSshDownloadEvent(sessionId, {
+    downloadId: downloadItem.downloadId,
+    fileName: downloadItem.fileName,
+    remotePath: downloadItem.remotePath,
+    localPath: downloadItem.localPath,
+    progress: 0,
+    status: 'queued',
+    message: `等待下载 ${downloadItem.fileName}`
+  });
+
+  const previousQueue = session.uploadQueue || Promise.resolve();
+  session.uploadQueue = previousQueue
+    .catch(() => {})
+    .then(() => downloadRemoteFileFromSshSession(sessionId, downloadItem));
+
+  return true;
 }
 
 function normalizeCmdPath(inputPath) {
@@ -886,7 +1508,9 @@ async function createEmbeddedSshSession(connection) {
     stream: null,
     closed: false,
     connectionId: normalized.id || '',
-    profile: normalized
+    profile: normalized,
+    remoteUploadDir: '',
+    uploadQueue: Promise.resolve()
   });
 
   client.on('ready', () => {
@@ -1791,6 +2415,88 @@ ipcMain.handle('connect-ssh-session', async (event, connection) => {
     };
   } catch (error) {
     console.error('创建应用内 SSH 会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('upload-ssh-session-files', async (event, sessionId, localPaths) => {
+  try {
+    const normalizedSessionId = String(sessionId || '').trim();
+    const acceptedPaths = Array.from(new Set((Array.isArray(localPaths) ? localPaths : [])
+      .map(item => String(item || '').trim())
+      .filter(Boolean)))
+      .slice(0, 50);
+
+    if (!normalizedSessionId) {
+      throw new Error('会话 ID 不能为空');
+    }
+    if (!acceptedPaths.length) {
+      throw new Error('没有可上传的本地文件');
+    }
+
+    const acceptedCount = queueSshSessionUploads(normalizedSessionId, acceptedPaths);
+    return {
+      success: true,
+      acceptedCount
+    };
+  } catch (error) {
+    console.error('启动 SSH 文件上传失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-ssh-session-files', async (event, sessionId, remoteDirectory) => {
+  try {
+    const normalizedSessionId = String(sessionId || '').trim();
+    if (!normalizedSessionId) {
+      throw new Error('会话 ID 不能为空');
+    }
+
+    const result = await listSshSessionFiles(normalizedSessionId, remoteDirectory);
+    return {
+      success: true,
+      ...result
+    };
+  } catch (error) {
+    console.error('读取 SSH 服务器文件列表失败:', error);
+    return { success: false, error: error.message, currentPath: '', parentPath: '', entries: [] };
+  }
+});
+
+ipcMain.handle('download-ssh-session-file', async (event, sessionId, remotePathInput) => {
+  try {
+    const normalizedSessionId = String(sessionId || '').trim();
+    if (!normalizedSessionId) {
+      throw new Error('会话 ID 不能为空');
+    }
+
+    const resolved = await resolveSshDownloadRequest(normalizedSessionId, remotePathInput);
+    const defaultSavePath = path.join(app.getPath('downloads'), resolved.fileName);
+    const saveResult = await dialog.showSaveDialog(mainWindow, {
+      title: '下载服务器文件',
+      defaultPath: defaultSavePath,
+      buttonLabel: '保存'
+    });
+
+    if (saveResult.canceled || !saveResult.filePath) {
+      return { success: false, canceled: true, error: '用户取消操作' };
+    }
+
+    queueSshSessionDownload(normalizedSessionId, {
+      downloadId: generateSshDownloadId(),
+      remotePath: resolved.remotePath,
+      localPath: saveResult.filePath,
+      fileName: resolved.fileName
+    });
+
+    return {
+      success: true,
+      remotePath: resolved.remotePath,
+      localPath: saveResult.filePath,
+      fileName: resolved.fileName
+    };
+  } catch (error) {
+    console.error('启动 SSH 文件下载失败:', error);
     return { success: false, error: error.message };
   }
 });

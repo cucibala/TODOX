@@ -17,6 +17,40 @@
     <section class="ssh-layout">
       <aside class="ssh-sidebar">
         <div class="ssh-sidebar-top">
+          <div class="ssh-sidebar-headline">
+            <div class="ssh-sidebar-headline-row">
+              <div class="sidebar-panel-title">分组</div>
+              <button
+                class="ssh-plain-icon-btn group-add-btn"
+                @click="toggleGroupCreator"
+                :title="showGroupCreator ? '关闭新建分组' : '新建分组'"
+                :aria-label="showGroupCreator ? '关闭新建分组' : '新建分组'"
+              >
+                {{ showGroupCreator ? '×' : '+' }}
+              </button>
+            </div>
+            <div v-if="showGroupCreator" class="top-create-row">
+              <div class="group-create-card">
+                <div class="group-create-card-head">
+                  <div class="group-create-card-title">新建分组</div>
+                  <div class="group-create-card-desc">把服务器和 CMD 收藏整理到同一个区域里。</div>
+                </div>
+                <div class="ssh-inline-field group-create-form">
+                  <input
+                    ref="groupCreateInputRef"
+                    v-model="newGroupName"
+                    class="ssh-group-create-input"
+                    type="text"
+                    maxlength="30"
+                    placeholder="例如：生产 / 测试 / 常用"
+                    @keyup.enter="createGroup"
+                  />
+                  <button class="ssh-btn mini primary" @click="createGroup">创建</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <input
             v-model="searchQuery"
             class="ssh-search-input"
@@ -24,14 +58,6 @@
             placeholder="搜索名称、主机、用户名"
           />
         </div>
-
-        <section class="ssh-sidebar-panel top-panel">
-          <div class="sidebar-panel-title">分组</div>
-          <div class="ssh-inline-field group-create-row">
-            <input v-model="newGroupName" type="text" placeholder="新建分组，例如：生产" />
-            <button class="ssh-btn mini" @click="createGroup">新增分组</button>
-          </div>
-        </section>
 
         <div class="ssh-list-shell">
           <div v-if="loading" class="ssh-list-empty">正在加载连接...</div>
@@ -74,6 +100,7 @@
                   :draggable="!group.locked"
                   @click="toggleGroup(group.key)"
                   @dragstart="!group.locked && handleGroupDragStart(group.id)"
+                  @dragend="handleDragEnd"
                   @dragover.prevent="true"
                   @drop.prevent="handleGroupHeaderDrop(group)"
                 >
@@ -107,26 +134,35 @@
                   v-for="connection in group.items"
                   :key="connection.id"
                   class="ssh-connection-item compact"
-                  :class="{ active: group.itemType === 'ssh' && selectedConnectionId === connection.id }"
+                  :class="{
+                    active:
+                      (group.itemType === 'ssh' && selectedConnectionId === connection.id) ||
+                      (group.itemType === 'cmd' && selectedCmdBookmarkId === connection.id)
+                  }"
                   :draggable="true"
                   tabindex="0"
-                  @click="group.itemType === 'ssh' ? selectConnection(connection.id) : null"
+                  @click="group.itemType === 'ssh' ? selectConnection(connection.id) : selectCmdBookmark(connection.id)"
                   @dblclick="group.itemType === 'ssh' ? openConnectionEditor(connection) : openCmdBookmark(connection)"
-                  @keydown.enter.prevent="group.itemType === 'ssh' ? selectConnection(connection.id) : null"
-                  @keydown.space.prevent="group.itemType === 'ssh' ? selectConnection(connection.id) : null"
+                  @keydown.enter.prevent="group.itemType === 'ssh' ? selectConnection(connection.id) : selectCmdBookmark(connection.id)"
+                  @keydown.space.prevent="group.itemType === 'ssh' ? selectConnection(connection.id) : selectCmdBookmark(connection.id)"
                   @dragstart="handleItemDragStart(group.itemType, connection.id, group.key)"
+                  @dragend="handleDragEnd"
                   @dragover.prevent
                   @drop.prevent="handleItemDrop(group, connection.id)"
                 >
                   <div class="ssh-connection-line">
                     <span class="ssh-connection-name compact">{{ connection.name }}</span>
                     <span class="ssh-connection-target compact">{{ group.itemType === 'ssh' ? formatTarget(connection) : connection.path }}</span>
-                    <button
-                      class="ssh-btn mini primary compact"
-                      @click.stop="group.itemType === 'ssh' ? connectEmbeddedSession(connection) : openCmdBookmark(connection)"
-                    >
-                      连接
-                    </button>
+                    <div class="ssh-connection-actions-inline">
+                      <button
+                        class="ssh-plain-icon-btn ssh-connect-icon-btn"
+                        @click.stop="group.itemType === 'ssh' ? connectEmbeddedSession(connection) : openCmdBookmark(connection)"
+                        :title="group.itemType === 'ssh' ? '连接' : '打开 CMD'"
+                        :aria-label="group.itemType === 'ssh' ? '连接' : '打开 CMD'"
+                      >
+                        <img :src="connectIcon" alt="" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -134,14 +170,15 @@
           </div>
         </div>
 
-        <section class="ssh-sidebar-panel">
-          <div class="sidebar-panel-title">连接操作</div>
-
-          <div class="ssh-editor-actions">
-            <button class="ssh-btn" :disabled="!selectedConnection" @click="openConnectionEditor(selectedConnection)">编辑连接</button>
-            <button class="ssh-btn" :disabled="!selectedConnection" @click="handleCopyCommand(selectedConnection)">复制命令</button>
-            <button class="ssh-btn danger" :disabled="!selectedConnectionId" @click="handleDeleteConnection">删除</button>
-          </div>
+        <section
+          class="ssh-delete-dropzone"
+          :data-active="isDeleteDropActive ? 'true' : 'false'"
+          @dragover.prevent="handleDeleteDragOver"
+          @dragleave.prevent="handleDeleteDragLeave"
+          @drop.prevent="handleDeleteDrop"
+        >
+          <div class="ssh-delete-drop-title">{{ deleteDropTitle }}</div>
+          <div class="ssh-delete-drop-text">将分组、SSH 连接或 CMD 收藏拖动到这里删除</div>
         </section>
       </aside>
 
@@ -175,6 +212,14 @@
             >
               保存 CMD
             </button>
+            <button
+              v-if="activeSession?.type === 'ssh'"
+              class="ssh-btn mini"
+              :disabled="!canUploadToActiveSession"
+              @click="openDownloadDialog"
+            >
+              下载文件
+            </button>
             <button class="ssh-btn mini" :disabled="!activeSessionId" @click="focusActiveTerminal">聚焦</button>
             <button class="ssh-btn mini" :disabled="!activeSessionId" @click="copyActiveTerminal">复制</button>
             <button class="ssh-btn mini" :disabled="!activeSessionId" @click="pasteActiveTerminal">粘贴</button>
@@ -184,7 +229,14 @@
           </div>
         </div>
 
-        <div ref="terminalStageRef" class="ssh-terminal-stage">
+        <div
+          ref="terminalStageRef"
+          class="ssh-terminal-stage"
+          @dragenter="handleTerminalDragEnter"
+          @dragover="handleTerminalDragOver"
+          @dragleave="handleTerminalDragLeave"
+          @drop="handleTerminalFileDrop"
+        >
           <div v-if="sessionTabs.length === 0" class="ssh-terminal-empty">
             <div class="ssh-terminal-empty-title">没有正在运行的终端</div>
             <div class="ssh-terminal-empty-text">从左侧选择连接后点击“连接”即可打开一个终端 tab。</div>
@@ -198,6 +250,38 @@
           >
             <div :ref="(el) => setTerminalHostRef(tab.sessionId, el)" class="ssh-terminal-host"></div>
           </div>
+
+          <div
+            v-if="isTerminalDropActive"
+            class="ssh-terminal-dropzone"
+            :data-enabled="canUploadToActiveSession ? 'true' : 'false'"
+          >
+            <div class="ssh-terminal-drop-title">
+              {{ canUploadToActiveSession ? '释放以上传文件' : '当前会话不支持拖动上传' }}
+            </div>
+            <div class="ssh-terminal-drop-text">
+              {{ canUploadToActiveSession ? '文件将上传到远程主目录，并显示实时进度' : '请先连接一个 SSH 会话' }}
+            </div>
+          </div>
+
+          <div v-if="activeUploadItems.length > 0" class="ssh-upload-panel">
+            <div
+              v-for="item in activeUploadItems"
+              :key="item.id"
+              class="ssh-upload-item"
+              :data-status="item.status"
+            >
+              <div class="ssh-upload-topline">
+                <span class="ssh-upload-direction" :data-direction="item.direction">{{ item.directionLabel }}</span>
+                <span class="ssh-upload-name" :title="item.fileName">{{ item.fileName }}</span>
+                <span class="ssh-upload-percent">{{ item.progressText }}</span>
+              </div>
+              <div class="ssh-upload-track">
+                <div class="ssh-upload-bar" :style="{ width: `${item.progress}%` }"></div>
+              </div>
+              <div class="ssh-upload-meta" :title="item.detailText">{{ item.detailText }}</div>
+            </div>
+          </div>
         </div>
 
         <div class="ssh-status-bar">
@@ -207,11 +291,16 @@
       </main>
     </section>
 
-    <div v-if="showSaveCmdDialog" class="ssh-dialog-overlay" @click.self="closeSaveCmdDialog">
+    <div
+      v-if="showSaveCmdDialog"
+      class="ssh-dialog-overlay"
+      @pointerdown.self="armOverlayClose('saveCmd')"
+      @pointerup.self="handleOverlayPointerUp('saveCmd', closeSaveCmdDialog)"
+    >
       <div class="ssh-dialog small">
         <div class="ssh-dialog-head">
           <div>
-            <div class="editor-title">保存 CMD</div>
+            <div class="editor-title">{{ cmdBookmarkDraft.id ? '编辑 CMD' : '保存 CMD' }}</div>
             <div class="editor-target">{{ cmdBookmarkDraft.path }}</div>
           </div>
           <button class="ssh-dialog-close" @click="closeSaveCmdDialog">×</button>
@@ -234,7 +323,67 @@
       </div>
     </div>
 
-    <div v-if="showEditorDialog" class="ssh-dialog-overlay" @click.self="closeConnectionEditor">
+    <div
+      v-if="showDownloadDialog"
+      class="ssh-dialog-overlay"
+      @pointerdown.self="armOverlayClose('download')"
+      @pointerup.self="handleOverlayPointerUp('download', closeDownloadDialog)"
+    >
+      <div class="ssh-dialog ssh-download-dialog">
+        <div class="ssh-dialog-head">
+          <div>
+            <div class="editor-title">下载服务器文件</div>
+            <div class="editor-target">{{ activeSession?.target || '当前 SSH 会话' }}</div>
+          </div>
+          <button class="ssh-dialog-close" @click="closeDownloadDialog">×</button>
+        </div>
+
+        <div class="ssh-download-toolbar">
+          <label class="ssh-field ssh-download-path-field">
+            <span>当前目录</span>
+            <input
+              :value="downloadDraft.currentPath || '加载中...'"
+              type="text"
+              readonly
+            />
+          </label>
+          <div class="ssh-download-toolbar-actions">
+            <button class="ssh-btn mini" :disabled="!downloadDraft.parentPath || downloadDraft.loading" @click="navigateDownloadParent">上一级</button>
+            <button class="ssh-btn mini" :disabled="downloadDraft.loading" @click="refreshDownloadDirectory()">刷新</button>
+          </div>
+        </div>
+
+        <div class="ssh-download-tip">单击文件立即下载，单击文件夹进入该目录。</div>
+
+        <div v-if="downloadDraft.loading" class="ssh-download-empty">正在加载服务器文件...</div>
+        <div v-else-if="downloadDialogEntries.length === 0" class="ssh-download-empty">当前目录没有可显示的文件。</div>
+        <div v-else class="ssh-download-list">
+          <button
+            v-for="entry in downloadDialogEntries"
+            :key="entry.path"
+            class="ssh-download-entry"
+            :data-kind="entry.isDirectory ? 'directory' : 'file'"
+            @click="handleDownloadEntry(entry)"
+          >
+            <span class="ssh-download-entry-icon">{{ entry.isDirectory ? 'DIR' : 'FILE' }}</span>
+            <span class="ssh-download-entry-name" :title="entry.name">{{ entry.name }}</span>
+            <span class="ssh-download-entry-size">{{ entry.sizeText }}</span>
+            <span class="ssh-download-entry-time">{{ entry.timeText }}</span>
+          </button>
+        </div>
+
+        <div class="ssh-editor-actions">
+          <button class="ssh-btn" @click="closeDownloadDialog">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showEditorDialog"
+      class="ssh-dialog-overlay"
+      @pointerdown.self="armOverlayClose('editor')"
+      @pointerup.self="handleOverlayPointerUp('editor', closeConnectionEditor)"
+    >
       <div class="ssh-dialog">
         <div class="ssh-dialog-head">
           <div>
@@ -333,6 +482,7 @@ import '@xterm/xterm/css/xterm.css'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import connectIcon from '../icon/connect.svg'
 import { useAppStore } from '../stores/app'
 import { generateId } from '../utils/tools'
 
@@ -343,6 +493,7 @@ const connections = ref([])
 const loading = ref(false)
 const searchQuery = ref('')
 const selectedConnectionId = ref('')
+const selectedCmdBookmarkId = ref('')
 const draft = ref(createDraft())
 const themeMode = ref(localStorage.getItem('ssh-theme-mode') || 'dark')
 const groups = ref([])
@@ -350,8 +501,11 @@ const connectionGroupMap = ref({})
 const connectionOrderMap = ref({})
 const collapsedGroups = ref({})
 const newGroupName = ref('')
+const showGroupCreator = ref(false)
+const groupCreateInputRef = ref(null)
 const draggingGroupId = ref('')
 const draggingItem = ref(null)
+const isDeleteDropActive = ref(false)
 const editingGroupId = ref(null)
 const editingGroupName = ref('')
 const cmdBookmarks = ref([])
@@ -364,15 +518,31 @@ const cmdBookmarkDraft = ref({
   name: '',
   path: ''
 })
+const showDownloadDialog = ref(false)
+const downloadDraft = ref({
+  currentPath: '',
+  parentPath: '',
+  loading: false,
+  entries: []
+})
+const overlayCloseArmed = ref({
+  saveCmd: false,
+  download: false,
+  editor: false
+})
 
 const sessionTabs = ref([])
 const activeSessionId = ref('')
 const terminalStageRef = ref(null)
+const isTerminalDropActive = ref(false)
+const terminalDragDepth = ref(0)
+const uploadTasks = ref({})
 
 const terminalControllers = new Map()
 const terminalHostRefs = new Map()
 const pendingSessionEvents = new Map()
 const ignoredSessionIds = new Set()
+const uploadCleanupTimers = new Map()
 let resizeObserver = null
 let sshSessionEventBound = false
 
@@ -462,8 +632,52 @@ const activeSession = computed(() => {
   return sessionTabs.value.find(item => item.sessionId === activeSessionId.value) || null
 })
 
-const selectedConnection = computed(() => {
-  return connections.value.find(item => item.id === selectedConnectionId.value) || null
+const canUploadToActiveSession = computed(() => {
+  return activeSession.value?.type === 'ssh' && activeSession.value?.status === 'connected'
+})
+
+const deleteDropTitle = computed(() => {
+  if (draggingGroupId.value) return isDeleteDropActive.value ? '释放以删除分组' : '拖动到此删除分组'
+  if (draggingItem.value?.itemType === 'ssh') return isDeleteDropActive.value ? '释放以删除 SSH 连接' : '拖动到此删除 SSH 连接'
+  if (draggingItem.value?.itemType === 'cmd') return isDeleteDropActive.value ? '释放以删除 CMD 收藏' : '拖动到此删除 CMD 收藏'
+  return '拖动到此删除'
+})
+
+const activeUploadItems = computed(() => {
+  return Object.values(uploadTasks.value)
+    .filter(item => item.sessionId === activeSessionId.value)
+    .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+    .slice(0, 6)
+    .map((item) => {
+      const progress = clampNumber(Number(item.progress) || 0, 0, 100)
+      const transferredText = item.totalBytes > 0
+        ? `${formatByteSize(item.transferredBytes || 0)} / ${formatByteSize(item.totalBytes || 0)}`
+        : getUploadStatusLabel(item)
+      const direction = item.direction === 'download' ? 'download' : 'upload'
+      const isInProgress = item.status === 'queued' || item.status === 'uploading' || item.status === 'downloading'
+      const detailText = isInProgress
+        ? (item.message || transferredText || item.remotePath || item.localPath || '')
+        : (item.message || item.localPath || item.remotePath || transferredText)
+      return {
+        ...item,
+        direction,
+        directionLabel: direction === 'download' ? '下载' : '上传',
+        progress,
+        progressText: item.status === 'completed' ? '100%' : `${progress.toFixed(progress % 1 === 0 ? 0 : 1)}%`,
+        detailText
+      }
+    })
+})
+
+const downloadDialogEntries = computed(() => {
+  return (Array.isArray(downloadDraft.value.entries) ? downloadDraft.value.entries : []).map((entry) => {
+    return {
+      ...entry,
+      typeLabel: entry.isDirectory ? '文件夹' : '文件',
+      sizeText: entry.isDirectory ? '文件夹' : formatByteSize(entry.size || 0),
+      timeText: formatTime(entry.mtime) || '--'
+    }
+  })
 })
 
 const activeSessionStatusText = computed(() => {
@@ -574,6 +788,41 @@ function formatTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toLocaleString()
+}
+
+function formatByteSize(bytes) {
+  const value = Number(bytes || 0)
+  if (!Number.isFinite(value) || value <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let size = value
+  let unitIndex = 0
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+  const precision = size >= 100 || unitIndex === 0 ? 0 : 1
+  return `${size.toFixed(precision)} ${units[unitIndex]}`
+}
+
+function getUploadStatusLabel(task) {
+  if (!task) return ''
+  const isDownload = task.direction === 'download'
+  if (task.status === 'queued') return isDownload ? '等待下载' : '等待上传'
+  if (task.status === 'uploading') {
+    if (task.totalBytes > 0) {
+      return `${formatByteSize(task.transferredBytes || 0)} / ${formatByteSize(task.totalBytes || 0)}`
+    }
+    return '上传中'
+  }
+  if (task.status === 'downloading') {
+    if (task.totalBytes > 0) {
+      return `${formatByteSize(task.transferredBytes || 0)} / ${formatByteSize(task.totalBytes || 0)}`
+    }
+    return '下载中'
+  }
+  if (task.status === 'completed') return task.remotePath || (isDownload ? '下载完成' : '上传完成')
+  if (task.status === 'error') return task.message || (isDownload ? '下载失败' : '上传失败')
+  return task.message || ''
 }
 
 function buildSavePayload(source, options = {}) {
@@ -755,6 +1004,132 @@ async function copyActiveTerminal() {
   await copyTerminalSelection(activeSessionId.value)
 }
 
+function hasDraggedFiles(event) {
+  const types = Array.from(event?.dataTransfer?.types || [])
+  return types.includes('Files')
+}
+
+function resetTerminalDragState() {
+  terminalDragDepth.value = 0
+  isTerminalDropActive.value = false
+}
+
+function resetDeleteDropState() {
+  isDeleteDropActive.value = false
+}
+
+function clearDragState() {
+  draggingGroupId.value = ''
+  draggingItem.value = null
+  resetDeleteDropState()
+}
+
+function resetOverlayCloseState() {
+  overlayCloseArmed.value.saveCmd = false
+  overlayCloseArmed.value.download = false
+  overlayCloseArmed.value.editor = false
+}
+
+function armOverlayClose(key) {
+  if (!overlayCloseArmed.value[key]) {
+    overlayCloseArmed.value[key] = true
+  }
+}
+
+function handleOverlayPointerUp(key, closeHandler) {
+  const shouldClose = Boolean(overlayCloseArmed.value[key])
+  resetOverlayCloseState()
+  if (shouldClose) {
+    closeHandler()
+  }
+}
+
+function extractDroppedLocalPaths(event) {
+  const fileList = Array.from(event?.dataTransfer?.files || [])
+  return Array.from(new Set(fileList
+    .map(file => String(file?.path || '').trim())
+    .filter(Boolean)))
+}
+
+function clearUploadCleanupTimer(uploadId) {
+  const timer = uploadCleanupTimers.get(uploadId)
+  if (timer) {
+    clearTimeout(timer)
+    uploadCleanupTimers.delete(uploadId)
+  }
+}
+
+function removeUploadTask(uploadId) {
+  clearUploadCleanupTimer(uploadId)
+  const nextTasks = { ...uploadTasks.value }
+  delete nextTasks[uploadId]
+  uploadTasks.value = nextTasks
+}
+
+function scheduleUploadTaskCleanup(uploadId, delay = 5000) {
+  clearUploadCleanupTimer(uploadId)
+  const timer = setTimeout(() => {
+    removeUploadTask(uploadId)
+  }, delay)
+  uploadCleanupTimers.set(uploadId, timer)
+}
+
+function handleTerminalDragEnter(event) {
+  if (!hasDraggedFiles(event)) return
+  event.preventDefault()
+  terminalDragDepth.value += 1
+  isTerminalDropActive.value = true
+}
+
+function handleTerminalDragOver(event) {
+  if (!hasDraggedFiles(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = canUploadToActiveSession.value ? 'copy' : 'none'
+  }
+  isTerminalDropActive.value = true
+}
+
+function handleTerminalDragLeave(event) {
+  if (!hasDraggedFiles(event)) return
+  event.preventDefault()
+  terminalDragDepth.value = Math.max(terminalDragDepth.value - 1, 0)
+  if (terminalDragDepth.value === 0) {
+    isTerminalDropActive.value = false
+  }
+}
+
+async function handleTerminalFileDrop(event) {
+  if (!hasDraggedFiles(event)) return
+  event.preventDefault()
+  event.stopPropagation()
+  resetTerminalDragState()
+
+  if (!canUploadToActiveSession.value) {
+    appStore.toast('请先连接一个 SSH 会话再拖动上传', 'warning')
+    return
+  }
+
+  const localPaths = extractDroppedLocalPaths(event)
+  if (!localPaths.length) {
+    appStore.toast('未识别到可上传的本地文件', 'warning')
+    return
+  }
+
+  if (!electronAPI?.uploadSshSessionFiles) {
+    appStore.toast('当前环境不支持拖动上传文件', 'warning')
+    return
+  }
+
+  const result = await electronAPI.uploadSshSessionFiles(activeSessionId.value, localPaths)
+  if (!result?.success) {
+    appStore.toast(result?.error || '开始上传失败', 'error')
+    return
+  }
+
+  appStore.toast(`已开始上传 ${result.acceptedCount || localPaths.length} 个文件`, 'success')
+}
+
 function getStatusLabel(status) {
   if (status === 'connected') return '已连接'
   if (status === 'connecting') return '连接中'
@@ -775,6 +1150,18 @@ function toggleGroup(groupKey) {
   }
 }
 
+function toggleGroupCreator() {
+  showGroupCreator.value = !showGroupCreator.value
+  if (!showGroupCreator.value) {
+    newGroupName.value = ''
+    return
+  }
+
+  nextTick(() => {
+    groupCreateInputRef.value?.focus?.()
+  })
+}
+
 async function loadGroupSettings() {
   if (!electronAPI?.loadSshGroupSettings) return
 
@@ -789,6 +1176,9 @@ async function loadGroupSettings() {
     ? result.connectionOrderMap
     : {}
   cmdBookmarks.value = Array.isArray(result.cmdBookmarks) ? result.cmdBookmarks : []
+  if (selectedCmdBookmarkId.value && !cmdBookmarks.value.some(item => item.id === selectedCmdBookmarkId.value)) {
+    selectedCmdBookmarkId.value = ''
+  }
 }
 
 async function persistGroupSettings() {
@@ -809,6 +1199,9 @@ async function persistGroupSettings() {
       ? result.connectionOrderMap
       : connectionOrderMap.value
     cmdBookmarks.value = Array.isArray(result.cmdBookmarks) ? result.cmdBookmarks : cmdBookmarks.value
+    if (selectedCmdBookmarkId.value && !cmdBookmarks.value.some(item => item.id === selectedCmdBookmarkId.value)) {
+      selectedCmdBookmarkId.value = ''
+    }
   }
 }
 
@@ -834,6 +1227,7 @@ async function createGroup() {
     }
   ]
   newGroupName.value = ''
+  showGroupCreator.value = false
   await persistGroupSettings()
   appStore.toast('分组已创建', 'success')
 }
@@ -902,8 +1296,88 @@ async function deleteGroup(groupId) {
   appStore.toast('分组已删除', 'success')
 }
 
+async function deleteConnectionById(connectionId) {
+  if (!electronAPI?.deleteSshConnection) {
+    appStore.toast('当前环境不支持删除 SSH 连接', 'warning')
+    return false
+  }
+
+  const normalizedId = String(connectionId || '').trim()
+  if (!normalizedId) {
+    appStore.toast('请先选择要删除的连接', 'warning')
+    return false
+  }
+
+  const connection = connections.value.find(item => item.id === normalizedId)
+  if (!connection) return false
+
+  const confirmed = await appStore.confirm(`确定删除 SSH 连接“${connection.name}”吗？`)
+  if (!confirmed) return false
+
+  const result = await electronAPI.deleteSshConnection(connection.id)
+  if (!result?.success) {
+    appStore.toast(result?.error || '删除失败', 'error')
+    return false
+  }
+
+  connections.value = connections.value.filter(item => item.id !== connection.id)
+  const nextMap = { ...connectionGroupMap.value }
+  delete nextMap[connection.id]
+  connectionGroupMap.value = nextMap
+  await persistGroupSettings()
+
+  if (selectedConnectionId.value === connection.id) {
+    const nextConnectionId = connections.value[0]?.id || ''
+    if (nextConnectionId) {
+      selectConnection(nextConnectionId)
+    } else {
+      selectedConnectionId.value = ''
+      draft.value = createDraft()
+    }
+  }
+
+  appStore.toast('SSH 连接已删除', 'success')
+  return true
+}
+
+async function deleteCmdBookmarkById(bookmarkId) {
+  const normalizedId = String(bookmarkId || '').trim()
+  if (!normalizedId) {
+    appStore.toast('请先选择要删除的 CMD 收藏', 'warning')
+    return false
+  }
+
+  const bookmark = cmdBookmarks.value.find(item => item.id === normalizedId)
+  if (!bookmark) {
+    if (selectedCmdBookmarkId.value === normalizedId) {
+      selectedCmdBookmarkId.value = ''
+    }
+    return false
+  }
+
+  const confirmed = await appStore.confirm(`确定删除 CMD 收藏“${bookmark.name}”吗？`)
+  if (!confirmed) return false
+
+  const remainingBookmarks = cmdBookmarks.value
+    .filter(item => item.id !== bookmark.id)
+    .map((item, index) => ({
+      ...item,
+      order: index
+    }))
+
+  cmdBookmarks.value = remainingBookmarks
+  if (selectedCmdBookmarkId.value === bookmark.id) {
+    selectedCmdBookmarkId.value = remainingBookmarks[0]?.id || ''
+  }
+  await persistGroupSettings()
+  appStore.toast('CMD 收藏已删除', 'success')
+  return true
+}
+
 function handleGroupDragStart(groupId) {
   draggingGroupId.value = groupId
+  draggingItem.value = null
+  isDeleteDropActive.value = false
 }
 
 function getNormalizedGroupId(groupKey) {
@@ -937,7 +1411,7 @@ async function handleGroupDrop(targetGroupId) {
     ...group,
     order: index
   }))
-  draggingGroupId.value = ''
+  clearDragState()
   await persistGroupSettings()
 }
 
@@ -953,10 +1427,49 @@ function handleGroupHeaderDrop(group) {
 }
 
 function handleItemDragStart(itemType, itemId, groupKey) {
+  draggingGroupId.value = ''
   draggingItem.value = {
     itemType,
     itemId,
     groupKey
+  }
+  isDeleteDropActive.value = false
+}
+
+function handleDragEnd() {
+  clearDragState()
+}
+
+function handleDeleteDragOver() {
+  if (!draggingGroupId.value && !draggingItem.value) return
+  isDeleteDropActive.value = true
+}
+
+function handleDeleteDragLeave(event) {
+  const nextTarget = event?.relatedTarget
+  if (nextTarget && event?.currentTarget?.contains?.(nextTarget)) return
+  resetDeleteDropState()
+}
+
+async function handleDeleteDrop() {
+  const draggingGroup = draggingGroupId.value
+  const draggingPayload = draggingItem.value ? { ...draggingItem.value } : null
+  clearDragState()
+
+  if (draggingGroup) {
+    await deleteGroup(draggingGroup)
+    return
+  }
+
+  if (!draggingPayload) return
+
+  if (draggingPayload.itemType === 'ssh') {
+    await deleteConnectionById(draggingPayload.itemId)
+    return
+  }
+
+  if (draggingPayload.itemType === 'cmd') {
+    await deleteCmdBookmarkById(draggingPayload.itemId)
   }
 }
 
@@ -1010,7 +1523,7 @@ async function handleItemDrop(section, targetItemId) {
     }))
   }
 
-  draggingItem.value = null
+  clearDragState()
   await persistGroupSettings()
 }
 
@@ -1057,22 +1570,57 @@ async function handleSectionDrop(section) {
     }))
   }
 
-  draggingItem.value = null
+  clearDragState()
   await persistGroupSettings()
 }
 
-function openSaveCmdDialog(path = '') {
-  const normalizedPath = String(path || '').trim()
-  const defaultName = normalizedPath ? normalizedPath.split(/[\\/]/).filter(Boolean).pop() || 'CMD' : 'CMD'
+function openSaveCmdDialog(path = '', bookmark = null) {
+  const normalizedPath = String(bookmark?.path || path || '').trim()
+  const defaultName = String(bookmark?.name || '').trim() || (normalizedPath ? normalizedPath.split(/[\\/]/).filter(Boolean).pop() || 'CMD' : 'CMD')
   cmdBookmarkDraft.value = {
-    id: '',
+    id: String(bookmark?.id || ''),
     name: defaultName,
     path: normalizedPath
   }
   showSaveCmdDialog.value = true
 }
 
+function openCmdBookmarkEditor(bookmark) {
+  if (!bookmark) return
+  selectedConnectionId.value = ''
+  selectedCmdBookmarkId.value = String(bookmark.id)
+  openSaveCmdDialog(bookmark.path, bookmark)
+}
+
+function openDownloadDialog() {
+  if (!canUploadToActiveSession.value) {
+    appStore.toast('请先连接一个 SSH 会话', 'warning')
+    return
+  }
+
+  downloadDraft.value = {
+    currentPath: '',
+    parentPath: '',
+    loading: true,
+    entries: []
+  }
+  showDownloadDialog.value = true
+  void refreshDownloadDirectory()
+}
+
+function closeDownloadDialog() {
+  resetOverlayCloseState()
+  showDownloadDialog.value = false
+  downloadDraft.value = {
+    currentPath: '',
+    parentPath: '',
+    loading: false,
+    entries: []
+  }
+}
+
 function closeSaveCmdDialog() {
+  resetOverlayCloseState()
   showSaveCmdDialog.value = false
   cmdBookmarkDraft.value = {
     id: '',
@@ -1082,6 +1630,7 @@ function closeSaveCmdDialog() {
 }
 
 async function saveCmdBookmark() {
+  const bookmarkId = String(cmdBookmarkDraft.value.id || '').trim()
   const name = String(cmdBookmarkDraft.value.name || '').trim()
   const path = String(cmdBookmarkDraft.value.path || '').trim()
   if (!name) {
@@ -1093,18 +1642,41 @@ async function saveCmdBookmark() {
     return
   }
 
-  cmdBookmarks.value = [
-    ...cmdBookmarks.value,
-    {
-      id: generateId(),
-      name,
-      path,
-      order: cmdBookmarks.value.length
-    }
-  ]
+  if (bookmarkId) {
+    cmdBookmarks.value = cmdBookmarks.value.map((item, index) => {
+      if (item.id !== bookmarkId) {
+        return {
+          ...item,
+          order: Number.isFinite(item.order) ? item.order : index
+        }
+      }
+      return {
+        ...item,
+        id: bookmarkId,
+        name,
+        path,
+        order: Number.isFinite(item.order) ? item.order : index
+      }
+    })
+    selectedCmdBookmarkId.value = bookmarkId
+  } else {
+    const newBookmarkId = generateId()
+    cmdBookmarks.value = [
+      ...cmdBookmarks.value,
+      {
+        id: newBookmarkId,
+        name,
+        path,
+        order: cmdBookmarks.value.length
+      }
+    ]
+    selectedConnectionId.value = ''
+    selectedCmdBookmarkId.value = newBookmarkId
+  }
+
   await persistGroupSettings()
   closeSaveCmdDialog()
-  appStore.toast('CMD 收藏已保存', 'success')
+  appStore.toast(bookmarkId ? 'CMD 收藏已更新' : 'CMD 收藏已保存', 'success')
 }
 
 async function saveCurrentCmdSession() {
@@ -1118,6 +1690,67 @@ async function saveCurrentCmdSession() {
   }
 
   openSaveCmdDialog(result.path)
+}
+
+async function refreshDownloadDirectory(targetPath = downloadDraft.value.currentPath || '') {
+  if (!canUploadToActiveSession.value) {
+    return false
+  }
+
+  if (!electronAPI?.listSshSessionFiles) {
+    appStore.toast('当前环境不支持读取服务器文件列表', 'warning')
+    return false
+  }
+
+  downloadDraft.value = {
+    ...downloadDraft.value,
+    loading: true
+  }
+
+  const result = await electronAPI.listSshSessionFiles(activeSessionId.value, targetPath)
+  if (!result?.success) {
+    downloadDraft.value = {
+      ...downloadDraft.value,
+      loading: false
+    }
+    appStore.toast(result?.error || '读取服务器文件列表失败', 'error')
+    return false
+  }
+
+  downloadDraft.value = {
+    currentPath: String(result.currentPath || ''),
+    parentPath: String(result.parentPath || ''),
+    loading: false,
+    entries: Array.isArray(result.entries) ? result.entries : []
+  }
+  return true
+}
+
+async function navigateDownloadParent() {
+  if (!downloadDraft.value.parentPath) return
+  await refreshDownloadDirectory(downloadDraft.value.parentPath)
+}
+
+async function handleDownloadEntry(entry) {
+  if (!entry) return
+  if (entry.isDirectory) {
+    await refreshDownloadDirectory(entry.path)
+    return
+  }
+
+  if (!electronAPI?.downloadSshSessionFile) {
+    appStore.toast('当前环境不支持下载服务器文件', 'warning')
+    return
+  }
+
+  const result = await electronAPI.downloadSshSessionFile(activeSessionId.value, entry.path)
+  if (result?.canceled) return
+  if (!result?.success) {
+    appStore.toast(result?.error || '启动下载失败', 'error')
+    return
+  }
+
+  appStore.toast(`已开始下载 ${result.fileName}`, 'success')
 }
 
 function getTerminalTheme() {
@@ -1173,12 +1806,21 @@ function getTerminalTheme() {
 function selectConnection(connectionId) {
   const connection = connections.value.find(item => item.id === String(connectionId))
   if (!connection) return
+  selectedCmdBookmarkId.value = ''
   selectedConnectionId.value = connection.id
   draft.value = createDraft(connection)
 }
 
+function selectCmdBookmark(bookmarkId) {
+  const bookmark = cmdBookmarks.value.find(item => item.id === String(bookmarkId))
+  if (!bookmark) return
+  selectedConnectionId.value = ''
+  selectedCmdBookmarkId.value = bookmark.id
+}
+
 function resetSelection() {
   selectedConnectionId.value = ''
+  selectedCmdBookmarkId.value = ''
   draft.value = createDraft()
 }
 
@@ -1190,6 +1832,7 @@ function handleCreateConnection() {
 
 function openConnectionEditor(connection) {
   if (!connection) return
+  selectedCmdBookmarkId.value = ''
   editingConnectionId.value = String(connection.id)
   editorDraft.value = createDraft({
     ...connection,
@@ -1199,6 +1842,7 @@ function openConnectionEditor(connection) {
 }
 
 function closeConnectionEditor() {
+  resetOverlayCloseState()
   showEditorDialog.value = false
   editingConnectionId.value = ''
 }
@@ -1441,6 +2085,45 @@ function applySessionEvent(payload) {
     return
   }
 
+  if (payload.type === 'upload' || payload.type === 'download') {
+    const transferId = String(payload.uploadId || payload.downloadId || '')
+    if (!transferId) return
+
+    const direction = payload.type === 'download' ? 'download' : 'upload'
+    const previousTask = uploadTasks.value[transferId] || {}
+    const nextTask = {
+      ...previousTask,
+      id: transferId,
+      direction,
+      sessionId: payload.sessionId,
+      fileName: payload.fileName || previousTask.fileName || 'file',
+      remotePath: payload.remotePath || previousTask.remotePath || '',
+      localPath: payload.localPath || previousTask.localPath || '',
+      message: payload.message || previousTask.message || '',
+      status: payload.status || previousTask.status || 'queued',
+      totalBytes: Number(payload.totalBytes ?? previousTask.totalBytes ?? 0),
+      transferredBytes: Number(payload.transferredBytes ?? previousTask.transferredBytes ?? 0),
+      progress: clampNumber(Number(payload.progress ?? previousTask.progress ?? 0), 0, 100),
+      updatedAt: Date.now()
+    }
+
+    uploadTasks.value = {
+      ...uploadTasks.value,
+      [transferId]: nextTask
+    }
+
+    if (nextTask.status === 'uploading' || nextTask.status === 'downloading' || nextTask.status === 'queued') {
+      clearUploadCleanupTimer(transferId)
+    } else {
+      scheduleUploadTaskCleanup(transferId, nextTask.status === 'completed' ? 4500 : 7000)
+    }
+
+    if (payload.message && controller?.terminal && (nextTask.status === 'completed' || nextTask.status === 'error')) {
+      controller.terminal.writeln(`\r\n[TodoX] ${payload.message}`)
+    }
+    return
+  }
+
   if (payload.type === 'closed') {
     tab.status = 'closed'
     tab.statusLabel = getStatusLabel('closed')
@@ -1448,6 +2131,20 @@ function applySessionEvent(payload) {
     if (controller?.terminal) {
       controller.terminal.writeln('\r\n[TodoX] 会话已断开')
     }
+
+    const nextTasks = { ...uploadTasks.value }
+    Object.values(nextTasks).forEach((task) => {
+      if (task.sessionId !== payload.sessionId) return
+      if (task.status !== 'queued' && task.status !== 'uploading' && task.status !== 'downloading') return
+      nextTasks[task.id] = {
+        ...task,
+        status: 'error',
+        message: '会话已断开，传输已中止',
+        updatedAt: Date.now()
+      }
+      scheduleUploadTaskCleanup(task.id, 7000)
+    })
+    uploadTasks.value = nextTasks
   }
 }
 
@@ -1586,42 +2283,6 @@ async function handleSaveAndConnect() {
   const savedConnection = await handleSaveConnection()
   if (!savedConnection) return
   await connectEmbeddedSession(savedConnection)
-}
-
-async function handleDeleteConnection() {
-  if (!electronAPI?.deleteSshConnection) {
-    appStore.toast('当前环境不支持删除 SSH 连接', 'warning')
-    return
-  }
-
-  if (!selectedConnectionId.value) {
-    appStore.toast('请先选择要删除的连接', 'warning')
-    return
-  }
-
-  const connection = connections.value.find(item => item.id === selectedConnectionId.value)
-  if (!connection) return
-
-  const confirmed = await appStore.confirm(`确定删除 SSH 连接“${connection.name}”吗？`)
-  if (!confirmed) return
-
-  const result = await electronAPI.deleteSshConnection(connection.id)
-  if (!result?.success) {
-    appStore.toast(result?.error || '删除失败', 'error')
-    return
-  }
-
-  connections.value = connections.value.filter(item => item.id !== connection.id)
-  const nextMap = { ...connectionGroupMap.value }
-  delete nextMap[connection.id]
-  connectionGroupMap.value = nextMap
-  await persistGroupSettings()
-  if (connections.value[0]) {
-    selectConnection(connections.value[0].id)
-  } else {
-    resetSelection()
-  }
-  appStore.toast('SSH 连接已删除', 'success')
 }
 
 async function handlePickPrivateKey() {
@@ -1771,6 +2432,10 @@ watch(themeMode, () => {
 })
 
 onMounted(() => {
+  window.addEventListener('pointerup', resetOverlayCloseState)
+  window.addEventListener('pointercancel', resetOverlayCloseState)
+  window.addEventListener('blur', resetOverlayCloseState)
+
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => {
       fitActiveTerminal()
@@ -1786,7 +2451,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(async () => {
+  window.removeEventListener('pointerup', resetOverlayCloseState)
+  window.removeEventListener('pointercancel', resetOverlayCloseState)
+  window.removeEventListener('blur', resetOverlayCloseState)
   try { resizeObserver?.disconnect() } catch (error) {}
+  uploadCleanupTimers.forEach((timer) => clearTimeout(timer))
+  uploadCleanupTimers.clear()
 
   for (const tab of [...sessionTabs.value]) {
     if (tab.status === 'connected' || tab.status === 'connecting') {
@@ -1921,7 +2591,19 @@ onBeforeUnmount(async () => {
   margin-bottom: 12px;
 }
 
+.ssh-sidebar-headline {
+  margin-bottom: 10px;
+}
+
+.ssh-sidebar-headline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .ssh-search-input,
+.ssh-group-create-input,
 .ssh-field input,
 .ssh-field textarea,
 .ssh-select {
@@ -1937,6 +2619,7 @@ onBeforeUnmount(async () => {
 }
 
 .ssh-search-input::placeholder,
+.ssh-group-create-input::placeholder,
 .ssh-field input::placeholder,
 .ssh-field textarea::placeholder,
 .ssh-select::placeholder {
@@ -1944,6 +2627,7 @@ onBeforeUnmount(async () => {
 }
 
 .ssh-search-input:focus,
+.ssh-group-create-input:focus,
 .ssh-field input:focus,
 .ssh-field textarea:focus,
 .ssh-select:focus {
@@ -2122,6 +2806,7 @@ onBeforeUnmount(async () => {
 }
 
 .ssh-connection-item.compact {
+  position: relative;
   padding: 8px 10px;
   border: none;
   border-top: 1px solid color-mix(in srgb, var(--ssh-border-soft) 70%, transparent);
@@ -2133,11 +2818,83 @@ onBeforeUnmount(async () => {
   border-top: none;
 }
 
+.ssh-connection-item.compact.active {
+  background: color-mix(in srgb, var(--ssh-input-focus) 18%, var(--ssh-item-bg));
+  border-top-color: color-mix(in srgb, var(--ssh-input-focus) 55%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ssh-input-focus) 42%, transparent);
+}
+
+.ssh-connection-item.compact.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--ssh-accent-strong);
+}
+
+.ssh-connection-item.compact.active .ssh-connection-name.compact {
+  color: var(--ssh-accent-strong);
+}
+
 .ssh-connection-line {
   display: grid;
   grid-template-columns: minmax(0, 112px) minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+}
+
+.ssh-connection-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.ssh-plain-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ssh-accent-strong);
+  cursor: pointer;
+  transition: transform 0.16s ease, opacity 0.16s ease;
+}
+
+.ssh-plain-icon-btn:hover {
+  opacity: 0.82;
+  transform: translateY(-1px);
+}
+
+.ssh-plain-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ssh-input-focus) 28%, transparent);
+  border-radius: 8px;
+}
+
+.ssh-connect-icon-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+}
+
+.ssh-connect-icon-btn img {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.group-add-btn {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ssh-accent);
 }
 
 .ssh-connection-name,
@@ -2188,21 +2945,6 @@ onBeforeUnmount(async () => {
   margin-top: 4px;
   padding-left: 122px;
   font-size: 10px;
-}
-
-.ssh-sidebar-panel {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid color-mix(in srgb, var(--ssh-border) 72%, transparent);
-}
-
-.ssh-sidebar-panel.top-panel {
-  margin-top: 0;
-  margin-bottom: 12px;
-  padding-top: 0;
-  padding-bottom: 12px;
-  border-top: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--ssh-border) 72%, transparent);
 }
 
 .sidebar-panel-title {
@@ -2297,12 +3039,118 @@ onBeforeUnmount(async () => {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
 }
 
+.ssh-download-dialog {
+  width: min(900px, 100%);
+}
+
 .ssh-dialog-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.ssh-download-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.ssh-download-path-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.ssh-download-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ssh-download-tip {
+  margin-top: 10px;
+  color: var(--ssh-text-muted);
+  font-size: 12px;
+}
+
+.ssh-download-empty {
+  padding: 18px 6px;
+  color: var(--ssh-text-muted);
+  font-size: 13px;
+}
+
+.ssh-download-list {
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 80%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ssh-download-entry {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 100px 150px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--ssh-border-soft) 72%, transparent);
+  background: var(--ssh-item-bg);
+  color: var(--ssh-text-main);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ssh-download-entry:first-child {
+  border-top: none;
+}
+
+.ssh-download-entry:hover {
+  background: color-mix(in srgb, var(--ssh-input-focus) 14%, var(--ssh-item-bg));
+}
+
+.ssh-download-entry[data-kind='directory'] {
+  background: color-mix(in srgb, var(--ssh-group-header-bg) 65%, var(--ssh-item-bg));
+}
+
+.ssh-download-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 3px 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 85%, transparent);
+  color: var(--ssh-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ssh-download-entry[data-kind='directory'] .ssh-download-entry-icon {
+  color: var(--ssh-accent-strong);
+  border-color: color-mix(in srgb, var(--ssh-input-focus) 60%, transparent);
+}
+
+.ssh-download-entry-name,
+.ssh-download-entry-size,
+.ssh-download-entry-time {
+  min-width: 0;
+  font-size: 12px;
+}
+
+.ssh-download-entry-name {
+  color: var(--ssh-text-strong);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-download-entry-size,
+.ssh-download-entry-time {
+  color: var(--ssh-text-muted);
+  font-family: 'Consolas', 'Courier New', monospace;
 }
 
 .ssh-dialog-close {
@@ -2399,6 +3247,139 @@ onBeforeUnmount(async () => {
   overflow: hidden;
 }
 
+.ssh-terminal-dropzone {
+  position: absolute;
+  inset: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 2px dashed rgba(126, 220, 255, 0.58);
+  border-radius: 16px;
+  background: rgba(8, 14, 25, 0.92);
+  z-index: 5;
+  pointer-events: none;
+  text-align: center;
+  padding: 24px;
+}
+
+.ssh-terminal-dropzone[data-enabled='false'] {
+  border-color: rgba(255, 158, 194, 0.45);
+}
+
+.ssh-terminal-drop-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ssh-text-strong);
+}
+
+.ssh-terminal-drop-text {
+  max-width: 420px;
+  color: var(--ssh-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ssh-upload-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: min(340px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.ssh-upload-item {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 85%, transparent);
+  border-radius: 12px;
+  background: rgba(8, 13, 23, 0.96);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.ssh-upload-item[data-status='completed'] {
+  border-color: color-mix(in srgb, #73f0a2 60%, var(--ssh-border-soft));
+}
+
+.ssh-upload-item[data-status='error'] {
+  border-color: color-mix(in srgb, var(--ssh-danger) 68%, var(--ssh-border-soft));
+}
+
+.ssh-upload-topline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ssh-upload-direction {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 80%, transparent);
+  background: color-mix(in srgb, var(--ssh-item-bg) 55%, transparent);
+  color: var(--ssh-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ssh-upload-direction[data-direction='download'] {
+  color: var(--ssh-accent-strong);
+}
+
+.ssh-upload-name {
+  min-width: 0;
+  flex: 1;
+  color: var(--ssh-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ssh-upload-percent {
+  flex-shrink: 0;
+  color: var(--ssh-accent-strong);
+  font-size: 11px;
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.ssh-upload-track {
+  margin-top: 8px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.ssh-upload-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #69c9ff 0%, #87e0ff 100%);
+  transition: width 0.18s ease;
+}
+
+.ssh-upload-item[data-status='completed'] .ssh-upload-bar {
+  background: linear-gradient(90deg, #4ade80 0%, #73f0a2 100%);
+}
+
+.ssh-upload-item[data-status='error'] .ssh-upload-bar {
+  background: linear-gradient(90deg, #ff7c9d 0%, #ff9ec2 100%);
+}
+
+.ssh-upload-meta {
+  margin-top: 8px;
+  color: var(--ssh-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
 .ssh-terminal-empty {
   height: 100%;
   min-height: 420px;
@@ -2470,8 +3451,71 @@ onBeforeUnmount(async () => {
   font-size: 11px;
 }
 
-.group-create-row {
+.top-create-row {
+  margin-top: 10px;
+}
+
+.group-create-card {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ssh-group-header-bg) 42%, var(--ssh-item-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ssh-group-header-border) 22%, transparent);
+}
+
+.group-create-card-head {
+  margin-bottom: 10px;
+}
+
+.group-create-card-title {
+  color: var(--ssh-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.group-create-card-desc {
+  margin-top: 4px;
+  color: var(--ssh-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.group-create-form {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ssh-group-create-input {
+  min-height: 38px;
+  background: color-mix(in srgb, var(--ssh-input-bg) 92%, var(--ssh-surface));
+}
+
+.ssh-delete-dropzone {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--ssh-danger) 55%, var(--ssh-border-soft));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ssh-item-bg) 82%, transparent);
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ssh-delete-dropzone[data-active='true'] {
+  border-color: color-mix(in srgb, var(--ssh-danger) 82%, var(--ssh-border-soft));
+  background: color-mix(in srgb, var(--ssh-danger) 12%, var(--ssh-item-bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ssh-danger) 32%, transparent);
+}
+
+.ssh-delete-drop-title {
+  color: var(--ssh-text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ssh-delete-drop-text {
+  margin-top: 4px;
+  color: var(--ssh-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .ssh-btn:disabled {
@@ -2521,6 +3565,26 @@ onBeforeUnmount(async () => {
 
   .ssh-connection-meta.compact {
     padding-left: 0;
+  }
+
+  .ssh-upload-panel {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .ssh-download-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ssh-download-entry {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .ssh-download-entry-size,
+  .ssh-download-entry-time {
+    display: none;
   }
 }
 </style>
