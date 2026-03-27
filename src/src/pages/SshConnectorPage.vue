@@ -3,7 +3,7 @@
     <header class="ssh-header">
       <div>
         <h1>SSH</h1>
-        <p>左侧管理连接，右侧切换终端。</p>
+        <p>左侧管理连接，顶部终端 tab 支持拖动排序和多排显示。</p>
       </div>
 
       <div class="ssh-header-actions">
@@ -184,7 +184,11 @@
 
       <main class="ssh-workspace">
         <div class="ssh-tabs-bar">
-          <div class="ssh-tabs">
+          <div
+            class="ssh-tabs"
+            @dragover.prevent="handleSessionTabsDragOver"
+            @drop.prevent="handleSessionTabsDrop"
+          >
             <div v-if="sessionTabs.length === 0" class="ssh-tabs-empty">暂无终端会话</div>
 
             <button
@@ -192,7 +196,14 @@
               :key="tab.sessionId"
               class="ssh-tab"
               :class="{ active: activeSessionId === tab.sessionId }"
+              :data-dragging="draggingSessionId === tab.sessionId ? 'true' : 'false'"
+              :data-drop-target="sessionDropTarget.sessionId === tab.sessionId ? sessionDropTarget.position : ''"
+              draggable="true"
               @click="setActiveSession(tab.sessionId)"
+              @dragstart="handleSessionTabDragStart(tab.sessionId, $event)"
+              @dragover.prevent="handleSessionTabDragOver(tab.sessionId, $event)"
+              @drop.stop.prevent="handleSessionTabDrop(tab.sessionId)"
+              @dragend="handleSessionTabDragEnd"
             >
               <span
                 class="ssh-tab-indicator"
@@ -220,12 +231,6 @@
             >
               下载文件
             </button>
-            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="focusActiveTerminal">聚焦</button>
-            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="copyActiveTerminal">复制</button>
-            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="pasteActiveTerminal">粘贴</button>
-            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="sendControlC">Ctrl+C</button>
-            <button class="ssh-btn mini" :disabled="!activeSessionId" @click="clearActiveTerminal">清空</button>
-            <button class="ssh-btn mini danger" :disabled="!activeSessionId" @click="disconnectActiveSession">断开</button>
           </div>
         </div>
 
@@ -533,6 +538,11 @@ const overlayCloseArmed = ref({
 
 const sessionTabs = ref([])
 const activeSessionId = ref('')
+const draggingSessionId = ref('')
+const sessionDropTarget = ref({
+  sessionId: '',
+  position: ''
+})
 const terminalStageRef = ref(null)
 const isTerminalDropActive = ref(false)
 const terminalDragDepth = ref(0)
@@ -972,11 +982,6 @@ async function pasteTextToSession(sessionId, text = '') {
   return success
 }
 
-async function pasteActiveTerminal() {
-  if (!activeSessionId.value) return
-  await pasteTextToSession(activeSessionId.value)
-}
-
 async function copyTerminalSelection(sessionId, options = {}) {
   const controller = terminalControllers.get(String(sessionId || ''))
   const text = String(controller?.terminal?.getSelection?.() || '')
@@ -997,11 +1002,6 @@ async function copyTerminalSelection(sessionId, options = {}) {
     appStore.toast(error?.message || '复制失败', 'error')
     return false
   }
-}
-
-async function copyActiveTerminal() {
-  if (!activeSessionId.value) return
-  await copyTerminalSelection(activeSessionId.value)
 }
 
 function hasDraggedFiles(event) {
@@ -1863,6 +1863,110 @@ function getSessionTab(sessionId) {
   return sessionTabs.value.find(item => item.sessionId === sessionId) || null
 }
 
+function resetSessionTabDragState() {
+  draggingSessionId.value = ''
+  sessionDropTarget.value = {
+    sessionId: '',
+    position: ''
+  }
+}
+
+function moveSessionTab(sessionId, targetSessionId, position = 'before') {
+  const sourceId = String(sessionId || '')
+  if (!sourceId) return
+
+  const sourceIndex = sessionTabs.value.findIndex(item => item.sessionId === sourceId)
+  if (sourceIndex < 0) return
+
+  const nextTabs = [...sessionTabs.value]
+  const [movedTab] = nextTabs.splice(sourceIndex, 1)
+  if (!movedTab) return
+
+  const normalizedTargetId = String(targetSessionId || '')
+  if (!normalizedTargetId) {
+    nextTabs.push(movedTab)
+    sessionTabs.value = nextTabs
+    return
+  }
+
+  let targetIndex = nextTabs.findIndex(item => item.sessionId === normalizedTargetId)
+  if (targetIndex < 0) {
+    nextTabs.push(movedTab)
+    sessionTabs.value = nextTabs
+    return
+  }
+
+  if (position === 'after') {
+    targetIndex += 1
+  }
+
+  nextTabs.splice(targetIndex, 0, movedTab)
+  sessionTabs.value = nextTabs
+}
+
+function handleSessionTabDragStart(sessionId, event) {
+  draggingSessionId.value = String(sessionId || '')
+  sessionDropTarget.value = {
+    sessionId: '',
+    position: ''
+  }
+
+  if (event?.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', draggingSessionId.value)
+  }
+}
+
+function handleSessionTabDragOver(targetSessionId, event) {
+  if (!draggingSessionId.value || draggingSessionId.value === targetSessionId) return
+
+  const rect = event?.currentTarget?.getBoundingClientRect?.()
+  const position = rect && Number.isFinite(event?.clientX)
+    ? (event.clientX >= rect.left + rect.width / 2 ? 'after' : 'before')
+    : 'before'
+
+  sessionDropTarget.value = {
+    sessionId: String(targetSessionId || ''),
+    position
+  }
+}
+
+function handleSessionTabDrop(targetSessionId) {
+  if (!draggingSessionId.value || draggingSessionId.value === targetSessionId) {
+    resetSessionTabDragState()
+    return
+  }
+
+  moveSessionTab(
+    draggingSessionId.value,
+    targetSessionId,
+    sessionDropTarget.value.position || 'before'
+  )
+  resetSessionTabDragState()
+}
+
+function handleSessionTabsDragOver(event) {
+  if (!draggingSessionId.value) return
+
+  const targetTab = event?.target?.closest?.('.ssh-tab')
+  if (targetTab) return
+
+  sessionDropTarget.value = {
+    sessionId: '',
+    position: 'append'
+  }
+}
+
+function handleSessionTabsDrop() {
+  if (!draggingSessionId.value) return
+  moveSessionTab(draggingSessionId.value, '', 'append')
+  resetSessionTabDragState()
+}
+
+function handleSessionTabDragEnd() {
+  resetSessionTabDragState()
+}
+
 function appendPendingSessionEvent(payload) {
   if (ignoredSessionIds.has(payload.sessionId)) return
   const list = pendingSessionEvents.get(payload.sessionId) || []
@@ -1880,6 +1984,19 @@ function flushPendingSessionEvents(sessionId) {
 async function resizeSession(sessionId, cols, rows) {
   if (!electronAPI?.resizeSshSession) return
   await electronAPI.resizeSshSession(sessionId, cols, rows)
+}
+
+async function fitSessionTerminal(sessionId) {
+  const controller = terminalControllers.get(String(sessionId || ''))
+  if (!controller) return
+
+  controller.fitAddon.fit()
+  await resizeSession(sessionId, controller.terminal.cols, controller.terminal.rows)
+}
+
+async function fitActiveTerminal() {
+  if (!activeSessionId.value) return
+  await fitSessionTerminal(activeSessionId.value)
 }
 
 function createTerminalController(sessionId, hostElement) {
@@ -2003,19 +2120,8 @@ function setTerminalHostRef(sessionId, element) {
   terminalHostRefs.delete(sessionId)
 }
 
-async function fitActiveTerminal() {
-  const controller = terminalControllers.get(activeSessionId.value)
-  if (!controller) return
-  controller.fitAddon.fit()
-  await resizeSession(activeSessionId.value, controller.terminal.cols, controller.terminal.rows)
-}
-
 function focusActiveTerminal() {
   terminalControllers.get(activeSessionId.value)?.terminal?.focus()
-}
-
-function clearActiveTerminal() {
-  terminalControllers.get(activeSessionId.value)?.terminal?.clear()
 }
 
 function setActiveSession(sessionId) {
@@ -2038,6 +2144,9 @@ async function closeSessionTab(sessionId) {
   if (activeSessionId.value === sessionId) {
     activeSessionId.value = sessionTabs.value[0]?.sessionId || ''
   }
+
+  await nextTick()
+  await fitActiveTerminal()
 }
 
 function applySessionEvent(payload) {
@@ -2393,16 +2502,6 @@ async function openCmdBookmark(bookmark) {
   })
 }
 
-async function disconnectActiveSession() {
-  if (!activeSessionId.value || !electronAPI?.disconnectSshSession) return
-  await electronAPI.disconnectSshSession(activeSessionId.value)
-}
-
-async function sendControlC() {
-  if (!activeSessionId.value) return
-  await writeSessionInput(activeSessionId.value, '\u0003', { showError: false })
-}
-
 async function handleCopyCommand(connection) {
   if (!String(connection?.host || '').trim()) {
     appStore.toast('请先填写主机地址', 'warning')
@@ -2577,17 +2676,22 @@ onBeforeUnmount(async () => {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 12px;
+  height: calc(100vh - 150px);
   min-height: calc(100vh - 150px);
+  overflow: hidden;
 }
 
 .ssh-sidebar {
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
   padding: 12px;
 }
 
 .ssh-sidebar-top {
+  flex-shrink: 0;
   margin-bottom: 12px;
 }
 
@@ -2643,19 +2747,27 @@ onBeforeUnmount(async () => {
 
 .ssh-list-shell {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--ssh-item-bg) 72%, transparent);
   overflow: hidden;
 }
 
 .ssh-group-list {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 8px;
-  max-height: 100%;
+  min-height: 0;
+  padding: 6px;
   overflow-y: auto;
 }
 
 .ssh-group-section {
+  flex-shrink: 0;
   border: 1px solid var(--ssh-border-soft);
   border-radius: 10px;
   background: var(--ssh-item-bg);
@@ -2773,8 +2885,6 @@ onBeforeUnmount(async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 100%;
-  overflow-y: auto;
 }
 
 .ssh-connection-list.compact {
@@ -3168,13 +3278,15 @@ onBeforeUnmount(async () => {
 .ssh-workspace {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
   min-height: 0;
+  overflow: hidden;
   padding: 12px;
 }
 
 .ssh-tabs-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
@@ -3183,10 +3295,11 @@ onBeforeUnmount(async () => {
 .ssh-tabs {
   display: flex;
   align-items: center;
+  align-content: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
 }
 
 .ssh-tabs-empty {
@@ -3206,10 +3319,25 @@ onBeforeUnmount(async () => {
   background: var(--ssh-item-bg);
   color: var(--ssh-text-main);
   cursor: pointer;
+  user-select: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
 .ssh-tab.active {
   border-color: var(--ssh-input-focus);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ssh-input-focus) 38%, transparent);
+}
+
+.ssh-tab[data-dragging='true'] {
+  opacity: 0.45;
+}
+
+.ssh-tab[data-drop-target='before'] {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ssh-accent-strong) 75%, transparent);
+}
+
+.ssh-tab[data-drop-target='after'] {
+  box-shadow: inset -3px 0 0 color-mix(in srgb, var(--ssh-accent-strong) 75%, transparent);
 }
 
 .ssh-tab-title {
@@ -3491,6 +3619,7 @@ onBeforeUnmount(async () => {
 }
 
 .ssh-delete-dropzone {
+  flex-shrink: 0;
   margin-top: 12px;
   padding: 12px 14px;
   border: 1px dashed color-mix(in srgb, var(--ssh-danger) 55%, var(--ssh-border-soft));
@@ -3527,6 +3656,9 @@ onBeforeUnmount(async () => {
 @media (max-width: 1200px) {
   .ssh-layout {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
   .ssh-list-shell {
