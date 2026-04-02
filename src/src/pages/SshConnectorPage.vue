@@ -436,6 +436,16 @@
           </div>
         </label>
 
+        <label class="ssh-field">
+          <span>登录密码</span>
+          <input
+            v-model="editorDraft.password"
+            type="password"
+            autocomplete="current-password"
+            placeholder="可留空；与私钥二选一，同时填写时优先使用私钥"
+          />
+        </label>
+
         <div class="ssh-form-grid auth-grid">
           <label class="ssh-field">
             <span>代理类型</span>
@@ -708,6 +718,7 @@ function createDraft(connection = null) {
     proxyPort: connection?.proxyPort ?? 1080,
     proxyUsername: connection?.proxyUsername || '',
     privateKeyPath: connection?.privateKeyPath || '',
+    password: connection?.password || '',
     remoteCommand: connection?.remoteCommand || '',
     note: connection?.note || '',
     createdAt: connection?.createdAt || '',
@@ -729,6 +740,7 @@ function normalizeConnection(connection) {
     proxyPort: clampNumber(parseInt(connection.proxyPort ?? connection.proxy_port, 10) || 1080, 1, 65535),
     proxyUsername: String(connection.proxyUsername || connection.proxy_username || '').trim(),
     privateKeyPath: String(connection.privateKeyPath || connection.private_key_path || '').trim(),
+    password: connection.password === undefined || connection.password === null ? '' : String(connection.password),
     remoteCommand: String(connection.remoteCommand || connection.remote_command || '').trim(),
     note: String(connection.note || '').trim(),
     createdAt: connection.createdAt || connection.created_at || '',
@@ -2419,8 +2431,8 @@ async function connectEmbeddedSession(connection) {
   const payload = buildSessionPayload(connection)
   if (!payload) return
 
-  if (!payload.privateKeyPath) {
-    appStore.toast('应用内 SSH 需要先配置私钥路径', 'warning')
+  if (!payload.privateKeyPath && !payload.password) {
+    appStore.toast('应用内 SSH 需要先配置密码或私钥', 'warning')
     return
   }
 

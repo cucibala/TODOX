@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 13;
+const DATABASE_VERSION = 14;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -205,6 +205,7 @@ class TodoXDatabase {
         proxy_port INTEGER,
         proxy_username TEXT,
         private_key_path TEXT,
+        password TEXT,
         remote_command TEXT,
         note TEXT,
         created_at TEXT NOT NULL,
@@ -1400,6 +1401,7 @@ class TodoXDatabase {
       proxyPort: connection.proxy_port || 1080,
       proxyUsername: connection.proxy_username || '',
       privateKeyPath: connection.private_key_path || '',
+      password: connection.password || '',
       remoteCommand: connection.remote_command || '',
       note: connection.note || '',
       createdAt: connection.created_at,
@@ -1427,6 +1429,7 @@ class TodoXDatabase {
       proxyPort: connection.proxy_port || 1080,
       proxyUsername: connection.proxy_username || '',
       privateKeyPath: connection.private_key_path || '',
+      password: connection.password || '',
       remoteCommand: connection.remote_command || '',
       note: connection.note || '',
       createdAt: connection.created_at,
@@ -1442,10 +1445,10 @@ class TodoXDatabase {
     const createdAt = connection.createdAt || connection.created_at || new Date().toISOString();
     const stmt = this.db.prepare(`
       INSERT INTO ssh_connections (
-        id, name, host, port, username, proxy_type, proxy_host, proxy_port, proxy_username, private_key_path, remote_command,
-        note, created_at, updated_at, last_connected_at
+        id, name, host, port, username, proxy_type, proxy_host, proxy_port, proxy_username, private_key_path, password,
+        remote_command, note, created_at, updated_at, last_connected_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -1459,6 +1462,7 @@ class TodoXDatabase {
       connection.proxyPort ? Number(connection.proxyPort) : (connection.proxy_port ? Number(connection.proxy_port) : null),
       connection.proxyUsername || connection.proxy_username || null,
       connection.privateKeyPath || connection.private_key_path || null,
+      connection.password || null,
       connection.remoteCommand || connection.remote_command || null,
       connection.note || null,
       createdAt,
@@ -1513,6 +1517,10 @@ class TodoXDatabase {
     if (updates.privateKeyPath !== undefined || updates.private_key_path !== undefined) {
       fields.push('private_key_path = ?');
       values.push(updates.privateKeyPath || updates.private_key_path || null);
+    }
+    if (updates.password !== undefined) {
+      fields.push('password = ?');
+      values.push(updates.password || null);
     }
     if (updates.remoteCommand !== undefined || updates.remote_command !== undefined) {
       fields.push('remote_command = ?');
@@ -2214,6 +2222,7 @@ class TodoXDatabase {
             proxy_port INTEGER,
             proxy_username TEXT,
             private_key_path TEXT,
+            password TEXT,
             remote_command TEXT,
             note TEXT,
             created_at TEXT NOT NULL,
@@ -2241,6 +2250,16 @@ class TodoXDatabase {
         }
         if (!columnNames.includes('proxy_username')) {
           this.db.exec('ALTER TABLE ssh_connections ADD COLUMN proxy_username TEXT;');
+        }
+      },
+
+      // 版本 14 - SSH 连接支持保存密码
+      14: function() {
+        const tableInfo = this.db.prepare('PRAGMA table_info(ssh_connections)').all();
+        const columnNames = tableInfo.map(col => col.name);
+
+        if (!columnNames.includes('password')) {
+          this.db.exec('ALTER TABLE ssh_connections ADD COLUMN password TEXT;');
         }
       },
 

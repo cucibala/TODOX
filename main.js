@@ -328,6 +328,7 @@ function normalizeSshConnectionPayload(connection = {}, options = {}) {
     proxyPort: Number.parseInt(connection.proxyPort ?? connection.proxy_port, 10) || 1080,
     proxyUsername: String(connection.proxyUsername || connection.proxy_username || '').trim(),
     privateKeyPath: String(connection.privateKeyPath || connection.private_key_path || '').trim(),
+    password: connection.password === undefined || connection.password === null ? '' : String(connection.password),
     remoteCommand: String(connection.remoteCommand || connection.remote_command || '').trim(),
     note: String(connection.note || '').trim()
   };
@@ -1438,12 +1439,12 @@ function requestCmdSessionPath(sessionId) {
 
 function buildEmbeddedSshOptions(connection) {
   const normalized = normalizeSshConnectionPayload(connection, {
-    validateKeyPath: true,
+    validateKeyPath: false,
     requireName: false
   });
 
   const username = normalized.username || os.userInfo().username;
-  const password = String(connection.password || '').trim();
+  const password = normalized.password;
   const passphrase = String(connection.passphrase || '').trim();
   const proxyPassword = String(connection.proxyPassword || connection.proxy_password || '').trim();
 
@@ -1456,13 +1457,17 @@ function buildEmbeddedSshOptions(connection) {
     keepaliveCountMax: 3
   };
 
-  if (normalized.privateKeyPath) {
+  const hasPrivateKey = normalized.privateKeyPath && fs.existsSync(normalized.privateKeyPath);
+
+  if (hasPrivateKey) {
     connectOptions.privateKey = fs.readFileSync(normalized.privateKeyPath);
     if (passphrase) {
       connectOptions.passphrase = passphrase;
     }
   } else if (password) {
     connectOptions.password = password;
+  } else if (normalized.privateKeyPath) {
+    throw new Error('私钥文件不存在');
   } else {
     throw new Error('应用内 SSH 连接需要密码或私钥');
   }
@@ -1508,7 +1513,10 @@ async function createEmbeddedSshSession(connection) {
     stream: null,
     closed: false,
     connectionId: normalized.id || '',
-    profile: normalized,
+    profile: {
+      ...normalized,
+      password: ''
+    },
     remoteUploadDir: '',
     uploadQueue: Promise.resolve()
   });
@@ -1904,6 +1912,23 @@ function decryptPassword(encrypted) {
   } catch (error) {
     return null;
   }
+}
+
+function normalizeSshConnectionForRenderer(connection) {
+  if (!connection || typeof connection !== 'object') return null;
+  return {
+    ...connection,
+    password: connection.password ? (decryptPassword(connection.password) || '') : ''
+  };
+}
+
+function normalizeSshConnectionForStorage(connection) {
+  if (!connection || typeof connection !== 'object') return connection;
+  const password = connection.password === undefined || connection.password === null ? '' : String(connection.password);
+  return {
+    ...connection,
+    password: password ? encryptPassword(password) : null
+  };
 }
 
 function normalizePasswordEntryForRenderer(entry) {
@@ -2316,7 +2341,7 @@ ipcMain.handle('load-ssh-connections', async () => {
       throw new Error('数据库未初始化');
     }
 
-    const connections = db.getSshConnections();
+    const connections = db.getSshConnections().map(normalizeSshConnectionForRenderer).filter(Boolean);
     return { success: true, connections };
   } catch (error) {
     console.error('读取 SSH 连接失败:', error);
@@ -2331,10 +2356,10 @@ ipcMain.handle('add-ssh-connection', async (event, connection) => {
     }
 
     const normalized = normalizeSshConnectionPayload(connection);
-    db.addSshConnection({
+    db.addSshConnection(normalizeSshConnectionForStorage({
       ...normalized,
       id: normalized.id || String(Date.now())
-    });
+    }));
 
     return { success: true };
   } catch (error) {
@@ -2349,7 +2374,7 @@ ipcMain.handle('update-ssh-connection', async (event, connectionId, updates) => 
       throw new Error('数据库未初始化');
     }
 
-    const existingConnection = db.getSshConnection(connectionId);
+    const existingConnection = normalizeSshConnectionForRenderer(db.getSshConnection(connectionId));
     if (!existingConnection) {
       throw new Error('SSH 连接不存在');
     }
@@ -2360,7 +2385,7 @@ ipcMain.handle('update-ssh-connection', async (event, connectionId, updates) => 
       id: connectionId
     });
 
-    db.updateSshConnection(connectionId, normalized);
+    db.updateSshConnection(connectionId, normalizeSshConnectionForStorage(normalized));
     return { success: true };
   } catch (error) {
     console.error('更新 SSH 连接失败:', error);

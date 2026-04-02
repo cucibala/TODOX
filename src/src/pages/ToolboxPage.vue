@@ -340,7 +340,7 @@
             </div>
             <div class="tool-card-body ssh-tool-body">
               <div class="ssh-security-note">
-                为了安全，连接器只保存主机、端口、用户名、私钥路径和登录后命令，不保存 SSH 密码。
+                支持保存主机、端口、用户名、密码、私钥路径和登录后命令；通过系统终端连接时，密码仍可能由 ssh 自行提示输入。
               </div>
 
               <div class="ssh-tool-layout">
@@ -387,6 +387,7 @@
                       </div>
 
                       <div class="ssh-connection-badges">
+                        <span v-if="connection.password" class="ssh-badge">密码</span>
                         <span v-if="connection.privateKeyPath" class="ssh-badge">私钥</span>
                         <span v-if="connection.remoteCommand" class="ssh-badge">命令</span>
                         <span v-if="connection.lastConnectedAt" class="ssh-badge subtle">最近使用</span>
@@ -460,6 +461,16 @@
                         清空
                       </button>
                     </div>
+                  </label>
+
+                  <label class="ssh-field">
+                    <span>登录密码</span>
+                    <input
+                      v-model="activeTab.state.draft.password"
+                      type="password"
+                      autocomplete="current-password"
+                      placeholder="可留空；保存后可在 SSH 页面复用"
+                    />
                   </label>
 
                   <label class="ssh-field">
@@ -722,6 +733,7 @@ function createSshDraft(connection = null) {
     port: connection?.port ?? 22,
     username: connection?.username || '',
     privateKeyPath: connection?.privateKeyPath || '',
+    password: connection?.password || '',
     remoteCommand: connection?.remoteCommand || '',
     note: connection?.note || '',
     createdAt: connection?.createdAt || '',
@@ -885,6 +897,7 @@ function normalizeSshConnection(connection) {
     port: clampNumber(parseInt(connection.port, 10) || 22, 1, 65535),
     username: String(connection.username || '').trim(),
     privateKeyPath: String(connection.privateKeyPath || connection.private_key_path || '').trim(),
+    password: connection.password === undefined || connection.password === null ? '' : String(connection.password),
     remoteCommand: String(connection.remoteCommand || connection.remote_command || '').trim(),
     note: String(connection.note || '').trim(),
     createdAt: connection.createdAt || connection.created_at || '',
