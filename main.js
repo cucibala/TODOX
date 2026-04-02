@@ -9,6 +9,9 @@ const { SocksClient } = require('socks');
 const pty = require('node-pty');
 const TodoXDatabase = require('./database');
 const isDev = process.argv.includes('--dev');
+// 统一使用更通用的终端类型，避免部分旧服务器 terminfo 不完整时
+// 出现 vi/vim 按键异常。
+const APP_TERMINAL_TERM = 'xterm';
 
 // 单实例锁定 - 只允许运行一个应用实例
 const gotTheLock = app.requestSingleInstanceLock();
@@ -382,6 +385,25 @@ function buildSshArgs(connection) {
   return args;
 }
 
+function buildNativeSshArgs(connection) {
+  const args = ['-tt'];
+
+  if (connection.port && Number(connection.port) !== 22) {
+    args.push('-p', String(connection.port));
+  }
+  if (connection.privateKeyPath) {
+    args.push('-i', connection.privateKeyPath);
+  }
+
+  args.push(connection.username ? `${connection.username}@${connection.host}` : connection.host);
+
+  if (connection.remoteCommand) {
+    args.push(connection.remoteCommand);
+  }
+
+  return args;
+}
+
 function buildSshExternalUrl(connection) {
   const safeHost = connection.host.includes(':') && !connection.host.startsWith('[')
     ? `[${connection.host}]`
@@ -432,6 +454,7 @@ async function launchWindowsSshTerminal(connection) {
   const psArgsLiteral = sshArgs.map(arg => `'${escapePowerShellSingleQuotedString(arg)}'`).join(', ');
   const script = [
     `$Host.UI.RawUI.WindowTitle = '${escapePowerShellSingleQuotedString(`TodoX SSH - ${title}`)}'`,
+    `$env:TERM = '${escapePowerShellSingleQuotedString(APP_TERMINAL_TERM)}'`,
     `$sshArgs = @(${psArgsLiteral})`,
     '& ssh.exe @sshArgs'
   ].join('\n');
@@ -448,7 +471,7 @@ async function launchWindowsSshTerminal(connection) {
 }
 
 async function launchMacSshTerminal(connection) {
-  const shellCommand = buildSshShellCommand(connection);
+  const shellCommand = `TERM=${quotePosixShellArg(APP_TERMINAL_TERM)} ${buildSshShellCommand(connection)}`;
   const escapedShellCommand = shellCommand
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"');
@@ -535,7 +558,7 @@ function finalizeCmdSession(sessionId, payload = {}) {
   broadcastSshSessionEvent({
     type: 'closed',
     sessionId,
-    connectionId: '',
+    connectionId: session.connectionId || '',
     ...payload
   });
 }
@@ -1344,13 +1367,13 @@ function createCmdSession(options = {}) {
   const args = process.platform === 'win32' ? [] : [];
 
   const terminalProcess = pty.spawn(command, args, {
-    name: 'xterm-256color',
+    name: APP_TERMINAL_TERM,
     cols: 120,
     rows: 32,
     cwd,
     env: {
       ...process.env,
-      TERM: 'xterm-256color'
+      TERM: APP_TERMINAL_TERM
     }
   });
 
@@ -1404,6 +1427,81 @@ function createCmdSession(options = {}) {
     sessionId,
     title: process.platform === 'win32' ? 'CMD' : 'Shell',
     cwd
+  };
+}
+
+function createNativeSshSession(connection) {
+  const normalized = normalizeSshConnectionPayload(connection, {
+    validateKeyPath: true,
+    requireName: false
+  });
+
+  if (normalized.proxyType === 'socks5') {
+    throw new Error('原生 SSH 暂不支持 SOCKS5 代理，请改用应用内 SSH 或系统终端');
+  }
+
+  const command = process.platform === 'win32' ? 'ssh.exe' : 'ssh';
+  const args = buildNativeSshArgs(normalized);
+  const sessionId = generateSshSessionId();
+  const target = normalized.username ? `${normalized.username}@${normalized.host}` : normalized.host;
+  const terminalProcess = pty.spawn(command, args, {
+    name: APP_TERMINAL_TERM,
+    cols: 120,
+    rows: 32,
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      TERM: APP_TERMINAL_TERM
+    }
+  });
+
+  const dataDisposable = terminalProcess.onData((data) => {
+    broadcastSshSessionEvent({
+      type: 'data',
+      sessionId,
+      connectionId: normalized.id || '',
+      data: String(data)
+    });
+  });
+
+  const exitDisposable = terminalProcess.onExit(({ exitCode }) => {
+    finalizeCmdSession(sessionId, { reason: 'process-close', code: exitCode });
+  });
+
+  cmdSessions.set(sessionId, {
+    id: sessionId,
+    pty: terminalProcess,
+    cwd: process.cwd(),
+    dataDisposable,
+    exitDisposable,
+    pathRequests: [],
+    closed: false,
+    kind: 'native-ssh',
+    connectionId: normalized.id || '',
+    profile: {
+      ...normalized,
+      password: ''
+    }
+  });
+
+  broadcastSshSessionEvent({
+    type: 'status',
+    status: 'connected',
+    sessionId,
+    connectionId: normalized.id || '',
+    message: `原生 SSH 已启动：${target}`
+  });
+
+  if (db && normalized.id) {
+    db.touchSshConnection(normalized.id, new Date().toISOString());
+  }
+
+  return {
+    sessionId,
+    username: normalized.username,
+    host: normalized.host,
+    port: normalized.port,
+    connectionId: normalized.id || ''
   };
 }
 
@@ -1532,7 +1630,7 @@ async function createEmbeddedSshSession(connection) {
 
     client.shell(
       {
-        term: 'xterm-256color',
+        term: APP_TERMINAL_TERM,
         cols: 120,
         rows: 32
       },
@@ -2440,6 +2538,19 @@ ipcMain.handle('connect-ssh-session', async (event, connection) => {
     };
   } catch (error) {
     console.error('创建应用内 SSH 会话失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('connect-ssh-native-session', async (event, connection) => {
+  try {
+    const session = createNativeSshSession(connection);
+    return {
+      success: true,
+      ...session
+    };
+  } catch (error) {
+    console.error('创建原生 SSH 会话失败:', error);
     return { success: false, error: error.message };
   }
 });

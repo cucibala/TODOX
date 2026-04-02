@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteSshConnection: (connectionId) => ipcRenderer.invoke('delete-ssh-connection', connectionId),
   connectSsh: (connection) => ipcRenderer.invoke('connect-ssh', connection),
   connectSshSession: (connection) => ipcRenderer.invoke('connect-ssh-session', connection),
+  connectSshNativeSession: (connection) => ipcRenderer.invoke('connect-ssh-native-session', connection),
   loadCmdPaths: () => ipcRenderer.invoke('load-cmd-paths'),
   saveCmdPaths: (paths) => ipcRenderer.invoke('save-cmd-paths', paths),
   loadSshGroupSettings: () => ipcRenderer.invoke('load-ssh-group-settings'),

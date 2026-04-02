@@ -3,7 +3,7 @@
     <header class="ssh-header">
       <div>
         <h1>SSH</h1>
-        <p>左侧管理连接，顶部终端 tab 支持拖动排序和多排显示。</p>
+        <p>左侧管理连接，顶部终端 tab 支持拖动排序和多排显示；默认连接走应用内原生 SSH，vi/vim 可以直接使用。</p>
       </div>
 
       <div class="ssh-header-actions">
@@ -154,11 +154,22 @@
                     <span class="ssh-connection-name compact">{{ connection.name }}</span>
                     <span class="ssh-connection-target compact">{{ group.itemType === 'ssh' ? formatTarget(connection) : connection.path }}</span>
                     <div class="ssh-connection-actions-inline">
+                      <template v-if="group.itemType === 'ssh'">
+                        <button
+                          class="ssh-plain-icon-btn ssh-connect-icon-btn"
+                          title="连接"
+                          aria-label="连接"
+                          @click.stop="connectNativeSession(connection)"
+                        >
+                          <img :src="connectIcon" alt="" />
+                        </button>
+                      </template>
                       <button
+                        v-else
                         class="ssh-plain-icon-btn ssh-connect-icon-btn"
-                        @click.stop="group.itemType === 'ssh' ? connectEmbeddedSession(connection) : openCmdBookmark(connection)"
-                        :title="group.itemType === 'ssh' ? '连接' : '打开 CMD'"
-                        :aria-label="group.itemType === 'ssh' ? '连接' : '打开 CMD'"
+                        title="打开 CMD"
+                        aria-label="打开 CMD"
+                        @click.stop="openCmdBookmark(connection)"
                       >
                         <img :src="connectIcon" alt="" />
                       </button>
@@ -2403,7 +2414,7 @@ async function handleSaveConnection() {
 async function handleSaveAndConnect() {
   const savedConnection = await handleSaveConnection()
   if (!savedConnection) return
-  await connectEmbeddedSession(savedConnection)
+  await connectNativeSession(savedConnection)
 }
 
 async function handlePickPrivateKey() {
@@ -2422,23 +2433,18 @@ async function handlePickPrivateKey() {
   }
 }
 
-async function connectEmbeddedSession(connection) {
-  if (!electronAPI?.connectSshSession) {
-    appStore.toast('当前环境不支持应用内 SSH', 'warning')
+async function connectNativeSession(connection) {
+  if (!electronAPI?.connectSshNativeSession) {
+    appStore.toast('当前环境不支持原生 SSH', 'warning')
     return
   }
 
   const payload = buildSessionPayload(connection)
   if (!payload) return
 
-  if (!payload.privateKeyPath && !payload.password) {
-    appStore.toast('应用内 SSH 需要先配置密码或私钥', 'warning')
-    return
-  }
-
-  const result = await electronAPI.connectSshSession(payload)
+  const result = await electronAPI.connectSshNativeSession(payload)
   if (!result?.success) {
-    appStore.toast(result?.error || '连接失败', 'error')
+    appStore.toast(result?.error || '原生 SSH 连接失败', 'error')
     return
   }
 
@@ -2447,14 +2453,28 @@ async function connectEmbeddedSession(connection) {
     connectionId: result.connectionId || payload.id || '',
     title: payload.name || payload.host,
     target: formatTarget(payload, true),
-    type: 'ssh',
-    status: 'connecting',
-    statusLabel: getStatusLabel('connecting'),
-    message: `正在连接 ${formatTarget(payload, true)}...`
+    type: 'ssh-native',
+    status: 'connected',
+    statusLabel: getStatusLabel('connected'),
+    message: `原生 SSH 已启动：${formatTarget(payload, true)}`
   }
 
   sessionTabs.value.push(tab)
   activeSessionId.value = tab.sessionId
+
+  const existing = connections.value.find(item => item.id === payload.id)
+  if (existing) {
+    const connectedAt = new Date().toISOString()
+    const updated = upsertConnection({
+      ...existing,
+      ...payload,
+      lastConnectedAt: connectedAt,
+      updatedAt: connectedAt
+    })
+    if (selectedConnectionId.value === updated.id) {
+      draft.value = createDraft(updated)
+    }
+  }
 
   await nextTick()
   ensureTerminalController(tab.sessionId)
@@ -2464,6 +2484,39 @@ async function connectEmbeddedSession(connection) {
   }
   await fitActiveTerminal()
   focusActiveTerminal()
+}
+
+async function connectInSystemTerminal(connection) {
+  if (!electronAPI?.connectSsh) {
+    appStore.toast('当前环境不支持系统终端 SSH', 'warning')
+    return false
+  }
+
+  const payload = buildSessionPayload(connection)
+  if (!payload) return false
+
+  const result = await electronAPI.connectSsh(payload)
+  if (!result?.success) {
+    appStore.toast(result?.error || '启动系统终端 SSH 失败', 'error')
+    return false
+  }
+
+  const existing = connections.value.find(item => item.id === payload.id)
+  if (existing) {
+    const connectedAt = result.lastConnectedAt || new Date().toISOString()
+    const updated = upsertConnection({
+      ...existing,
+      ...payload,
+      lastConnectedAt: connectedAt,
+      updatedAt: connectedAt
+    })
+    if (selectedConnectionId.value === updated.id) {
+      draft.value = createDraft(updated)
+    }
+  }
+
+  appStore.toast('SSH 会话已在系统终端中打开，vi/vim 建议使用此方式', 'success')
+  return true
 }
 
 async function createCmdTab(options = {}) {
