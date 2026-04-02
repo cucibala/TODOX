@@ -2434,13 +2434,55 @@ async function handlePickPrivateKey() {
 }
 
 async function connectNativeSession(connection) {
+  const payload = buildSessionPayload(connection)
+  if (!payload) return
+
+  if (payload.proxyType === 'socks5') {
+    if (!electronAPI?.connectSshSession) {
+      appStore.toast('当前环境不支持 SOCKS5 代理 SSH', 'warning')
+      return
+    }
+
+    if (!payload.privateKeyPath && !payload.password) {
+      appStore.toast('通过 SOCKS5 代理连接时，请先配置密码或私钥', 'warning')
+      return
+    }
+
+    const result = await electronAPI.connectSshSession(payload)
+    if (!result?.success) {
+      appStore.toast(result?.error || '通过 SOCKS5 代理连接失败', 'error')
+      return
+    }
+
+    const tab = {
+      sessionId: result.sessionId,
+      connectionId: result.connectionId || payload.id || '',
+      title: payload.name || payload.host,
+      target: formatTarget(payload, true),
+      type: 'ssh',
+      status: 'connecting',
+      statusLabel: getStatusLabel('connecting'),
+      message: `正在通过 SOCKS5 代理连接 ${formatTarget(payload, true)}...`
+    }
+
+    sessionTabs.value.push(tab)
+    activeSessionId.value = tab.sessionId
+
+    await nextTick()
+    ensureTerminalController(tab.sessionId)
+    const controller = terminalControllers.get(tab.sessionId)
+    if (controller) {
+      controller.terminal.writeln(`[TodoX] ${tab.message}`)
+    }
+    await fitActiveTerminal()
+    focusActiveTerminal()
+    return
+  }
+
   if (!electronAPI?.connectSshNativeSession) {
     appStore.toast('当前环境不支持原生 SSH', 'warning')
     return
   }
-
-  const payload = buildSessionPayload(connection)
-  if (!payload) return
 
   const result = await electronAPI.connectSshNativeSession(payload)
   if (!result?.success) {
