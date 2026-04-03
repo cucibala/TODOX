@@ -1,0 +1,4 @@
+owner: cucibala
+repo: TODOX
+provider: github
+updaterCacheDirName: todox-updater

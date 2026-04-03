@@ -1,0 +1,8 @@
+version: 3.14.0
+files:
+  - url: TodoX-Setup-3.14.0.exe
+    sha512: aWMJA0Xb7g0LppptD6mtl77jHUqgQVrKVDSazVgBOkXMQuH9jjVbxFrVp3fTxajVPQi8FfoqL4c4L5ZHx7NZuQ==
+    size: 89557907
+path: TodoX-Setup-3.14.0.exe
+sha512: aWMJA0Xb7g0LppptD6mtl77jHUqgQVrKVDSazVgBOkXMQuH9jjVbxFrVp3fTxajVPQi8FfoqL4c4L5ZHx7NZuQ==
+releaseDate: '2026-04-03T01:54:34.819Z'

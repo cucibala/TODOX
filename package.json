@@ -10,6 +10,7 @@
     "vue:build": "cd src && npm run build",
     "build": "npm run vue:build && electron-builder",
     "build:win": "npm run vue:build && electron-builder --win",
+    "build:win:fresh": "npm run vue:build && electron-builder --win -c.directories.output=dist-fresh",
     "build:mac": "npm run vue:build && electron-builder --mac",
     "build:linux": "npm run vue:build && electron-builder --linux",
     "postinstall": "electron-builder install-app-deps"

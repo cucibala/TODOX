@@ -3,7 +3,7 @@
     <header class="ssh-header">
       <div>
         <h1>SSH</h1>
-        <p>左侧管理连接，顶部终端 tab 支持拖动排序和多排显示；默认连接走应用内原生 SSH，vi/vim 可以直接使用。</p>
+        <p>左侧管理连接，顶部终端 tab 支持拖动排序和多排显示；连接为原生 SSH，SSH2 为兼容模式。</p>
       </div>
 
       <div class="ssh-header-actions">
@@ -157,11 +157,19 @@
                       <template v-if="group.itemType === 'ssh'">
                         <button
                           class="ssh-plain-icon-btn ssh-connect-icon-btn"
-                          title="连接"
-                          aria-label="连接"
+                          title="原生 SSH 连接"
+                          aria-label="原生 SSH 连接"
                           @click.stop="connectNativeSession(connection)"
                         >
                           <img :src="connectIcon" alt="" />
+                        </button>
+                        <button
+                          class="ssh-inline-action-btn"
+                          title="SSH2 兼容模式，适合代理、上传下载和兼容性兜底"
+                          aria-label="SSH2 兼容模式"
+                          @click.stop="connectEmbeddedSession(connection)"
+                        >
+                          SSH2
                         </button>
                       </template>
                       <button
@@ -495,6 +503,7 @@
         <div class="ssh-editor-actions">
           <button class="ssh-btn primary" @click="handleSaveConnection">保存</button>
           <button class="ssh-btn" @click="handleSaveAndConnect">保存并连接</button>
+          <button class="ssh-btn" @click="handleSaveAndConnectEmbedded">保存并 SSH2 连接</button>
           <button class="ssh-btn" @click="closeConnectionEditor">取消</button>
         </div>
       </div>
@@ -2417,6 +2426,12 @@ async function handleSaveAndConnect() {
   await connectNativeSession(savedConnection)
 }
 
+async function handleSaveAndConnectEmbedded() {
+  const savedConnection = await handleSaveConnection()
+  if (!savedConnection) return
+  await connectEmbeddedSession(savedConnection)
+}
+
 async function handlePickPrivateKey() {
   if (!electronAPI?.selectSshPrivateKey) {
     appStore.toast('当前环境不支持选择私钥文件', 'warning')
@@ -2433,49 +2448,62 @@ async function handlePickPrivateKey() {
   }
 }
 
+async function connectEmbeddedSession(connection, options = {}) {
+  if (!electronAPI?.connectSshSession) {
+    appStore.toast('当前环境不支持 SSH2 兼容连接', 'warning')
+    return
+  }
+
+  const payload = buildSessionPayload(connection)
+  if (!payload) return
+
+  if (!payload.privateKeyPath && !payload.password) {
+    appStore.toast('SSH2 连接需要先配置密码或私钥', 'warning')
+    return
+  }
+
+  const result = await electronAPI.connectSshSession(payload)
+  if (!result?.success) {
+    appStore.toast(result?.error || options.errorMessage || 'SSH2 连接失败', 'error')
+    return
+  }
+
+  const isProxyConnection = payload.proxyType === 'socks5'
+  const tab = {
+    sessionId: result.sessionId,
+    connectionId: result.connectionId || payload.id || '',
+    title: payload.name || payload.host,
+    target: formatTarget(payload, true),
+    type: 'ssh',
+    status: 'connecting',
+    statusLabel: getStatusLabel('connecting'),
+    message: options.message || (isProxyConnection
+      ? `正在通过 SOCKS5 代理连接 ${formatTarget(payload, true)}...`
+      : `正在通过 SSH2 兼容模式连接 ${formatTarget(payload, true)}...`)
+  }
+
+  sessionTabs.value.push(tab)
+  activeSessionId.value = tab.sessionId
+
+  await nextTick()
+  ensureTerminalController(tab.sessionId)
+  const controller = terminalControllers.get(tab.sessionId)
+  if (controller) {
+    controller.terminal.writeln(`[TodoX] ${tab.message}`)
+  }
+  await fitActiveTerminal()
+  focusActiveTerminal()
+}
+
 async function connectNativeSession(connection) {
   const payload = buildSessionPayload(connection)
   if (!payload) return
 
   if (payload.proxyType === 'socks5') {
-    if (!electronAPI?.connectSshSession) {
-      appStore.toast('当前环境不支持 SOCKS5 代理 SSH', 'warning')
-      return
-    }
-
-    if (!payload.privateKeyPath && !payload.password) {
-      appStore.toast('通过 SOCKS5 代理连接时，请先配置密码或私钥', 'warning')
-      return
-    }
-
-    const result = await electronAPI.connectSshSession(payload)
-    if (!result?.success) {
-      appStore.toast(result?.error || '通过 SOCKS5 代理连接失败', 'error')
-      return
-    }
-
-    const tab = {
-      sessionId: result.sessionId,
-      connectionId: result.connectionId || payload.id || '',
-      title: payload.name || payload.host,
-      target: formatTarget(payload, true),
-      type: 'ssh',
-      status: 'connecting',
-      statusLabel: getStatusLabel('connecting'),
-      message: `正在通过 SOCKS5 代理连接 ${formatTarget(payload, true)}...`
-    }
-
-    sessionTabs.value.push(tab)
-    activeSessionId.value = tab.sessionId
-
-    await nextTick()
-    ensureTerminalController(tab.sessionId)
-    const controller = terminalControllers.get(tab.sessionId)
-    if (controller) {
-      controller.terminal.writeln(`[TodoX] ${tab.message}`)
-    }
-    await fitActiveTerminal()
-    focusActiveTerminal()
+    await connectEmbeddedSession(payload, {
+      message: `正在通过 SOCKS5 代理连接 ${formatTarget(payload, true)}...`,
+      errorMessage: '通过 SOCKS5 代理连接失败'
+    })
     return
   }
 
@@ -3091,6 +3119,31 @@ onBeforeUnmount(async () => {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ssh-input-focus) 28%, transparent);
   border-radius: 8px;
+}
+
+.ssh-inline-action-btn {
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--ssh-border-soft) 88%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ssh-item-bg) 88%, transparent);
+  color: var(--ssh-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.ssh-inline-action-btn:hover {
+  color: var(--ssh-accent-strong);
+  border-color: color-mix(in srgb, var(--ssh-input-focus) 58%, transparent);
+  transform: translateY(-1px);
+}
+
+.ssh-inline-action-btn:focus-visible {
+  outline: none;
+  border-color: var(--ssh-input-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ssh-input-focus) 24%, transparent);
 }
 
 .ssh-connect-icon-btn {
