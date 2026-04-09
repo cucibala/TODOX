@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 
 // 当前数据库版本
-const DATABASE_VERSION = 14;
+const DATABASE_VERSION = 15;
 
 class TodoXDatabase {
   constructor(dbPath) {
@@ -74,6 +74,7 @@ class TodoXDatabase {
         group_id TEXT NOT NULL,
         account TEXT NOT NULL,
         password TEXT NOT NULL,
+        totp_secret TEXT,
         website TEXT,
         note TEXT,
         "order" INTEGER DEFAULT 0,
@@ -331,6 +332,10 @@ class TodoXDatabase {
         this.db.exec('ALTER TABLE password_entries ADD COLUMN website TEXT;');
         console.log('✓ 已为 password_entries 表添加 website 字段');
       }
+      if (!entryColumns.includes('totp_secret')) {
+        this.db.exec('ALTER TABLE password_entries ADD COLUMN totp_secret TEXT;');
+        console.log('✓ 已为 password_entries 表添加 totp_secret 字段');
+      }
       if (!entryColumns.includes('note')) {
         this.db.exec('ALTER TABLE password_entries ADD COLUMN note TEXT;');
         console.log('✓ 已为 password_entries 表添加 note 字段');
@@ -453,14 +458,15 @@ class TodoXDatabase {
    */
   addPasswordEntry(entry) {
     const stmt = this.db.prepare(`
-      INSERT INTO password_entries (id, group_id, account, password, website, note, "order", created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO password_entries (id, group_id, account, password, totp_secret, website, note, "order", created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       String(entry.id),
       String(entry.groupId ?? entry.group_id),
       entry.account,
       entry.password,
+      entry.totpSecret ?? entry.totp_secret ?? null,
       entry.website || '',
       entry.note || '',
       entry.order || 0,
@@ -488,6 +494,11 @@ class TodoXDatabase {
     if (updates.password !== undefined) {
       fields.push('password = ?');
       values.push(updates.password);
+    }
+    if (updates.totpSecret !== undefined || updates.totp_secret !== undefined) {
+      const totpSecret = updates.totpSecret ?? updates.totp_secret ?? null;
+      fields.push('totp_secret = ?');
+      values.push(totpSecret);
     }
     if (updates.website !== undefined) {
       fields.push('website = ?');
@@ -2196,6 +2207,7 @@ class TodoXDatabase {
             group_id TEXT NOT NULL,
             account TEXT NOT NULL,
             password TEXT NOT NULL,
+            totp_secret TEXT,
             website TEXT,
             note TEXT,
             "order" INTEGER DEFAULT 0,
@@ -2260,6 +2272,17 @@ class TodoXDatabase {
 
         if (!columnNames.includes('password')) {
           this.db.exec('ALTER TABLE ssh_connections ADD COLUMN password TEXT;');
+        }
+      },
+
+      // 版本 15 - 密码本支持 2FA 密钥
+      15: function() {
+        const tableInfo = this.db.prepare('PRAGMA table_info(password_entries)').all();
+        const columnNames = tableInfo.map(col => col.name);
+
+        if (!columnNames.includes('totp_secret')) {
+          this.db.exec('ALTER TABLE password_entries ADD COLUMN totp_secret TEXT;');
+          console.log('✓ 已为 password_entries 表添加 totp_secret 字段');
         }
       },
 

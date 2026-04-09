@@ -2032,7 +2032,8 @@ function normalizeSshConnectionForStorage(connection) {
 function normalizePasswordEntryForRenderer(entry) {
   return {
     ...entry,
-    password: decryptPassword(entry.password) || ''
+    password: decryptPassword(entry.password) || '',
+    totpSecret: entry.totp_secret ? (decryptPassword(entry.totp_secret) || '') : ''
   };
 }
 
@@ -3104,7 +3105,8 @@ ipcMain.handle('add-password-vault-entry', async (event, entry) => {
     }
     db.addPasswordEntry({
       ...entry,
-      password: encryptPassword(entry.password || '')
+      password: encryptPassword(entry.password || ''),
+      totpSecret: entry.totpSecret ? encryptPassword(entry.totpSecret) : null
     });
     return { success: true };
   } catch (error) {
@@ -3122,6 +3124,9 @@ ipcMain.handle('update-password-vault-entry', async (event, entryId, updates) =>
     const payload = { ...updates };
     if (payload.password !== undefined) {
       payload.password = encryptPassword(payload.password || '');
+    }
+    if (payload.totpSecret !== undefined) {
+      payload.totpSecret = payload.totpSecret ? encryptPassword(payload.totpSecret) : null;
     }
     db.updatePasswordEntry(entryId, payload);
     return { success: true };

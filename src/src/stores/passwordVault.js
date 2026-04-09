@@ -31,6 +31,7 @@ export const usePasswordVaultStore = defineStore('passwordVault', () => {
       groupId: String(entry.groupId ?? entry.group_id),
       account: entry.account || '',
       password: entry.password || '',
+      totpSecret: entry.totpSecret || entry.totp_secret || '',
       website: entry.website || '',
       note: entry.note || '',
       order: entry.order ?? 0,
@@ -207,6 +208,7 @@ export const usePasswordVaultStore = defineStore('passwordVault', () => {
     const groupId = payload.groupId ? String(payload.groupId) : String(currentGroupId.value || '')
     const account = String(payload.account || '').trim()
     const password = String(payload.password || '').trim()
+    const totpSecret = String(payload.totpSecret || '').trim()
     const website = String(payload.website || '').trim()
     const note = String(payload.note || '').trim()
 
@@ -224,6 +226,7 @@ export const usePasswordVaultStore = defineStore('passwordVault', () => {
       groupId,
       account,
       password,
+      totpSecret,
       website,
       note,
       order: getNextEntryOrder(groupId),
@@ -259,6 +262,9 @@ export const usePasswordVaultStore = defineStore('passwordVault', () => {
         appStore.toast('密码不能为空', 'warning')
         return false
       }
+    }
+    if (nextUpdates.totpSecret !== undefined) {
+      nextUpdates.totpSecret = String(nextUpdates.totpSecret || '').trim()
     }
     if (nextUpdates.website !== undefined) {
       nextUpdates.website = String(nextUpdates.website || '').trim()

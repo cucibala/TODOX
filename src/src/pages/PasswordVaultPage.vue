@@ -79,6 +79,7 @@
               <tr>
                 <th>账号</th>
                 <th>密码</th>
+                <th>2FA</th>
                 <th>网址</th>
                 <th>备注</th>
                 <th>更新于</th>
@@ -98,14 +99,30 @@
                   />
                 </td>
                 <td>
-                  <input
-                    v-model="newEntry.password"
-                    class="vault-cell-input"
-                    type="text"
-                    maxlength="200"
-                    placeholder="输入密码"
-                    @keyup.enter="createEntry"
-                  />
+                  <div class="vault-cell-stack">
+                    <input
+                      v-model="newEntry.password"
+                      class="vault-cell-input"
+                      type="text"
+                      maxlength="200"
+                      placeholder="输入密码"
+                      @keyup.enter="createEntry"
+                    />
+                    <button class="vault-secondary-btn small" @click="fillRandomPassword(newEntry)">随机</button>
+                  </div>
+                </td>
+                <td>
+                  <div class="vault-cell-stack">
+                    <input
+                      v-model="newEntry.totpSecret"
+                      class="vault-cell-input"
+                      type="text"
+                      maxlength="300"
+                      placeholder="2FA 密钥或 otpauth 链接"
+                      @keyup.enter="createEntry"
+                    />
+                    <button class="vault-secondary-btn small ghost" @click="previewNewEntryTotp">验证码</button>
+                  </div>
                 </td>
                 <td>
                   <input
@@ -132,7 +149,7 @@
               </tr>
 
               <tr v-if="filteredEntries.length === 0">
-                <td colspan="6" class="vault-table-empty">
+                <td colspan="7" class="vault-table-empty">
                   {{ searchQuery ? '没有匹配记录' : '当前分组还没有记录，直接在上面一行开始录入。' }}
                 </td>
               </tr>
@@ -150,14 +167,31 @@
                     />
                   </td>
                   <td>
-                    <input
-                      v-model="editingEntry.password"
-                      class="vault-cell-input"
-                      type="text"
-                      maxlength="200"
-                      @keyup.enter="saveEditingEntry"
-                      @keyup.esc="cancelEditingEntry"
-                    />
+                    <div class="vault-cell-stack">
+                      <input
+                        v-model="editingEntry.password"
+                        class="vault-cell-input"
+                        type="text"
+                        maxlength="200"
+                        @keyup.enter="saveEditingEntry"
+                        @keyup.esc="cancelEditingEntry"
+                      />
+                      <button class="vault-secondary-btn small" @click="fillRandomPassword(editingEntry)">随机</button>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="vault-cell-stack">
+                      <input
+                        v-model="editingEntry.totpSecret"
+                        class="vault-cell-input"
+                        type="text"
+                        maxlength="300"
+                        placeholder="2FA 密钥或 otpauth 链接"
+                        @keyup.enter="saveEditingEntry"
+                        @keyup.esc="cancelEditingEntry"
+                      />
+                      <button class="vault-secondary-btn small ghost" @click="previewEditingEntryTotp">验证码</button>
+                    </div>
                   </td>
                   <td>
                     <input
@@ -208,6 +242,13 @@
                     </div>
                   </td>
                   <td>
+                    <div v-if="entry.totpSecret" class="vault-2fa-cell">
+                      <span class="vault-2fa-badge">已配置</span>
+                      <button class="vault-inline-link" @click="openEntryTotp(entry)">查看验证码</button>
+                    </div>
+                    <span v-else class="muted">-</span>
+                  </td>
+                  <td>
                     <button
                       v-if="entry.website"
                       class="vault-link-btn"
@@ -251,14 +292,51 @@
     <div v-else-if="isLoaded" class="vault-empty-panel large">
       先创建一个分组，然后就可以在下方表格持续录入，切换页面回来也不会清空当前输入。
     </div>
+
+    <div v-if="totpDialog.visible" class="vault-modal-overlay" @click.self="closeTotpDialog">
+      <div class="vault-modal">
+        <div class="vault-modal-header">
+          <div>
+            <div class="vault-modal-title">动态验证码</div>
+            <div class="vault-modal-subtitle">{{ totpDialog.label || totpDialog.title }}</div>
+          </div>
+          <button class="vault-inline-link" @click="closeTotpDialog">关闭</button>
+        </div>
+
+        <div v-if="totpDialog.issuer" class="vault-modal-meta">
+          服务商：{{ totpDialog.issuer }}
+        </div>
+
+        <div v-if="totpDialog.error" class="vault-totp-error">
+          {{ totpDialog.error }}
+        </div>
+
+        <template v-else>
+          <div class="vault-totp-code">{{ totpDialog.code }}</div>
+          <div class="vault-totp-hint">
+            {{ totpDialog.remainingSeconds }} 秒后刷新
+          </div>
+          <div class="vault-totp-progress">
+            <div class="vault-totp-progress-bar" :style="totpProgressStyle"></div>
+          </div>
+          <div class="vault-action-row">
+            <button class="vault-primary-btn small" @click="copyText(totpDialog.code, '验证码已复制')">复制验证码</button>
+            <button class="vault-secondary-btn small ghost" @click="refreshTotpDialog">立即刷新</button>
+          </div>
+        </template>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { usePasswordVaultStore } from '../stores/passwordVault'
+import { generateRandomPassword, generateTotpToken } from '../utils/password_tools'
+
+const RANDOM_PASSWORD_LENGTH = 18
 
 const appStore = useAppStore()
 const passwordVaultStore = usePasswordVaultStore()
@@ -274,6 +352,7 @@ const editingEntryId = ref('')
 const newEntry = reactive({
   account: '',
   password: '',
+  totpSecret: '',
   website: '',
   note: ''
 })
@@ -282,14 +361,42 @@ const editingEntry = reactive({
   groupId: '',
   account: '',
   password: '',
+  totpSecret: '',
   website: '',
   note: ''
+})
+
+const totpDialog = reactive({
+  visible: false,
+  title: '2FA 验证码',
+  secret: '',
+  code: '',
+  issuer: '',
+  label: '',
+  period: 30,
+  remainingSeconds: 30,
+  error: ''
+})
+
+let totpTimer = null
+let totpRequestId = 0
+
+const totpProgressStyle = computed(() => {
+  const period = Math.max(Number(totpDialog.period) || 30, 1)
+  const remaining = Math.max(Number(totpDialog.remainingSeconds) || 0, 0)
+  return {
+    width: `${Math.min((remaining / period) * 100, 100)}%`
+  }
 })
 
 onMounted(async () => {
   if (!isLoaded.value) {
     await passwordVaultStore.loadPasswordVault()
   }
+})
+
+onBeforeUnmount(() => {
+  stopTotpDialogTimer()
 })
 
 function getGroupEntryCount(groupId) {
@@ -332,6 +439,7 @@ async function saveEditingGroup() {
 function resetNewEntry() {
   newEntry.account = ''
   newEntry.password = ''
+  newEntry.totpSecret = ''
   newEntry.website = ''
   newEntry.note = ''
 }
@@ -342,6 +450,7 @@ async function createEntry() {
       groupId: currentGroupId.value,
       account: newEntry.account,
       password: newEntry.password,
+      totpSecret: newEntry.totpSecret,
       website: newEntry.website,
       note: newEntry.note
     })
@@ -358,6 +467,7 @@ function startEditingEntry(entry) {
   editingEntry.groupId = String(entry.groupId || currentGroupId.value || '')
   editingEntry.account = entry.account || ''
   editingEntry.password = entry.password || ''
+  editingEntry.totpSecret = entry.totpSecret || ''
   editingEntry.website = entry.website || ''
   editingEntry.note = entry.note || ''
 }
@@ -367,6 +477,7 @@ function cancelEditingEntry() {
   editingEntry.groupId = ''
   editingEntry.account = ''
   editingEntry.password = ''
+  editingEntry.totpSecret = ''
   editingEntry.website = ''
   editingEntry.note = ''
 }
@@ -378,6 +489,7 @@ async function saveEditingEntry() {
       groupId: editingEntry.groupId,
       account: editingEntry.account,
       password: editingEntry.password,
+      totpSecret: editingEntry.totpSecret,
       website: editingEntry.website,
       note: editingEntry.note
     })
@@ -387,6 +499,119 @@ async function saveEditingEntry() {
   } catch (error) {
     appStore.toast(error.message || '保存记录失败', 'error')
   }
+}
+
+function fillRandomPassword(target) {
+  try {
+    target.password = generateRandomPassword({ length: RANDOM_PASSWORD_LENGTH })
+    appStore.toast('已生成随机密码', 'success')
+  } catch (error) {
+    appStore.toast(error.message || '生成随机密码失败', 'error')
+  }
+}
+
+function getTotpTitle(entryOrLabel) {
+  if (typeof entryOrLabel === 'string') {
+    return String(entryOrLabel || '').trim() || '2FA 验证码'
+  }
+  return entryOrLabel?.account || entryOrLabel?.website || selectedGroup.value?.name || '2FA 验证码'
+}
+
+function resetTotpDialog() {
+  totpDialog.visible = false
+  totpDialog.title = '2FA 验证码'
+  totpDialog.secret = ''
+  totpDialog.code = ''
+  totpDialog.issuer = ''
+  totpDialog.label = ''
+  totpDialog.period = 30
+  totpDialog.remainingSeconds = 30
+  totpDialog.error = ''
+}
+
+function stopTotpDialogTimer() {
+  if (totpTimer) {
+    clearInterval(totpTimer)
+    totpTimer = null
+  }
+}
+
+function closeTotpDialog() {
+  totpRequestId += 1
+  stopTotpDialogTimer()
+  resetTotpDialog()
+}
+
+async function refreshTotpDialog() {
+  if (!totpDialog.visible || !totpDialog.secret) return
+
+  const requestId = ++totpRequestId
+  try {
+    const token = await generateTotpToken(totpDialog.secret)
+    if (requestId !== totpRequestId || !totpDialog.visible) {
+      return
+    }
+
+    totpDialog.code = token.code
+    totpDialog.issuer = token.issuer || ''
+    totpDialog.label = token.label || ''
+    totpDialog.period = token.period || 30
+    totpDialog.remainingSeconds = token.remainingSeconds || token.period || 30
+    totpDialog.error = ''
+  } catch (error) {
+    if (requestId !== totpRequestId || !totpDialog.visible) {
+      return
+    }
+
+    totpDialog.code = ''
+    totpDialog.issuer = ''
+    totpDialog.label = ''
+    totpDialog.error = error.message || '2FA 密钥格式无效'
+    stopTotpDialogTimer()
+  }
+}
+
+function startTotpDialogTimer() {
+  stopTotpDialogTimer()
+  totpTimer = setInterval(() => {
+    void refreshTotpDialog()
+  }, 1000)
+}
+
+async function previewTotp(secret, title) {
+  if (!String(secret || '').trim()) {
+    appStore.toast('请先填写 2FA 密钥', 'warning')
+    return
+  }
+
+  totpRequestId += 1
+  stopTotpDialogTimer()
+  totpDialog.visible = true
+  totpDialog.title = getTotpTitle(title)
+  totpDialog.secret = String(secret || '').trim()
+  totpDialog.code = ''
+  totpDialog.issuer = ''
+  totpDialog.label = ''
+  totpDialog.period = 30
+  totpDialog.remainingSeconds = 30
+  totpDialog.error = ''
+
+  await refreshTotpDialog()
+  if (!totpDialog.error) {
+    startTotpDialogTimer()
+  }
+}
+
+async function previewNewEntryTotp() {
+  await previewTotp(newEntry.totpSecret, newEntry.account || '新记录')
+}
+
+async function previewEditingEntryTotp() {
+  await previewTotp(editingEntry.totpSecret, editingEntry.account || '编辑记录')
+}
+
+async function openEntryTotp(entry) {
+  await previewTotp(entry.totpSecret, getTotpTitle(entry))
 }
 
 function isPasswordVisible(entryId) {
@@ -674,7 +899,7 @@ function formatDateTime(value) {
 
 .vault-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 1180px;
   border-collapse: collapse;
 }
 
@@ -703,7 +928,7 @@ function formatDateTime(value) {
 }
 
 .vault-table .actions {
-  width: 320px;
+  width: 340px;
 }
 
 .vault-action-row {
@@ -711,6 +936,18 @@ function formatDateTime(value) {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.vault-cell-stack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 210px;
+}
+
+.vault-cell-stack .vault-cell-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .vault-new-row td {
@@ -738,6 +975,24 @@ function formatDateTime(value) {
   border-radius: 10px;
   background: #0f172a;
   color: #e2e8f0;
+}
+
+.vault-2fa-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.vault-2fa-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .vault-link-btn {
@@ -812,6 +1067,93 @@ function formatDateTime(value) {
   margin-top: 18px;
 }
 
+.vault-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.vault-modal {
+  width: min(100%, 420px);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+  padding: 22px;
+  box-sizing: border-box;
+}
+
+.vault-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.vault-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.vault-modal-subtitle,
+.vault-modal-meta,
+.vault-totp-hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.vault-totp-code {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: #0f172a;
+  color: #f8fafc;
+  text-align: center;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+.vault-totp-progress {
+  margin-top: 12px;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+}
+
+.vault-totp-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #16a34a 0%, #2563eb 100%);
+  transition: width 0.25s linear;
+}
+
+.vault-totp-error {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(220, 38, 38, 0.16);
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.vault-modal .vault-action-row {
+  margin-top: 16px;
+}
+
 .vault-table-empty {
   padding: 40px 20px;
   text-align: center;
@@ -839,6 +1181,20 @@ function formatDateTime(value) {
 
   .vault-search-input {
     width: 100%;
+  }
+
+  .vault-modal-overlay {
+    padding: 16px;
+  }
+
+  .vault-modal {
+    width: 100%;
+    padding: 18px;
+  }
+
+  .vault-totp-code {
+    font-size: 28px;
+    letter-spacing: 4px;
   }
 }
 </style>
