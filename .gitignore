@@ -19,3 +19,4 @@ dist-vue/*
 test/
 .env
 .claude
+dist-*/
