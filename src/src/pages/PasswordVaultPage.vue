@@ -117,11 +117,14 @@
                       v-model="newEntry.totpSecret"
                       class="vault-cell-input"
                       type="text"
-                      maxlength="300"
-                      placeholder="2FA 密钥或 otpauth 链接"
+                      maxlength="2000"
+                      placeholder="2FA 密钥、otpauth 链接或 JSON 备份"
                       @keyup.enter="createEntry"
                     />
-                    <button class="vault-secondary-btn small ghost" @click="previewNewEntryTotp">验证码</button>
+                    <div class="vault-action-row">
+                      <button class="vault-secondary-btn small ghost" @click="previewNewEntryTotp">验证码</button>
+                      <button class="vault-secondary-btn small ghost" @click="importNewEntryTotp">导入</button>
+                    </div>
                   </div>
                 </td>
                 <td>
@@ -185,12 +188,15 @@
                         v-model="editingEntry.totpSecret"
                         class="vault-cell-input"
                         type="text"
-                        maxlength="300"
-                        placeholder="2FA 密钥或 otpauth 链接"
+                        maxlength="2000"
+                        placeholder="2FA 密钥、otpauth 链接或 JSON 备份"
                         @keyup.enter="saveEditingEntry"
                         @keyup.esc="cancelEditingEntry"
                       />
-                      <button class="vault-secondary-btn small ghost" @click="previewEditingEntryTotp">验证码</button>
+                      <div class="vault-action-row">
+                        <button class="vault-secondary-btn small ghost" @click="previewEditingEntryTotp">验证码</button>
+                        <button class="vault-secondary-btn small ghost" @click="importEditingEntryTotp">导入</button>
+                      </div>
                     </div>
                   </td>
                   <td>
@@ -334,7 +340,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAppStore } from '../stores/app'
 import { usePasswordVaultStore } from '../stores/passwordVault'
-import { generateRandomPassword, generateTotpToken } from '../utils/password_tools'
+import { generateRandomPassword, generateTotpToken, normalizeTotpInput, parseTotpInput } from '../utils/password_tools'
 
 const RANDOM_PASSWORD_LENGTH = 18
 
@@ -608,6 +614,49 @@ async function previewNewEntryTotp() {
 
 async function previewEditingEntryTotp() {
   await previewTotp(editingEntry.totpSecret, editingEntry.account || '编辑记录')
+}
+
+function applyImportedTotp(target, rawInput) {
+  const normalized = normalizeTotpInput(rawInput)
+  const parsed = parseTotpInput(normalized)
+  target.totpSecret = normalized
+
+  if (!String(target.account || '').trim() && String(parsed.label || '').trim()) {
+    target.account = parsed.label.trim()
+  }
+
+  return parsed
+}
+
+async function importTotpFile(target, fallbackTitle) {
+  try {
+    const result = await window.electronAPI.importPasswordVaultTotp()
+    if (!result?.success) {
+      if (result?.error && result.error !== '用户取消操作') {
+        appStore.toast(result.error || '导入 2FA 文件失败', 'error')
+      }
+      return
+    }
+
+    const content = String(result.data || '').trim()
+    if (!content) {
+      appStore.toast('导入文件内容为空', 'warning')
+      return
+    }
+
+    const parsed = applyImportedTotp(target, content)
+    appStore.toast(`已导入 ${parsed.label || parsed.issuer || fallbackTitle} 的 2FA 数据`, 'success')
+  } catch (error) {
+    appStore.toast(error.message || '导入 2FA 文件失败', 'error')
+  }
+}
+
+async function importNewEntryTotp() {
+  await importTotpFile(newEntry, '新记录')
+}
+
+async function importEditingEntryTotp() {
+  await importTotpFile(editingEntry, '编辑记录')
 }
 
 async function openEntryTotp(entry) {

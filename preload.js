@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addPasswordVaultEntry: (entry) => ipcRenderer.invoke('add-password-vault-entry', entry),
   updatePasswordVaultEntry: (entryId, updates) => ipcRenderer.invoke('update-password-vault-entry', entryId, updates),
   deletePasswordVaultEntry: (entryId) => ipcRenderer.invoke('delete-password-vault-entry', entryId),
+  importPasswordVaultTotp: () => ipcRenderer.invoke('import-password-vault-totp'),
   
   // 任务管理
   loadTodos: () => ipcRenderer.invoke('load-todos'),

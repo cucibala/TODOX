@@ -3150,6 +3150,36 @@ ipcMain.handle('delete-password-vault-entry', async (event, entryId) => {
   }
 });
 
+// IPC 通信处理 - 导入 2FA 文件
+ipcMain.handle('import-password-vault-totp', async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '导入 2FA 密钥或备份',
+      properties: ['openFile'],
+      filters: [
+        { name: '2FA 文件', extensions: ['mfa', 'json', 'txt'] },
+        { name: '所有文件', extensions: ['*'] }
+      ]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { success: false, error: '用户取消操作' };
+    }
+
+    const filePath = result.filePaths[0];
+    const data = fs.readFileSync(filePath, 'utf-8');
+
+    return {
+      success: true,
+      data,
+      filePath
+    };
+  } catch (error) {
+    console.error('导入 2FA 文件失败:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC 通信处理 - 删除单个项目
 ipcMain.handle('delete-project', async (event, projectId) => {
   try {
